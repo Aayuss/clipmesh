@@ -25,12 +25,15 @@ project = ROOT / "clipmesh"
 if not (project / "Cargo.toml").is_file() or not (project / "android" / "settings.gradle.kts").is_file():
     raise SystemExit("Source archive did not unpack into the expected clipmesh project")
 
-# CI hardening patch: never let a runner-provided Gradle override the version
-# the Android project was authored and tested against.
 fixed_gradlew = CI / "gradlew-fixed"
 android_gradlew = project / "android" / "gradlew"
 if fixed_gradlew.is_file():
     shutil.copyfile(fixed_gradlew, android_gradlew)
     android_gradlew.chmod(0o755)
+
+fixed_android_build = CI / "android-app-build.gradle.kts.fixed"
+android_build = project / "android" / "app" / "build.gradle.kts"
+if fixed_android_build.is_file():
+    shutil.copyfile(fixed_android_build, android_build)
 
 print(f"Extracted project to {project}")
