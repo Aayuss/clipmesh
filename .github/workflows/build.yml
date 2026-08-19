@@ -22,6 +22,8 @@ jobs:
           python-version: '3.12'
       - name: Unpack exact source archive
         run: python ci/unpack.py
+      - name: Stamp desktop version
+        run: python -c "from pathlib import Path; p=Path('clipmesh/Cargo.toml'); s=p.read_text(); p.write_text(s.replace('version = \"0.1.0\"','version = \"0.1.1\"',1))"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -45,6 +47,7 @@ jobs:
             clipmesh/dist/macos/ClipMesh.dmg
             clipmesh/dist/macos/ClipMesh.app
             clipmesh/dist/macos/clipmesh
+            clipmesh/dist/macos/ClipMesh-icon.png
             clipmesh/dist/macos/SHA256SUMS.txt
 
   windows:
@@ -57,6 +60,13 @@ jobs:
           python-version: '3.12'
       - name: Unpack exact source archive
         run: python ci/unpack.py
+      - name: Stamp desktop version
+        shell: pwsh
+        run: |
+          $p = 'clipmesh/Cargo.toml'
+          $s = Get-Content $p -Raw
+          $s = $s -replace 'version = "0.1.0"', 'version = "0.1.1"'
+          Set-Content $p $s -Encoding utf8
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -146,6 +156,7 @@ jobs:
           set -euo pipefail
           mkdir -p release
           cp artifacts/macos/ClipMesh.dmg release/ClipMesh-macOS.dmg
+          cp artifacts/macos/ClipMesh-icon.png release/ClipMesh-icon.png
           cp artifacts/windows/clipmesh.exe release/ClipMesh-Windows.exe
           cp artifacts/android/ClipMesh-debug.apk release/ClipMesh-Android.apk
           cd release
@@ -161,12 +172,20 @@ jobs:
             tag="${GITHUB_REF_NAME}"
             title="ClipMesh ${GITHUB_REF_NAME}"
           else
-            tag="v0.1.0-alpha"
-            title="ClipMesh v0.1.0-alpha"
+            tag="v0.1.1-alpha"
+            title="ClipMesh v0.1.1-alpha"
           fi
 
+          assets=(
+            release/ClipMesh-macOS.dmg
+            release/ClipMesh-Windows.exe
+            release/ClipMesh-Android.apk
+            release/ClipMesh-icon.png
+            release/SHA256SUMS.txt
+          )
+
           if gh release view "$tag" >/dev/null 2>&1; then
-            echo "Release $tag already exists; leaving it unchanged. Use a new v* tag for the next version."
+            gh release upload "$tag" "${assets[@]}" --clobber
             exit 0
           fi
 
@@ -174,10 +193,4 @@ jobs:
           if [[ "$tag" == *-* ]]; then
             args+=(--prerelease)
           fi
-
-          gh release create "$tag" \
-            release/ClipMesh-macOS.dmg \
-            release/ClipMesh-Windows.exe \
-            release/ClipMesh-Android.apk \
-            release/SHA256SUMS.txt \
-            "${args[@]}"
+          gh release create "$tag" "${assets[@]}" "${args[@]}"
