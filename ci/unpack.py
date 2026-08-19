@@ -41,4 +41,9 @@ android_props = project / "android" / "gradle.properties"
 if fixed_android_props.is_file():
     shutil.copyfile(fixed_android_props, android_props)
 
+fixed_provider = CI / "ClipFileProvider.kt.fixed"
+provider = project / "android" / "app" / "src" / "main" / "java" / "dev" / "clipmesh" / "files" / "ClipFileProvider.kt"
+if fixed_provider.is_file():
+    shutil.copyfile(fixed_provider, provider)
+
 print(f"Extracted project to {project}")
