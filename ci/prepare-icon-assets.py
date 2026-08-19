@@ -14,19 +14,21 @@ PNG_PART_HASHES = [
     "c1a583dc78fa0640f1847e4716c750439f730b9acfe38fc684180e1043f6b5d1",
 ]
 ICO_PART_HASHES = [
-    "46b9b292a23849528c170431d83231ee2b78b99c0ec5324f96b8960b7fd1b4a8",
+    "b2643deacf1057d1add07223ea7a13a24cd3c4bddaf5fafabedf12e109c51575",
+    "cb6b2e95c5ea03059fcc28cadbb7c21bcb2a61c6756774f1f2daa4f6bc8ebd81",
+    "6676f62333eb869d783155a0e22868c4e8adef9d87e73d2620dd74801d0c0416",
+    "180b6dcbde29c9a331a64a318b6a778fb9407fc772f42c46a7206b2ea1f87f4d",
     "64e4880359da2244be76c171f6c93168ad0bfc1725045639d2a342ed8cf58a92",
     "fc612c44c407262ad1dbed9e154cd54c3aa167ad5459349a4272be13535ec125",
 ]
 
 
 def restore(
-    pattern: str,
+    parts: list[Path],
     expected_part_hashes: list[str],
     output_name: str,
     expected_sha256: str,
 ) -> None:
-    parts = sorted(CI.glob(pattern))
     if len(parts) != len(expected_part_hashes):
         raise SystemExit(
             f"Expected {len(expected_part_hashes)} parts for {output_name}, found {len(parts)}"
@@ -59,14 +61,20 @@ def restore(
     print(f"Restored {output_name}: {len(raw)} bytes, sha256={digest}")
 
 
+png_parts = sorted(CI.glob("clipmesh-icon-png.part*.b64"))
+ico_parts = sorted(CI.glob("clipmesh-icon-ico-head.part*.b64")) + [
+    CI / "clipmesh-icon-ico.part01.b64",
+    CI / "clipmesh-icon-ico.part02.b64",
+]
+
 restore(
-    "clipmesh-icon-png.part*.b64",
+    png_parts,
     PNG_PART_HASHES,
     "clipmesh-icon.png.b64",
     "89f77dcf9b638abcc09baeb5680cb24b322577d55356cba4d8ad8f4b2452b597",
 )
 restore(
-    "clipmesh-icon-ico.part*.b64",
+    ico_parts,
     ICO_PART_HASHES,
     "clipmesh-icon.ico.b64",
     "da0ae4f36f3fcbd38b1ae4702e17b1e38911b0549bc97c4cc7be23137bd6654f",
