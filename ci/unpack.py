@@ -36,4 +36,9 @@ android_build = project / "android" / "app" / "build.gradle.kts"
 if fixed_android_build.is_file():
     shutil.copyfile(fixed_android_build, android_build)
 
+fixed_android_props = CI / "android-gradle.properties.fixed"
+android_props = project / "android" / "gradle.properties"
+if fixed_android_props.is_file():
+    shutil.copyfile(fixed_android_props, android_props)
+
 print(f"Extracted project to {project}")
