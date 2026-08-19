@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
 
@@ -15,8 +16,8 @@ jobs:
     name: macOS DMG
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Unpack exact source archive
@@ -36,7 +37,7 @@ jobs:
       - name: Checksums
         working-directory: clipmesh
         run: shasum -a 256 dist/macos/ClipMesh.dmg dist/macos/clipmesh > dist/macos/SHA256SUMS.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ClipMesh-macOS
           if-no-files-found: error
@@ -50,8 +51,8 @@ jobs:
     name: Windows EXE
     runs-on: windows-2025
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Unpack exact source archive
@@ -73,7 +74,7 @@ jobs:
         run: |
           $hash = (Get-FileHash dist\windows\clipmesh.exe -Algorithm SHA256).Hash.ToLower()
           "$hash  clipmesh.exe" | Set-Content -Encoding ascii dist\windows\SHA256SUMS.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ClipMesh-Windows
           if-no-files-found: error
@@ -85,19 +86,19 @@ jobs:
     name: Android APK
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Unpack exact source archive
         run: python ci/unpack.py
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
           cache: gradle
           cache-dependency-path: clipmesh/android/**/*.gradle*
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
       - name: Install Android SDK 36
         run: sdkmanager "platforms;android-36" "build-tools;35.0.0" "platform-tools"
       - name: Build debug APK
@@ -108,10 +109,75 @@ jobs:
       - name: Checksum
         working-directory: clipmesh
         run: sha256sum dist/android/ClipMesh-debug.apk > dist/android/SHA256SUMS.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ClipMesh-Android
           if-no-files-found: error
           path: |
             clipmesh/dist/android/ClipMesh-debug.apk
             clipmesh/dist/android/SHA256SUMS.txt
+
+  release:
+    name: Publish GitHub Release
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    needs: [macos, windows, android]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download macOS build
+        uses: actions/download-artifact@v8
+        with:
+          name: ClipMesh-macOS
+          path: artifacts/macos
+      - name: Download Windows build
+        uses: actions/download-artifact@v8
+        with:
+          name: ClipMesh-Windows
+          path: artifacts/windows
+      - name: Download Android build
+        uses: actions/download-artifact@v8
+        with:
+          name: ClipMesh-Android
+          path: artifacts/android
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          cp artifacts/macos/ClipMesh.dmg release/ClipMesh-macOS.dmg
+          cp artifacts/windows/clipmesh.exe release/ClipMesh-Windows.exe
+          cp artifacts/android/ClipMesh-debug.apk release/ClipMesh-Android.apk
+          cd release
+          sha256sum ClipMesh-macOS.dmg ClipMesh-Windows.exe ClipMesh-Android.apk > SHA256SUMS.txt
+      - name: Publish release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            tag="${GITHUB_REF_NAME}"
+            title="ClipMesh ${GITHUB_REF_NAME}"
+          else
+            tag="v0.1.0-alpha"
+            title="ClipMesh v0.1.0-alpha"
+          fi
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; leaving it unchanged. Use a new v* tag for the next version."
+            exit 0
+          fi
+
+          args=(--title "$title" --generate-notes --target "$GITHUB_SHA")
+          if [[ "$tag" == *-* ]]; then
+            args+=(--prerelease)
+          fi
+
+          gh release create "$tag" \
+            release/ClipMesh-macOS.dmg \
+            release/ClipMesh-Windows.exe \
+            release/ClipMesh-Android.apk \
+            release/SHA256SUMS.txt \
+            "${args[@]}"
