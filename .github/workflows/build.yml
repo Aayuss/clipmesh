@@ -1,0 +1,115 @@
+name: Build ClipMesh
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: macOS DMG
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Unpack exact source archive
+        run: python ci/unpack.py
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: clipmesh
+      - name: Test core
+        working-directory: clipmesh
+        run: cargo test -p clipmesh-core
+      - name: Build macOS app and DMG
+        working-directory: clipmesh
+        run: |
+          chmod +x scripts/build-macos.sh
+          ./scripts/build-macos.sh
+      - name: Checksums
+        working-directory: clipmesh
+        run: shasum -a 256 dist/macos/ClipMesh.dmg dist/macos/clipmesh > dist/macos/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ClipMesh-macOS
+          if-no-files-found: error
+          path: |
+            clipmesh/dist/macos/ClipMesh.dmg
+            clipmesh/dist/macos/ClipMesh.app
+            clipmesh/dist/macos/clipmesh
+            clipmesh/dist/macos/SHA256SUMS.txt
+
+  windows:
+    name: Windows EXE
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Unpack exact source archive
+        run: python ci/unpack.py
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: clipmesh
+      - name: Test core
+        working-directory: clipmesh
+        run: cargo test -p clipmesh-core
+      - name: Build Windows executable
+        working-directory: clipmesh
+        shell: pwsh
+        run: .\scripts\build-windows.ps1
+      - name: Checksum
+        working-directory: clipmesh
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash dist\windows\clipmesh.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  clipmesh.exe" | Set-Content -Encoding ascii dist\windows\SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ClipMesh-Windows
+          if-no-files-found: error
+          path: |
+            clipmesh/dist/windows/clipmesh.exe
+            clipmesh/dist/windows/SHA256SUMS.txt
+
+  android:
+    name: Android APK
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Unpack exact source archive
+        run: python ci/unpack.py
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+          cache-dependency-path: clipmesh/android/**/*.gradle*
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK 36
+        run: sdkmanager "platforms;android-36" "build-tools;35.0.0" "platform-tools"
+      - name: Build debug APK
+        working-directory: clipmesh
+        run: |
+          chmod +x android/gradlew scripts/build-android-debug.sh
+          ./scripts/build-android-debug.sh
+      - name: Checksum
+        working-directory: clipmesh
+        run: sha256sum dist/android/ClipMesh-debug.apk > dist/android/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ClipMesh-Android
+          if-no-files-found: error
+          path: |
+            clipmesh/dist/android/ClipMesh-debug.apk
+            clipmesh/dist/android/SHA256SUMS.txt
