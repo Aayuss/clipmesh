@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import pathlib
+import shutil
 import tarfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -18,10 +19,18 @@ archive.write_bytes(archive_bytes)
 print(f"source archive sha256={hashlib.sha256(archive_bytes).hexdigest()}")
 
 with tarfile.open(archive, mode="r:xz") as tf:
-    # The archive is created by us and contains one top-level clipmesh directory.
     tf.extractall(ROOT, filter="data")
 
 project = ROOT / "clipmesh"
 if not (project / "Cargo.toml").is_file() or not (project / "android" / "settings.gradle.kts").is_file():
     raise SystemExit("Source archive did not unpack into the expected clipmesh project")
+
+# CI hardening patch: never let a runner-provided Gradle override the version
+# the Android project was authored and tested against.
+fixed_gradlew = CI / "gradlew-fixed"
+android_gradlew = project / "android" / "gradlew"
+if fixed_gradlew.is_file():
+    shutil.copyfile(fixed_gradlew, android_gradlew)
+    android_gradlew.chmod(0o755)
+
 print(f"Extracted project to {project}")
