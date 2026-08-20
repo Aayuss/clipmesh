@@ -19,6 +19,17 @@ def replace_if_present(path: Path, old: str, new: str) -> None:
     if old in text:
         path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
+
+# ---------------------------------------------------------------------------
+# v0.1.7 root cause: ClipMesh depended on the Shizuku provider artifact but never
+# declared rikka.shizuku.ShizukuProvider in its application manifest.
+#
+# The provider artifact contributes permission/metadata, which is why ClipMesh was
+# visible and could be toggled ON in Shizuku's "Authorized applications" screen.
+# But the provider component itself must be declared by the client app. Without it,
+# the Shizuku server has nowhere to deliver its Binder, so Shizuku.pingBinder()
+# remains false inside ClipMesh even while Shizuku says it is running/authorized.
+# ---------------------------------------------------------------------------
 manifest = project / "android/app/src/main/AndroidManifest.xml"
 manifest_text = manifest.read_text(encoding="utf-8")
 provider_name = "rikka.shizuku.ShizukuProvider"
@@ -43,6 +54,9 @@ if provider_name not in manifest_text:
     manifest_text = manifest_text[: app_open_end + 1] + provider + manifest_text[app_open_end + 1 :]
     manifest.write_text(manifest_text, encoding="utf-8")
 
+# Give the Settings button wording that matches what it actually verifies: receipt
+# of the Shizuku server Binder plus authorization, not whether the Shizuku app UI is
+# merely open.
 settings_activity = project / "android/app/src/main/java/dev/clipmesh/SettingsActivity.kt"
 replace_once(
     settings_activity,
@@ -57,6 +71,10 @@ replace_once(
     "Shizuku connected guidance",
 )
 
+# ---------------------------------------------------------------------------
+# Package metadata for the fixed build.
+# Earlier patch stages normalize the generated project to v0.1.6 first.
+# ---------------------------------------------------------------------------
 android_gradle = project / "android/app/build.gradle.kts"
 replace_once(android_gradle, 'versionCode = 6', 'versionCode = 7', "Android v0.1.7 versionCode")
 replace_once(android_gradle, 'versionName = "0.1.6"', 'versionName = "0.1.7"', "Android v0.1.7 versionName")
@@ -79,6 +97,7 @@ replace_if_present(
     'private const string Version = "0.1.7";',
 )
 
+# Fail the patch itself if the Shizuku wiring is ever accidentally removed again.
 final_manifest = manifest.read_text(encoding="utf-8")
 required_manifest_fragments = (
     'android:name="rikka.shizuku.ShizukuProvider"',
@@ -92,7 +111,3 @@ for fragment in required_manifest_fragments:
         raise SystemExit(f"Missing required Shizuku manifest fragment: {fragment}")
 
 print("Applied ClipMesh v0.1.7 Shizuku Binder-provider fix and native version metadata")
-print("--- GENERATED ClipboardBridge.kt ---")
-print((project / "android/app/src/main/java/dev/clipmesh/clipboard/ClipboardBridge.kt").read_text(encoding="utf-8"))
-print("--- GENERATED ClipboardUserService.kt ---")
-print((project / "android/app/src/main/java/dev/clipmesh/shizuku/ClipboardUserService.kt").read_text(encoding="utf-8"))
