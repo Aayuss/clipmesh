@@ -83,4 +83,22 @@ replace_once(
     "Android SettingsActivity manifest registration",
 )
 
+# The macOS wrapper is generated directly from this tracked source. Keep first
+# launch quiet until initialization has completed, then refresh when the user
+# reopens the window from the menu bar/Dock. The closure form is compatible with
+# all Swift versions used by the macOS GitHub runner.
+mac_wrapper = ci / "ClipMeshApp.swift"
+replace_once(
+    mac_wrapper,
+    "for line in output.split(whereSeparator: \\ .isNewline) {",
+    "for line in output.split(whereSeparator: { $0.isNewline }) {",
+    "macOS UI-state line splitting",
+)
+replace_once(
+    mac_wrapper,
+    """    private func showWindow() {\n        NSApp.setActivationPolicy(.regular)\n        window?.makeKeyAndOrderFront(nil)\n        NSApp.activate(ignoringOtherApps: true)\n        if window != nil { refreshHome() }\n    }""",
+    """    private func showWindow() {\n        NSApp.setActivationPolicy(.regular)\n        window?.makeKeyAndOrderFront(nil)\n        NSApp.activate(ignoringOtherApps: true)\n        if latestState != nil { refreshHome() }\n    }""",
+    "macOS avoid pre-initialization UI refresh",
+)
+
 print("Applied ClipMesh v0.1.3 cross-platform device UI, peer registry, pairing metadata, and clipboard inspection patches")
