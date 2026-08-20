@@ -1,0 +1,31 @@
+name: Diagnose ClipMesh v0.1.6 settings
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  settings-diagnostics:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python ci/prepare-icon-assets.py
+      - run: python ci/unpack.py
+      - run: |
+          python ci/patch-features.py
+          python ci/patch-sync-fixes.py
+          python ci/patch-v014-versions.py
+          python ci/patch-v015-sync.py
+      - name: Dump Android settings and settings UI
+        run: |
+          cat clipmesh/android/app/src/main/java/dev/clipmesh/SettingsStore.kt
+          echo '===== SETTINGS ACTIVITY ====='
+          cat clipmesh/android/app/src/main/java/dev/clipmesh/SettingsActivity.kt
+          echo '===== MAIN ACTIVITY RESUME ====='
+          grep -n -B20 -A40 -E 'onResume|ACTION_CAPTURE_CURRENT|backgroundSync|sendEnabled|receiveEnabled' clipmesh/android/app/src/main/java/dev/clipmesh/MainActivity.kt || true
