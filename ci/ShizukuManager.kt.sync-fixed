@@ -15,9 +15,11 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Lifecycle-safe wrapper around Shizuku's UserService API.
- * The Shizuku binder is delivered asynchronously, so ClipMesh keeps the official
- * binder/permission listeners registered instead of treating pingBinder() as a
- * one-shot startup test.
+ *
+ * Shizuku's server binder is delivered through ShizukuProvider. The provider is
+ * declared explicitly in ClipMesh's manifest by the v0.1.7 patch. Keep the
+ * official binder/permission listeners registered so starting Shizuku before or
+ * after ClipMesh both work without restarting either app.
  */
 class ShizukuManager(private val context: Context) {
     companion object { const val REQUEST_CODE_PERMISSION = 8844 }
@@ -34,17 +36,21 @@ class ShizukuManager(private val context: Context) {
         Shizuku.UserServiceArgs(ComponentName(context.packageName, ClipboardUserService::class.java.name))
             .daemon(false)
             .processNameSuffix("clipboard")
+            .tag("clipmesh-clipboard")
             .debuggable(BuildConfig.DEBUG)
-            .version(2)
+            // Bump whenever the UserService implementation changes. Shizuku uses
+            // this value to replace a stale service from an older ClipMesh build.
+            .version(3)
     }
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             binding = false
-            service = binder?.let(IClipboardUserService.Stub::asInterface)
+            service = binder?.takeIf { it.isBinderAlive }?.let(IClipboardUserService.Stub::asInterface)
             runCatching { service?.init(callerToken) }
             latch.countDown()
         }
+
         override fun onServiceDisconnected(name: ComponentName?) {
             binding = false
             service = null
@@ -60,9 +66,7 @@ class ShizukuManager(private val context: Context) {
 
     private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
         binderAvailable = true
-        permissionGranted = runCatching {
-            !Shizuku.isPreV11() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
-        }.getOrDefault(false)
+        permissionGranted = currentPermissionGranted()
         if (permissionGranted) bindUserService()
     }
 
@@ -78,36 +82,43 @@ class ShizukuManager(private val context: Context) {
         Shizuku.addRequestPermissionResultListener(permissionListener)
         Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
         Shizuku.addBinderDeadListener(binderDeadListener)
+
+        // The sticky listener normally initializes the state immediately when the
+        // provider already has a binder. Keep this explicit probe as a defensive
+        // fallback and eagerly bind an already-authorized install.
         if (runCatching { Shizuku.pingBinder() }.getOrDefault(false)) {
             binderAvailable = true
-            permissionGranted = runCatching {
-                !Shizuku.isPreV11() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
-            }.getOrDefault(false)
+            permissionGranted = currentPermissionGranted()
+            if (permissionGranted) bindUserService()
         }
     }
 
     fun isAvailable(): Boolean {
         if (closed) return false
-        if (binderAvailable) return true
+        if (binderAvailable && runCatching { Shizuku.pingBinder() }.getOrDefault(false)) return true
         val alive = runCatching { Shizuku.pingBinder() }.getOrDefault(false)
-        if (alive) binderAvailable = true
+        binderAvailable = alive
+        if (!alive) {
+            permissionGranted = false
+            service = null
+        }
         return alive
     }
 
     fun hasPermission(): Boolean {
         if (!isAvailable()) return false
         if (permissionGranted) return true
-        val granted = runCatching {
-            !Shizuku.isPreV11() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
-        }.getOrDefault(false)
-        permissionGranted = granted
-        return granted
+        permissionGranted = currentPermissionGranted()
+        return permissionGranted
     }
 
     fun requestPermission(): Boolean {
         if (!isAvailable()) return false
         if (runCatching { Shizuku.isPreV11() }.getOrDefault(true)) return false
-        if (hasPermission()) return true
+        if (hasPermission()) {
+            bindUserService()
+            return true
+        }
         if (runCatching { Shizuku.shouldShowRequestPermissionRationale() }.getOrDefault(false)) return false
         return runCatching {
             Shizuku.requestPermission(REQUEST_CODE_PERMISSION)
@@ -136,7 +147,7 @@ class ShizukuManager(private val context: Context) {
         ensureConnected()?.setPrimaryClipText(text) == true
     }.getOrDefault(false)
 
-    /** Disconnect ClipMesh without asking Shizuku to remove or kill its UserService. */
+    /** Disconnect ClipMesh's callback only. Never remove/kill Shizuku or its server. */
     fun close() {
         if (closed) return
         closed = true
@@ -147,6 +158,10 @@ class ShizukuManager(private val context: Context) {
         service = null
         binding = false
     }
+
+    private fun currentPermissionGranted(): Boolean = runCatching {
+        !Shizuku.isPreV11() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+    }.getOrDefault(false)
 
     private fun bindUserService() {
         if (closed || service != null || binding || !hasPermission()) return
@@ -159,7 +174,8 @@ class ShizukuManager(private val context: Context) {
     }
 
     private fun ensureConnected(): IClipboardUserService? {
-        service?.let { return it }
+        service?.takeIf { runCatching { it.asBinder().isBinderAlive }.getOrDefault(false) }?.let { return it }
+        service = null
         if (!hasPermission()) return null
         bindUserService()
         runCatching { latch.await(3, TimeUnit.SECONDS) }
