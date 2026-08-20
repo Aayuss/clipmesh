@@ -123,13 +123,14 @@ if CommandLine.arguments.contains("--smoke-test") {
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var window: NSWindow!
     private var status: NSTextField!
     private var detail: NSTextField!
     private var daemon: Process?
     private var logHandle: FileHandle?
     private var statusItem: NSStatusItem?
+    private var statusMenu: NSMenu?
     private var quitting = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -159,6 +160,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        hideWindow()
+        return false
+    }
+
     private func buildWindow() {
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 510, height: 360),
@@ -169,6 +175,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.title = "ClipMesh"
         window.isReleasedWhenClosed = false
         window.center()
+        window.delegate = self
 
         let stack = NSStackView()
         stack.orientation = .vertical
@@ -199,10 +206,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         buttons.spacing = 10
         let pair = NSButton(title: "Copy Pairing Link", target: self, action: #selector(copyPairingLink))
         let background = NSButton(title: "Run in Background", target: self, action: #selector(hideWindow))
-        let quit = NSButton(title: "Quit", target: self, action: #selector(quitApp))
         buttons.addArrangedSubview(pair)
         buttons.addArrangedSubview(background)
-        buttons.addArrangedSubview(quit)
 
         [icon, title, status, detail, buttons].forEach { stack.addArrangedSubview($0) }
         guard let content = window.contentView else { return }
@@ -217,7 +222,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func buildStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = NSImage(systemSymbolName: "arrow.left.arrow.right", accessibilityDescription: "ClipMesh")
+        if let button = item.button {
+            button.image = NSImage(systemSymbolName: "arrow.left.arrow.right", accessibilityDescription: "ClipMesh")
+            button.target = self
+            button.action = #selector(statusItemClicked(_:))
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        }
+
         let menu = NSMenu()
         let show = NSMenuItem(title: "Show ClipMesh", action: #selector(showFromMenu), keyEquivalent: "")
         show.target = self
@@ -229,8 +240,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let quit = NSMenuItem(title: "Quit ClipMesh", action: #selector(quitApp), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
-        item.menu = menu
+
         statusItem = item
+        statusMenu = menu
     }
 
     private func startDaemon() throws {
@@ -261,10 +273,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         status.stringValue = "ClipMesh is running"
         status.textColor = .systemGreen
-        detail.stringValue = "Clipboard sync is active. You can close this window - ClipMesh keeps running from the menu bar."
+        detail.stringValue = "Clipboard sync is active. Closing this window hides ClipMesh from the Dock but keeps it running in the menu bar."
     }
 
     private func showWindow() {
+        NSApp.setActivationPolicy(.regular)
+        if window?.isMiniaturized == true { window.deminiaturize(nil) }
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -276,8 +290,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         showWindow()
     }
 
+    @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
+        switch NSApp.currentEvent?.type {
+        case .rightMouseUp:
+            guard let menu = statusMenu else { return }
+            menu.popUp(positioning: nil, at: NSPoint(x: 0, y: sender.bounds.height + 2), in: sender)
+        default:
+            showWindow()
+        }
+    }
+
     @objc private func showFromMenu() { showWindow() }
-    @objc private func hideWindow() { window.orderOut(nil) }
+
+    @objc private func hideWindow() {
+        window?.orderOut(nil)
+        NSApp.setActivationPolicy(.accessory)
+    }
 
     @objc private func copyPairingLink() {
         do {
