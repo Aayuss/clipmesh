@@ -71,6 +71,32 @@ replace_once(
     "Shizuku connected guidance",
 )
 
+# v0.1.4 expanded this button into a launch/help flow. v0.1.8 replaces the
+# control wholesale with live Binder state, so normalize the generated block to
+# the stable anchor expected by the v0.1.8 patch before that next layer runs.
+replace_once(
+    settings_activity,
+    '''        accessCard.addView(button("Request Shizuku permission") {
+            when {
+                !shizuku.isAvailable() -> {
+                    packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")?.let { startActivity(it) }
+                    toast("ClipMesh has not received the Shizuku connection yet. Keep Shizuku running, then return to ClipMesh and try again.")
+                }
+                shizuku.hasPermission() -> toast("Shizuku is authorized and connected to ClipMesh")
+                shizuku.requestPermission() -> toast("Shizuku permission request sent")
+                else -> toast("Shizuku permission is unavailable. Check Shizuku and try again.")
+            }
+        })''',
+    '''        accessCard.addView(button("Request Shizuku permission") {
+            when {
+                !shizuku.isAvailable() -> toast("Start or install Shizuku first")
+                shizuku.hasPermission() -> toast("Shizuku is authorized and connected to ClipMesh")
+                else -> shizuku.requestPermission()
+            }
+        })''',
+    "Normalize Shizuku controls for v0.1.8",
+)
+
 # ---------------------------------------------------------------------------
 # Package metadata for the fixed build.
 # Earlier patch stages normalize the generated project to v0.1.6 first.
