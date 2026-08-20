@@ -15,6 +15,8 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+      - name: Reconstruct validated icon assets
+        run: python ci/prepare-icon-assets.py
       - name: Unpack source
         run: python ci/unpack.py
       - name: Print targeted source files
