@@ -112,8 +112,8 @@ jobs:
           Remove-Item -Recurse -Force $roaming -ErrorAction SilentlyContinue
           Remove-Item -Recurse -Force $local -ErrorAction SilentlyContinue
 
-          .\dist\windows\clipmesh.exe --smoke-test
-          if ($LASTEXITCODE -ne 0) { throw "Windows smoke test failed with exit code $LASTEXITCODE" }
+          $process = Start-Process -FilePath '.\dist\windows\clipmesh.exe' -ArgumentList '--smoke-test' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Windows smoke test failed with exit code $($process.ExitCode)" }
 
           $configs = @(
             (Join-Path $env:APPDATA 'ClipMesh\ClipMesh\config\config.json'),
