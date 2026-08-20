@@ -2,7 +2,7 @@ from pathlib import Path
 import shutil
 
 root = Path(__file__).resolve().parents[1]
-source = root / "ci" / "build-macos.sh.fixed"
+source = root / "ci" / "build-macos-v2.sh.fixed"
 target = root / "clipmesh" / "scripts" / "build-macos.sh"
 
 if not source.is_file():
@@ -12,4 +12,4 @@ if not target.parent.is_dir():
 
 shutil.copyfile(source, target)
 target.chmod(0o755)
-print(f"Applied native macOS packaging patch to {target}")
+print(f"Applied repaired native macOS packaging patch to {target}")
