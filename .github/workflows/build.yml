@@ -32,6 +32,8 @@ jobs:
         run: python ci/patch-desktop.py
       - name: Apply native macOS app wrapper
         run: python ci/patch-macos.py
+      - name: Align v0.1.4 native package versions
+        run: python ci/patch-v014-versions.py
       - name: Stamp desktop version
         run: python -c "from pathlib import Path; p=Path('clipmesh/Cargo.toml'); s=p.read_text(); p.write_text(s.replace('version = \"0.1.0\"','version = \"0.1.4\"',1))"
       - uses: dtolnay/rust-toolchain@stable
@@ -41,6 +43,7 @@ jobs:
       - name: Test protocol and core
         working-directory: clipmesh
         run: |
+          python -m pip install --disable-pip-version-check cryptography
           python tools/protocol_selftest.py
           cargo test -p clipmesh-core
       - name: Build macOS app and DMG
@@ -59,6 +62,7 @@ jobs:
           test -f "$SUPPORT/config.json"
           ./dist/macos/ClipMesh.app/Contents/MacOS/clipmesh-bin status
           ./dist/macos/ClipMesh.app/Contents/MacOS/clipmesh-bin ui-state
+          plutil -extract CFBundleShortVersionString raw ./dist/macos/ClipMesh.app/Contents/Info.plist | grep -qx '0.1.4'
           file ./dist/macos/ClipMesh.app/Contents/MacOS/ClipMesh
           plutil -lint ./dist/macos/ClipMesh.app/Contents/Info.plist
           codesign --verify --deep --strict --verbose=2 ./dist/macos/ClipMesh.app
@@ -96,6 +100,8 @@ jobs:
         run: python ci/patch-desktop.py
       - name: Apply native Windows tray wrapper
         run: python ci/patch-windows.py
+      - name: Align v0.1.4 native package versions
+        run: python ci/patch-v014-versions.py
       - name: Stamp desktop version
         shell: pwsh
         run: |
@@ -111,8 +117,12 @@ jobs:
         working-directory: clipmesh
         shell: pwsh
         run: |
+          python -m pip install --disable-pip-version-check cryptography
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tools/protocol_selftest.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo test -p clipmesh-core
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build Windows tray application
         working-directory: clipmesh
         shell: pwsh
@@ -132,7 +142,7 @@ jobs:
             (Join-Path $env:APPDATA 'ClipMesh\ClipMesh\config.json')
           )
           if (-not ($configs | Where-Object { Test-Path $_ })) { throw 'Windows first-run smoke test did not create config.json.' }
-          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.1.4\clipmesh-bin.exe'))) { throw 'Windows launcher did not extract its embedded sync engine.' }
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.1.4\clipmesh-bin.exe'))) { throw 'Windows launcher did not extract its embedded v0.1.4 sync engine.' }
       - name: Checksum
         working-directory: clipmesh
         shell: pwsh
@@ -163,6 +173,8 @@ jobs:
         run: python ci/patch-features.py
       - name: Apply sync and Shizuku fixes
         run: python ci/patch-sync-fixes.py
+      - name: Align v0.1.4 native package versions
+        run: python ci/patch-v014-versions.py
       - name: Validate patched Android sources
         shell: bash
         run: |
@@ -171,8 +183,11 @@ jobs:
           grep -q 'android:name=".ExclusionActivity"' clipmesh/android/app/src/main/AndroidManifest.xml
           grep -q 'ExclusionAccessibilityService' clipmesh/android/app/src/main/AndroidManifest.xml
           grep -q 'addBinderReceivedListenerSticky' clipmesh/android/app/src/main/java/dev/clipmesh/shizuku/ShizukuManager.kt
+          grep -q 'unbindUserService(args, connection, false)' clipmesh/android/app/src/main/java/dev/clipmesh/shizuku/ShizukuManager.kt
+          ! grep -q 'exitProcess(0)' clipmesh/android/app/src/main/java/dev/clipmesh/shizuku/ClipboardUserService.kt
           grep -q 'captureNowForBackgroundMonitor' clipmesh/android/app/src/main/java/dev/clipmesh/SyncService.kt
           grep -q 'preferredOutgoing' clipmesh/android/app/src/main/java/dev/clipmesh/network/NetworkEngine.kt
+          grep -q 'versionName = "0.1.4"' clipmesh/android/app/build.gradle.kts
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
