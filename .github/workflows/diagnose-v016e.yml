@@ -1,0 +1,28 @@
+name: Diagnose ClipMesh v0.1.6 socket code
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  socket-code:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python ci/prepare-icon-assets.py
+      - run: python ci/unpack.py
+      - run: |
+          python ci/patch-features.py
+          python ci/patch-sync-fixes.py
+          python ci/patch-v014-versions.py
+          python ci/patch-v015-sync.py
+      - name: Desktop network
+        run: cat clipmesh/apps/desktop/src/network.rs
+      - name: Android network
+        run: cat clipmesh/android/app/src/main/java/dev/clipmesh/network/NetworkEngine.kt
