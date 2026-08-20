@@ -1,0 +1,168 @@
+package dev.clipmesh.shizuku
+
+import android.content.ComponentName
+import android.content.Context
+import android.content.ServiceConnection
+import android.content.pm.PackageManager
+import android.os.Binder
+import android.os.IBinder
+import android.os.ParcelFileDescriptor
+import dev.clipmesh.BuildConfig
+import rikka.shizuku.Shizuku
+import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+
+/**
+ * Lifecycle-safe wrapper around Shizuku's UserService API.
+ * The Shizuku binder is delivered asynchronously, so ClipMesh keeps the official
+ * binder/permission listeners registered instead of treating pingBinder() as a
+ * one-shot startup test.
+ */
+class ShizukuManager(private val context: Context) {
+    companion object { const val REQUEST_CODE_PERMISSION = 8844 }
+
+    private val callerToken = Binder()
+    @Volatile private var service: IClipboardUserService? = null
+    @Volatile private var binding = false
+    @Volatile private var binderAvailable = false
+    @Volatile private var permissionGranted = false
+    @Volatile private var closed = false
+    @Volatile private var latch = CountDownLatch(1)
+
+    private val args: Shizuku.UserServiceArgs by lazy {
+        Shizuku.UserServiceArgs(ComponentName(context.packageName, ClipboardUserService::class.java.name))
+            .daemon(false)
+            .processNameSuffix("clipboard")
+            .debuggable(BuildConfig.DEBUG)
+            .version(2)
+    }
+
+    private val connection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+            binding = false
+            service = binder?.let(IClipboardUserService.Stub::asInterface)
+            runCatching { service?.init(callerToken) }
+            latch.countDown()
+        }
+        override fun onServiceDisconnected(name: ComponentName?) {
+            binding = false
+            service = null
+            latch.countDown()
+        }
+    }
+
+    private val permissionListener = Shizuku.OnRequestPermissionResultListener { requestCode, result ->
+        if (requestCode != REQUEST_CODE_PERMISSION) return@OnRequestPermissionResultListener
+        permissionGranted = result == PackageManager.PERMISSION_GRANTED
+        if (permissionGranted) bindUserService()
+    }
+
+    private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
+        binderAvailable = true
+        permissionGranted = runCatching {
+            !Shizuku.isPreV11() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+        }.getOrDefault(false)
+        if (permissionGranted) bindUserService()
+    }
+
+    private val binderDeadListener = Shizuku.OnBinderDeadListener {
+        binderAvailable = false
+        permissionGranted = false
+        binding = false
+        service = null
+        latch.countDown()
+    }
+
+    init {
+        Shizuku.addRequestPermissionResultListener(permissionListener)
+        Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
+        Shizuku.addBinderDeadListener(binderDeadListener)
+        if (runCatching { Shizuku.pingBinder() }.getOrDefault(false)) {
+            binderAvailable = true
+            permissionGranted = runCatching {
+                !Shizuku.isPreV11() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+            }.getOrDefault(false)
+        }
+    }
+
+    fun isAvailable(): Boolean {
+        if (closed) return false
+        if (binderAvailable) return true
+        val alive = runCatching { Shizuku.pingBinder() }.getOrDefault(false)
+        if (alive) binderAvailable = true
+        return alive
+    }
+
+    fun hasPermission(): Boolean {
+        if (!isAvailable()) return false
+        if (permissionGranted) return true
+        val granted = runCatching {
+            !Shizuku.isPreV11() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+        }.getOrDefault(false)
+        permissionGranted = granted
+        return granted
+    }
+
+    fun requestPermission(): Boolean {
+        if (!isAvailable()) return false
+        if (runCatching { Shizuku.isPreV11() }.getOrDefault(true)) return false
+        if (hasPermission()) return true
+        if (runCatching { Shizuku.shouldShowRequestPermissionRationale() }.getOrDefault(false)) return false
+        return runCatching {
+            Shizuku.requestPermission(REQUEST_CODE_PERMISSION)
+            true
+        }.getOrDefault(false)
+    }
+
+    fun readSnapshotJson(): String = runCatching { ensureConnected()?.primaryClipJson.orEmpty() }.getOrDefault("")
+
+    fun copyItem(index: Int, destination: File): Boolean {
+        destination.parentFile?.mkdirs()
+        val descriptor = ParcelFileDescriptor.open(
+            destination,
+            ParcelFileDescriptor.MODE_CREATE or ParcelFileDescriptor.MODE_TRUNCATE or ParcelFileDescriptor.MODE_READ_WRITE
+        )
+        return try {
+            ensureConnected()?.copyPrimaryClipItemToFile(index, descriptor) == true
+        } catch (_: Exception) {
+            false
+        } finally {
+            descriptor.close()
+        }
+    }
+
+    fun setText(text: String): Boolean = runCatching {
+        ensureConnected()?.setPrimaryClipText(text) == true
+    }.getOrDefault(false)
+
+    /** Disconnect ClipMesh without asking Shizuku to remove or kill its UserService. */
+    fun close() {
+        if (closed) return
+        closed = true
+        runCatching { Shizuku.removeRequestPermissionResultListener(permissionListener) }
+        runCatching { Shizuku.removeBinderReceivedListener(binderReceivedListener) }
+        runCatching { Shizuku.removeBinderDeadListener(binderDeadListener) }
+        if (service != null || binding) runCatching { Shizuku.unbindUserService(args, connection, false) }
+        service = null
+        binding = false
+    }
+
+    private fun bindUserService() {
+        if (closed || service != null || binding || !hasPermission()) return
+        binding = true
+        latch = CountDownLatch(1)
+        runCatching { Shizuku.bindUserService(args, connection) }.onFailure {
+            binding = false
+            latch.countDown()
+        }
+    }
+
+    private fun ensureConnected(): IClipboardUserService? {
+        service?.let { return it }
+        if (!hasPermission()) return null
+        bindUserService()
+        runCatching { latch.await(3, TimeUnit.SECONDS) }
+        return service
+    }
+}
