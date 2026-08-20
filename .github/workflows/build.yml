@@ -34,8 +34,9 @@ jobs:
           python ci/patch-v015-sync.py
           python ci/patch-v016-sync.py
           python ci/patch-v017-shizuku.py
-      - name: Stamp v0.1.7
-        run: python -c "from pathlib import Path; p=Path('clipmesh/Cargo.toml'); s=p.read_text(); p.write_text(s.replace('version = \"0.1.0\"','version = \"0.1.7\"',1))"
+          python ci/patch-v018-features.py
+      - name: Stamp v0.1.8
+        run: python -c "from pathlib import Path; p=Path('clipmesh/Cargo.toml'); s=p.read_text(); p.write_text(s.replace('version = \"0.1.0\"','version = \"0.1.8\"',1))"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -46,6 +47,11 @@ jobs:
           set -euo pipefail
           grep -q 'source_is_clipmesh' clipmesh/apps/desktop/src/clipboard.rs
           grep -q 'retain(|item| !item.trim().eq_ignore_ascii_case("clipmesh"))' clipmesh/apps/desktop/src/config.rs
+          grep -q 'Command::Reset' clipmesh/apps/desktop/src/main.rs
+          grep -q 'fn reset_identity' clipmesh/apps/desktop/src/main.rs
+          grep -q 'buildMainMenu()' ci/ClipMeshApp.swift
+          grep -q 'Reset All Pairing' ci/ClipMeshApp.swift
+          grep -q 'keyEquivalent: "v"' ci/ClipMeshApp.swift
           python - <<'PY'
           from pathlib import Path
           text = Path('clipmesh/apps/desktop/src/config.rs').read_text()
@@ -64,7 +70,7 @@ jobs:
         run: |
           chmod +x scripts/build-macos.sh
           ./scripts/build-macos.sh
-      - name: Smoke-test macOS first launch
+      - name: Smoke-test macOS first launch and reset
         working-directory: clipmesh
         shell: bash
         run: |
@@ -74,8 +80,11 @@ jobs:
           ./dist/macos/ClipMesh.app/Contents/MacOS/ClipMesh --smoke-test
           test -f "$SUPPORT/config.json"
           ./dist/macos/ClipMesh.app/Contents/MacOS/clipmesh-bin status
-          ./dist/macos/ClipMesh.app/Contents/MacOS/clipmesh-bin ui-state
-          plutil -extract CFBundleShortVersionString raw ./dist/macos/ClipMesh.app/Contents/Info.plist | grep -qx '0.1.7'
+          BEFORE="$(./dist/macos/ClipMesh.app/Contents/MacOS/clipmesh-bin ui-state | head -n1 | cut -f2)"
+          ./dist/macos/ClipMesh.app/Contents/MacOS/clipmesh-bin reset --name 'CI Mac'
+          AFTER="$(./dist/macos/ClipMesh.app/Contents/MacOS/clipmesh-bin ui-state | head -n1 | cut -f2)"
+          test -n "$BEFORE" && test -n "$AFTER" && test "$BEFORE" != "$AFTER"
+          plutil -extract CFBundleShortVersionString raw ./dist/macos/ClipMesh.app/Contents/Info.plist | grep -qx '0.1.8'
           plutil -lint ./dist/macos/ClipMesh.app/Contents/Info.plist
           codesign --verify --deep --strict --verbose=2 ./dist/macos/ClipMesh.app
       - name: Checksums
@@ -126,12 +135,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python ci/patch-v017-shizuku.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Stamp v0.1.7
+          python ci/patch-v018-features.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Stamp v0.1.8
         shell: pwsh
         run: |
           $p = 'clipmesh/Cargo.toml'
           $s = Get-Content $p -Raw
-          $s = $s -replace 'version = "0.1.0"', 'version = "0.1.7"'
+          $s = $s -replace 'version = "0.1.0"', 'version = "0.1.8"'
           Set-Content $p $s -Encoding utf8
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
@@ -142,8 +153,12 @@ jobs:
         run: |
           $clip = Get-Content 'clipmesh/apps/desktop/src/clipboard.rs' -Raw
           $cfg = Get-Content 'clipmesh/apps/desktop/src/config.rs' -Raw
+          $main = Get-Content 'clipmesh/apps/desktop/src/main.rs' -Raw
+          $ui = Get-Content 'ci/ClipMeshWindows.cs' -Raw
           if (-not $clip.Contains('source_is_clipmesh')) { throw 'Desktop self-capture guard missing' }
           if (-not $cfg.Contains('retain(|item| !item.trim().eq_ignore_ascii_case("clipmesh"))')) { throw 'Desktop self-exclusion migration missing' }
+          if (-not $main.Contains('Command::Reset')) { throw 'Desktop reset command missing' }
+          if (-not $ui.Contains('Reset all pairing')) { throw 'Windows pairing reset UI missing' }
           $defaults = $cfg.Substring($cfg.IndexOf('pub fn default_exclusions()'))
           if ($defaults.Contains('"clipmesh"')) { throw 'ClipMesh remains in desktop default exclusions' }
       - name: Test protocol, core, and transport
@@ -174,7 +189,7 @@ jobs:
           if ($process.ExitCode -ne 0) { throw "Windows smoke test failed with exit code $($process.ExitCode)" }
           $configs = @((Join-Path $env:APPDATA 'ClipMesh\ClipMesh\config\config.json'), (Join-Path $env:APPDATA 'ClipMesh\ClipMesh\config.json'))
           if (-not ($configs | Where-Object { Test-Path $_ })) { throw 'Windows first-run smoke test did not create config.json.' }
-          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.1.7\clipmesh-bin.exe'))) { throw 'Windows launcher did not extract its embedded v0.1.7 sync engine.' }
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.1.8\clipmesh-bin.exe'))) { throw 'Windows launcher did not extract its embedded v0.1.8 sync engine.' }
       - name: Checksum
         working-directory: clipmesh
         shell: pwsh
@@ -209,6 +224,7 @@ jobs:
           python ci/patch-v015-sync.py
           python ci/patch-v016-sync.py
           python ci/patch-v017-shizuku.py
+          python ci/patch-v018-features.py
       - name: Validate Android Shizuku and synchronization sources
         shell: bash
         run: |
@@ -217,13 +233,24 @@ jobs:
           BRIDGE=clipmesh/android/app/src/main/java/dev/clipmesh/clipboard/ClipboardBridge.kt
           SHIZUKU=clipmesh/android/app/src/main/java/dev/clipmesh/shizuku/ShizukuManager.kt
           USER_SERVICE=clipmesh/android/app/src/main/java/dev/clipmesh/shizuku/ClipboardUserService.kt
+          SETTINGS=clipmesh/android/app/src/main/java/dev/clipmesh/SettingsActivity.kt
+          STORE=clipmesh/android/app/src/main/java/dev/clipmesh/SettingsStore.kt
           grep -q 'sourcePackage != context.packageName' "$BRIDGE"
           grep -q 'readSnapshotJson' "$BRIDGE"
           grep -q 'shizuku.setText' "$BRIDGE"
-          grep -q 'filterNot { it.equals("dev.clipmesh", ignoreCase = true) }' clipmesh/android/app/src/main/java/dev/clipmesh/SettingsStore.kt
+          grep -q 'BitmapFactory.decodeByteArray' "$BRIDGE"
+          grep -q 'Representation("image/png", png)' "$BRIDGE"
+          grep -q 'readUriBytes(uri)' "$BRIDGE"
+          grep -q 'SUPPRESS_CLIPBOARD_OVERLAY' "$BRIDGE"
+          grep -q 'SUPPRESS_CLIPBOARD_OVERLAY' "$USER_SERVICE"
+          grep -q 'filterNot { it.equals("dev.clipmesh", ignoreCase = true) }' "$STORE"
+          grep -q 'prefs.getBoolean("background_sync", true)' "$STORE"
           grep -q 'ACTION_CAPTURE_CURRENT' clipmesh/android/app/src/main/java/dev/clipmesh/MainActivity.kt
-          grep -q 'versionName = "0.1.7"' clipmesh/android/app/build.gradle.kts
-          grep -q 'versionCode = 7' clipmesh/android/app/build.gradle.kts
+          grep -q 'fun isBound()' "$SHIZUKU"
+          grep -q 'Shizuku connected' "$SETTINGS"
+          grep -q 'Reset all pairing' "$SETTINGS"
+          grep -q 'versionName = "0.1.8"' clipmesh/android/app/build.gradle.kts
+          grep -q 'versionCode = 8' clipmesh/android/app/build.gradle.kts
           python - <<'PY'
           from pathlib import Path
           s = Path('clipmesh/android/app/src/main/java/dev/clipmesh/SettingsStore.kt').read_text()
@@ -244,10 +271,6 @@ jobs:
           ! grep -q 'exitProcess(0)' "$USER_SERVICE"
           grep -q '2_500L' clipmesh/android/app/src/main/java/dev/clipmesh/network/NetworkEngine.kt
           grep -q 'text/plain; charset=utf-8' "$BRIDGE"
-          echo '--- ClipboardUserService Shizuku/clipboard calls ---'
-          grep -nE 'class ClipboardUserService|primaryClip|setPrimaryClip|copyPrimaryClip|destroy|ServiceManager|clipboard' "$USER_SERVICE" || true
-          echo '--- ClipboardBridge Shizuku calls ---'
-          grep -nE 'readSnapshotJson|copyItem|setText|readCurrent|applyRemote|captureAsync' "$BRIDGE" || true
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -328,8 +351,8 @@ jobs:
             tag="${GITHUB_REF_NAME}"
             title="ClipMesh ${GITHUB_REF_NAME}"
           else
-            tag="v0.1.7-alpha"
-            title="ClipMesh v0.1.7-alpha"
+            tag="v0.1.8-alpha"
+            title="ClipMesh v0.1.8-alpha"
           fi
           assets=(release/ClipMesh-macOS.dmg release/ClipMesh-Windows.exe release/ClipMesh-Android.apk release/ClipMesh-icon.png release/SHA256SUMS.txt)
           if gh release view "$tag" >/dev/null 2>&1; then
