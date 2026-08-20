@@ -145,26 +145,24 @@ replace_once(
 
 # ---------------------------------------------------------------------------
 # Native package metadata.
-# patch-v014-versions.py first normalizes the old wrappers to v0.1.5; advance every
-# platform wrapper to v0.1.6 here so the binaries, runtime extraction directory and
-# macOS bundle metadata all agree with Cargo/Android package versions.
+# patch-v014-versions.py first normalizes old wrappers to v0.1.5. Some platform
+# wrapper files only exist in their own native job, so these replacements are
+# deliberately conditional outside the platform where the file is generated.
 # ---------------------------------------------------------------------------
 android_gradle = project / "android/app/build.gradle.kts"
 replace_once(android_gradle, 'versionCode = 5', 'versionCode = 6', "Android v0.1.6 versionCode")
 replace_once(android_gradle, 'versionName = "0.1.5"', 'versionName = "0.1.6"', "Android v0.1.6 versionName")
 
 mac_build = project / "scripts/build-macos.sh"
-replace_once(
+replace_if_present(
     mac_build,
     '<key>CFBundleShortVersionString</key><string>0.1.5</string>',
     '<key>CFBundleShortVersionString</key><string>0.1.6</string>',
-    "macOS v0.1.6 short version",
 )
-replace_once(
+replace_if_present(
     mac_build,
     '<key>CFBundleVersion</key><string>0.1.5</string>',
     '<key>CFBundleVersion</key><string>0.1.6</string>',
-    "macOS v0.1.6 bundle version",
 )
 
 replace_if_present(
