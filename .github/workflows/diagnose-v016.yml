@@ -1,0 +1,45 @@
+name: Diagnose ClipMesh v0.1.6 protocol
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  protocol-diagnostics:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Reconstruct validated icon assets
+        run: python ci/prepare-icon-assets.py
+      - name: Unpack exact source archive
+        run: python ci/unpack.py
+      - name: Apply product patches
+        run: |
+          python ci/patch-features.py
+          python ci/patch-sync-fixes.py
+          python ci/patch-v014-versions.py
+          python ci/patch-v015-sync.py
+      - name: Dump cross-language protocol sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '===== ANDROID SOURCE FILES ====='
+          find clipmesh/android/app/src/main/java/dev/clipmesh -type f | sort
+          echo '===== CRYPTO FILES ====='
+          find clipmesh -type f \( -iname '*crypto*' -o -iname '*protocol*' -o -iname '*network*' \) | sort
+          echo '===== ANDROID NETWORK ====='
+          cat clipmesh/android/app/src/main/java/dev/clipmesh/network/NetworkEngine.kt
+          echo '===== ANDROID CRYPTO ====='
+          CRYPTO=$(find clipmesh/android/app/src/main/java/dev/clipmesh -type f -iname '*Crypto*.kt' | head -1)
+          test -n "$CRYPTO"
+          cat "$CRYPTO"
+          echo '===== ANDROID MODELS/PAYLOAD ====='
+          grep -R -n -B20 -A80 -E 'data class (Frame|Clip|Representation)|class (Frame|Clip|Representation)|toJson|fromJson|encryptFrame|decryptFrame' clipmesh/android/app/src/main/java/dev/clipmesh || true
+          echo '===== RUST CRYPTO/PROTOCOL MATCHES ====='
+          grep -R -n -B30 -A100 -E 'fn (encrypt_frame|decrypt_frame)|struct (Frame|ClipPayload|Representation)|enum FrameKind|to_json_bytes|from_json_bytes' clipmesh --include='*.rs' || true
