@@ -20,29 +20,38 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Reconstruct validated icon assets
-        run: python ci/prepare-icon-assets.py
-      - name: Unpack exact source archive
-        run: python ci/unpack.py
-      - name: Apply cross-platform device UI features
-        run: python ci/patch-features.py
-      - name: Apply v0.1.4 Shizuku/accessibility baseline fixes
-        run: python ci/patch-sync-fixes.py
-      - name: Enable native desktop credential stores
-        run: python ci/patch-desktop.py
-      - name: Apply native macOS app wrapper
-        run: python ci/patch-macos.py
-      - name: Align v0.1.5 native package versions
-        run: python ci/patch-v014-versions.py
-      - name: Apply v0.1.5 foreground sync and transport fixes
-        run: python ci/patch-v015-sync.py
-      - name: Stamp desktop version
-        run: python -c "from pathlib import Path; p=Path('clipmesh/Cargo.toml'); s=p.read_text(); p.write_text(s.replace('version = \"0.1.0\"','version = \"0.1.5\"',1))"
+      - name: Reconstruct source and assets
+        run: |
+          python ci/prepare-icon-assets.py
+          python ci/unpack.py
+      - name: Apply ClipMesh patches
+        run: |
+          python ci/patch-features.py
+          python ci/patch-sync-fixes.py
+          python ci/patch-desktop.py
+          python ci/patch-macos.py
+          python ci/patch-v014-versions.py
+          python ci/patch-v015-sync.py
+          python ci/patch-v016-sync.py
+      - name: Stamp v0.1.6
+        run: python -c "from pathlib import Path; p=Path('clipmesh/Cargo.toml'); s=p.read_text(); p.write_text(s.replace('version = \"0.1.0\"','version = \"0.1.6\"',1))"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: clipmesh
-      - name: Test protocol, core, and desktop transport
+      - name: Validate self-capture migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'source_is_clipmesh' clipmesh/apps/desktop/src/clipboard.rs
+          grep -q 'retain(|item| !item.trim().eq_ignore_ascii_case("clipmesh"))' clipmesh/apps/desktop/src/config.rs
+          python - <<'PY'
+          from pathlib import Path
+          text = Path('clipmesh/apps/desktop/src/config.rs').read_text()
+          defaults = text[text.index('pub fn default_exclusions()'):]
+          assert '"clipmesh"' not in defaults, defaults
+          PY
+      - name: Test protocol, core, and transport
         working-directory: clipmesh
         run: |
           python -m pip install --disable-pip-version-check cryptography
@@ -65,8 +74,7 @@ jobs:
           test -f "$SUPPORT/config.json"
           ./dist/macos/ClipMesh.app/Contents/MacOS/clipmesh-bin status
           ./dist/macos/ClipMesh.app/Contents/MacOS/clipmesh-bin ui-state
-          plutil -extract CFBundleShortVersionString raw ./dist/macos/ClipMesh.app/Contents/Info.plist | grep -qx '0.1.5'
-          file ./dist/macos/ClipMesh.app/Contents/MacOS/ClipMesh
+          plutil -extract CFBundleShortVersionString raw ./dist/macos/ClipMesh.app/Contents/Info.plist | grep -qx '0.1.6'
           plutil -lint ./dist/macos/ClipMesh.app/Contents/Info.plist
           codesign --verify --deep --strict --verbose=2 ./dist/macos/ClipMesh.app
       - name: Checksums
@@ -91,34 +99,51 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Reconstruct validated icon assets
-        run: python ci/prepare-icon-assets.py
-      - name: Unpack exact source archive
-        run: python ci/unpack.py
-      - name: Apply cross-platform device UI features
-        run: python ci/patch-features.py
-      - name: Apply v0.1.4 Shizuku/accessibility baseline fixes
-        run: python ci/patch-sync-fixes.py
-      - name: Enable native desktop credential stores
-        run: python ci/patch-desktop.py
-      - name: Apply native Windows tray wrapper
-        run: python ci/patch-windows.py
-      - name: Align v0.1.5 native package versions
-        run: python ci/patch-v014-versions.py
-      - name: Apply v0.1.5 foreground sync and transport fixes
-        run: python ci/patch-v015-sync.py
-      - name: Stamp desktop version
+      - name: Reconstruct source and assets
+        shell: pwsh
+        run: |
+          python ci/prepare-icon-assets.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python ci/unpack.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Apply ClipMesh patches
+        shell: pwsh
+        run: |
+          python ci/patch-features.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python ci/patch-sync-fixes.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python ci/patch-desktop.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python ci/patch-windows.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python ci/patch-v014-versions.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python ci/patch-v015-sync.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python ci/patch-v016-sync.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Stamp v0.1.6
         shell: pwsh
         run: |
           $p = 'clipmesh/Cargo.toml'
           $s = Get-Content $p -Raw
-          $s = $s -replace 'version = "0.1.0"', 'version = "0.1.5"'
+          $s = $s -replace 'version = "0.1.0"', 'version = "0.1.6"'
           Set-Content $p $s -Encoding utf8
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: clipmesh
-      - name: Test protocol, core, and desktop transport
+      - name: Validate self-capture migration
+        shell: pwsh
+        run: |
+          $clip = Get-Content 'clipmesh/apps/desktop/src/clipboard.rs' -Raw
+          $cfg = Get-Content 'clipmesh/apps/desktop/src/config.rs' -Raw
+          if (-not $clip.Contains('source_is_clipmesh')) { throw 'Desktop self-capture guard missing' }
+          if (-not $cfg.Contains('retain(|item| !item.trim().eq_ignore_ascii_case("clipmesh"))')) { throw 'Desktop self-exclusion migration missing' }
+          $defaults = $cfg.Substring($cfg.IndexOf('pub fn default_exclusions()'))
+          if ($defaults.Contains('"clipmesh"')) { throw 'ClipMesh remains in desktop default exclusions' }
+      - name: Test protocol, core, and transport
         working-directory: clipmesh
         shell: pwsh
         run: |
@@ -144,12 +169,9 @@ jobs:
           Remove-Item -Recurse -Force $local -ErrorAction SilentlyContinue
           $process = Start-Process -FilePath '.\dist\windows\clipmesh.exe' -ArgumentList '--smoke-test' -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "Windows smoke test failed with exit code $($process.ExitCode)" }
-          $configs = @(
-            (Join-Path $env:APPDATA 'ClipMesh\ClipMesh\config\config.json'),
-            (Join-Path $env:APPDATA 'ClipMesh\ClipMesh\config.json')
-          )
+          $configs = @((Join-Path $env:APPDATA 'ClipMesh\ClipMesh\config\config.json'), (Join-Path $env:APPDATA 'ClipMesh\ClipMesh\config.json'))
           if (-not ($configs | Where-Object { Test-Path $_ })) { throw 'Windows first-run smoke test did not create config.json.' }
-          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.1.5\clipmesh-bin.exe'))) { throw 'Windows launcher did not extract its embedded v0.1.5 sync engine.' }
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.1.6\clipmesh-bin.exe'))) { throw 'Windows launcher did not extract its embedded v0.1.6 sync engine.' }
       - name: Checksum
         working-directory: clipmesh
         shell: pwsh
@@ -172,34 +194,39 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Reconstruct validated icon assets
-        run: python ci/prepare-icon-assets.py
-      - name: Unpack exact source archive
-        run: python ci/unpack.py
-      - name: Apply cross-platform device UI features
-        run: python ci/patch-features.py
-      - name: Apply v0.1.4 Shizuku/accessibility baseline fixes
-        run: python ci/patch-sync-fixes.py
-      - name: Align v0.1.5 native package versions
-        run: python ci/patch-v014-versions.py
-      - name: Apply v0.1.5 foreground sync and transport fixes
-        run: python ci/patch-v015-sync.py
-      - name: Validate patched Android sources
+      - name: Reconstruct source and assets
+        run: |
+          python ci/prepare-icon-assets.py
+          python ci/unpack.py
+      - name: Apply ClipMesh patches
+        run: |
+          python ci/patch-features.py
+          python ci/patch-sync-fixes.py
+          python ci/patch-v014-versions.py
+          python ci/patch-v015-sync.py
+          python ci/patch-v016-sync.py
+      - name: Validate Android synchronization sources
         shell: bash
         run: |
           set -euo pipefail
+          grep -q 'sourcePackage != context.packageName' clipmesh/android/app/src/main/java/dev/clipmesh/clipboard/ClipboardBridge.kt
+          grep -q 'filterNot { it.equals("dev.clipmesh", ignoreCase = true) }' clipmesh/android/app/src/main/java/dev/clipmesh/SettingsStore.kt
+          grep -q 'ACTION_CAPTURE_CURRENT' clipmesh/android/app/src/main/java/dev/clipmesh/MainActivity.kt
+          grep -q 'versionName = "0.1.6"' clipmesh/android/app/build.gradle.kts
+          grep -q 'versionCode = 6' clipmesh/android/app/build.gradle.kts
+          python - <<'PY'
+          from pathlib import Path
+          s = Path('clipmesh/android/app/src/main/java/dev/clipmesh/SettingsStore.kt').read_text()
+          defaults = s[s.index('val DEFAULT_EXCLUSIONS = setOf('):]
+          assert '"dev.clipmesh"' not in defaults, defaults
+          PY
           grep -q 'moe.shizuku.manager.permission.API_V23' clipmesh/android/app/src/main/AndroidManifest.xml
           grep -q 'android:name=".ExclusionActivity"' clipmesh/android/app/src/main/AndroidManifest.xml
           grep -q 'ExclusionAccessibilityService' clipmesh/android/app/src/main/AndroidManifest.xml
           grep -q 'addBinderReceivedListenerSticky' clipmesh/android/app/src/main/java/dev/clipmesh/shizuku/ShizukuManager.kt
-          grep -q 'unbindUserService(args, connection, false)' clipmesh/android/app/src/main/java/dev/clipmesh/shizuku/ShizukuManager.kt
           ! grep -q 'exitProcess(0)' clipmesh/android/app/src/main/java/dev/clipmesh/shizuku/ClipboardUserService.kt
-          grep -q 'captureNowForBackgroundMonitor' clipmesh/android/app/src/main/java/dev/clipmesh/SyncService.kt
-          grep -q 'ACTION_CAPTURE_CURRENT' clipmesh/android/app/src/main/java/dev/clipmesh/SyncService.kt
           grep -q '2_500L' clipmesh/android/app/src/main/java/dev/clipmesh/network/NetworkEngine.kt
-          grep -q 'clipboardChanged' clipmesh/android/app/src/main/java/dev/clipmesh/exclusion/ExclusionAccessibilityService.kt
           grep -q 'text/plain; charset=utf-8' clipmesh/android/app/src/main/java/dev/clipmesh/clipboard/ClipboardBridge.kt
-          grep -q 'versionName = "0.1.5"' clipmesh/android/app/build.gradle.kts
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -243,18 +270,15 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Download macOS build
-        uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8
         with:
           name: ClipMesh-macOS
           path: artifacts/macos
-      - name: Download Windows build
-        uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8
         with:
           name: ClipMesh-Windows
           path: artifacts/windows
-      - name: Download Android build
-        uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8
         with:
           name: ClipMesh-Android
           path: artifacts/android
@@ -280,16 +304,10 @@ jobs:
             tag="${GITHUB_REF_NAME}"
             title="ClipMesh ${GITHUB_REF_NAME}"
           else
-            tag="v0.1.5-alpha"
-            title="ClipMesh v0.1.5-alpha"
+            tag="v0.1.6-alpha"
+            title="ClipMesh v0.1.6-alpha"
           fi
-          assets=(
-            release/ClipMesh-macOS.dmg
-            release/ClipMesh-Windows.exe
-            release/ClipMesh-Android.apk
-            release/ClipMesh-icon.png
-            release/SHA256SUMS.txt
-          )
+          assets=(release/ClipMesh-macOS.dmg release/ClipMesh-Windows.exe release/ClipMesh-Android.apk release/ClipMesh-icon.png release/SHA256SUMS.txt)
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" "${assets[@]}" --clobber
             exit 0
