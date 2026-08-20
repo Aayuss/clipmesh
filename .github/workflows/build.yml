@@ -33,13 +33,14 @@ jobs:
           python ci/patch-v014-versions.py
           python ci/patch-v015-sync.py
           python ci/patch-v016-sync.py
-      - name: Stamp v0.1.6
-        run: python -c "from pathlib import Path; p=Path('clipmesh/Cargo.toml'); s=p.read_text(); p.write_text(s.replace('version = \"0.1.0\"','version = \"0.1.6\"',1))"
+          python ci/patch-v017-shizuku.py
+      - name: Stamp v0.1.7
+        run: python -c "from pathlib import Path; p=Path('clipmesh/Cargo.toml'); s=p.read_text(); p.write_text(s.replace('version = \"0.1.0\"','version = \"0.1.7\"',1))"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: clipmesh
-      - name: Validate self-capture migration
+      - name: Validate desktop synchronization sources
         shell: bash
         run: |
           set -euo pipefail
@@ -74,7 +75,7 @@ jobs:
           test -f "$SUPPORT/config.json"
           ./dist/macos/ClipMesh.app/Contents/MacOS/clipmesh-bin status
           ./dist/macos/ClipMesh.app/Contents/MacOS/clipmesh-bin ui-state
-          plutil -extract CFBundleShortVersionString raw ./dist/macos/ClipMesh.app/Contents/Info.plist | grep -qx '0.1.6'
+          plutil -extract CFBundleShortVersionString raw ./dist/macos/ClipMesh.app/Contents/Info.plist | grep -qx '0.1.7'
           plutil -lint ./dist/macos/ClipMesh.app/Contents/Info.plist
           codesign --verify --deep --strict --verbose=2 ./dist/macos/ClipMesh.app
       - name: Checksums
@@ -123,18 +124,20 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python ci/patch-v016-sync.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Stamp v0.1.6
+          python ci/patch-v017-shizuku.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Stamp v0.1.7
         shell: pwsh
         run: |
           $p = 'clipmesh/Cargo.toml'
           $s = Get-Content $p -Raw
-          $s = $s -replace 'version = "0.1.0"', 'version = "0.1.6"'
+          $s = $s -replace 'version = "0.1.0"', 'version = "0.1.7"'
           Set-Content $p $s -Encoding utf8
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: clipmesh
-      - name: Validate self-capture migration
+      - name: Validate desktop synchronization sources
         shell: pwsh
         run: |
           $clip = Get-Content 'clipmesh/apps/desktop/src/clipboard.rs' -Raw
@@ -171,7 +174,7 @@ jobs:
           if ($process.ExitCode -ne 0) { throw "Windows smoke test failed with exit code $($process.ExitCode)" }
           $configs = @((Join-Path $env:APPDATA 'ClipMesh\ClipMesh\config\config.json'), (Join-Path $env:APPDATA 'ClipMesh\ClipMesh\config.json'))
           if (-not ($configs | Where-Object { Test-Path $_ })) { throw 'Windows first-run smoke test did not create config.json.' }
-          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.1.6\clipmesh-bin.exe'))) { throw 'Windows launcher did not extract its embedded v0.1.6 sync engine.' }
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.1.7\clipmesh-bin.exe'))) { throw 'Windows launcher did not extract its embedded v0.1.7 sync engine.' }
       - name: Checksum
         working-directory: clipmesh
         shell: pwsh
@@ -205,28 +208,46 @@ jobs:
           python ci/patch-v014-versions.py
           python ci/patch-v015-sync.py
           python ci/patch-v016-sync.py
-      - name: Validate Android synchronization sources
+          python ci/patch-v017-shizuku.py
+      - name: Validate Android Shizuku and synchronization sources
         shell: bash
         run: |
           set -euo pipefail
-          grep -q 'sourcePackage != context.packageName' clipmesh/android/app/src/main/java/dev/clipmesh/clipboard/ClipboardBridge.kt
+          MANIFEST=clipmesh/android/app/src/main/AndroidManifest.xml
+          BRIDGE=clipmesh/android/app/src/main/java/dev/clipmesh/clipboard/ClipboardBridge.kt
+          SHIZUKU=clipmesh/android/app/src/main/java/dev/clipmesh/shizuku/ShizukuManager.kt
+          USER_SERVICE=clipmesh/android/app/src/main/java/dev/clipmesh/shizuku/ClipboardUserService.kt
+          grep -q 'sourcePackage != context.packageName' "$BRIDGE"
+          grep -q 'readSnapshotJson' "$BRIDGE"
+          grep -q 'shizuku.setText' "$BRIDGE"
           grep -q 'filterNot { it.equals("dev.clipmesh", ignoreCase = true) }' clipmesh/android/app/src/main/java/dev/clipmesh/SettingsStore.kt
           grep -q 'ACTION_CAPTURE_CURRENT' clipmesh/android/app/src/main/java/dev/clipmesh/MainActivity.kt
-          grep -q 'versionName = "0.1.6"' clipmesh/android/app/build.gradle.kts
-          grep -q 'versionCode = 6' clipmesh/android/app/build.gradle.kts
+          grep -q 'versionName = "0.1.7"' clipmesh/android/app/build.gradle.kts
+          grep -q 'versionCode = 7' clipmesh/android/app/build.gradle.kts
           python - <<'PY'
           from pathlib import Path
           s = Path('clipmesh/android/app/src/main/java/dev/clipmesh/SettingsStore.kt').read_text()
           defaults = s[s.index('val DEFAULT_EXCLUSIONS = setOf('):]
           assert '"dev.clipmesh"' not in defaults, defaults
           PY
-          grep -q 'moe.shizuku.manager.permission.API_V23' clipmesh/android/app/src/main/AndroidManifest.xml
-          grep -q 'android:name=".ExclusionActivity"' clipmesh/android/app/src/main/AndroidManifest.xml
-          grep -q 'ExclusionAccessibilityService' clipmesh/android/app/src/main/AndroidManifest.xml
-          grep -q 'addBinderReceivedListenerSticky' clipmesh/android/app/src/main/java/dev/clipmesh/shizuku/ShizukuManager.kt
-          ! grep -q 'exitProcess(0)' clipmesh/android/app/src/main/java/dev/clipmesh/shizuku/ClipboardUserService.kt
+          grep -q 'moe.shizuku.manager.permission.API_V23' "$MANIFEST"
+          grep -q 'android:name="rikka.shizuku.ShizukuProvider"' "$MANIFEST"
+          grep -q 'android:authorities="${applicationId}.shizuku"' "$MANIFEST"
+          grep -q 'android:permission="android.permission.INTERACT_ACROSS_USERS_FULL"' "$MANIFEST"
+          grep -q 'android:name=".ExclusionActivity"' "$MANIFEST"
+          grep -q 'ExclusionAccessibilityService' "$MANIFEST"
+          grep -q 'addBinderReceivedListenerSticky' "$SHIZUKU"
+          grep -q '.tag("clipmesh-clipboard")' "$SHIZUKU"
+          grep -q '.version(3)' "$SHIZUKU"
+          grep -q 'unbindUserService(args, connection, false)' "$SHIZUKU"
+          ! grep -q 'unbindUserService(args, connection, true)' "$SHIZUKU"
+          ! grep -q 'exitProcess(0)' "$USER_SERVICE"
           grep -q '2_500L' clipmesh/android/app/src/main/java/dev/clipmesh/network/NetworkEngine.kt
-          grep -q 'text/plain; charset=utf-8' clipmesh/android/app/src/main/java/dev/clipmesh/clipboard/ClipboardBridge.kt
+          grep -q 'text/plain; charset=utf-8' "$BRIDGE"
+          echo '--- ClipboardUserService Shizuku/clipboard calls ---'
+          grep -nE 'class ClipboardUserService|primaryClip|setPrimaryClip|copyPrimaryClip|destroy|ServiceManager|clipboard' "$USER_SERVICE" || true
+          echo '--- ClipboardBridge Shizuku calls ---'
+          grep -nE 'readSnapshotJson|copyItem|setText|readCurrent|applyRemote|captureAsync' "$BRIDGE" || true
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -250,7 +271,10 @@ jobs:
           unzip -p "$APK" AndroidManifest.xml > /tmp/manifest.bin
           strings -el /tmp/manifest.bin | grep -q 'dev.clipmesh.ExclusionActivity'
           strings -el /tmp/manifest.bin | grep -q 'dev.clipmesh.exclusion.ExclusionAccessibilityService'
+          strings -el /tmp/manifest.bin | grep -q 'rikka.shizuku.ShizukuProvider'
+          strings -el /tmp/manifest.bin | grep -q 'dev.clipmesh.shizuku'
           strings -el /tmp/manifest.bin | grep -q 'moe.shizuku.manager.permission.API_V23'
+          strings -el /tmp/manifest.bin | grep -q 'android.permission.INTERACT_ACROSS_USERS_FULL'
       - name: Checksum
         working-directory: clipmesh
         run: sha256sum dist/android/ClipMesh-debug.apk > dist/android/SHA256SUMS.txt
@@ -304,8 +328,8 @@ jobs:
             tag="${GITHUB_REF_NAME}"
             title="ClipMesh ${GITHUB_REF_NAME}"
           else
-            tag="v0.1.6-alpha"
-            title="ClipMesh v0.1.6-alpha"
+            tag="v0.1.7-alpha"
+            title="ClipMesh v0.1.7-alpha"
           fi
           assets=(release/ClipMesh-macOS.dmg release/ClipMesh-Windows.exe release/ClipMesh-Android.apk release/ClipMesh-icon.png release/SHA256SUMS.txt)
           if gh release view "$tag" >/dev/null 2>&1; then

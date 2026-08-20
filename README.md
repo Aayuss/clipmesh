@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/Aayuss/clipmesh/releases/download/v0.1.6-alpha/ClipMesh-icon.png" width="180" alt="ClipMesh icon">
+  <img src="https://github.com/Aayuss/clipmesh/releases/download/v0.1.7-alpha/ClipMesh-icon.png" width="180" alt="ClipMesh icon">
 </p>
 
 <h1 align="center">ClipMesh</h1>
@@ -8,43 +8,53 @@
   Private LAN-only encrypted clipboard sync for macOS, Windows, and Android.
 </p>
 
-This repository builds the private ClipMesh package for personal/family/friends use.
+This repository builds ClipMesh for personal/family/friends use.
 
 ## Download ClipMesh
 
-### Direct downloads - v0.1.6-alpha
+### Direct downloads - v0.1.7-alpha
 
-- [Download ClipMesh for macOS (.dmg)](https://github.com/Aayuss/clipmesh/releases/download/v0.1.6-alpha/ClipMesh-macOS.dmg)
-- [Download ClipMesh for Windows (.exe)](https://github.com/Aayuss/clipmesh/releases/download/v0.1.6-alpha/ClipMesh-Windows.exe)
-- [Download ClipMesh for Android (.apk)](https://github.com/Aayuss/clipmesh/releases/download/v0.1.6-alpha/ClipMesh-Android.apk)
+- [Download ClipMesh for macOS (.dmg)](https://github.com/Aayuss/clipmesh/releases/download/v0.1.7-alpha/ClipMesh-macOS.dmg)
+- [Download ClipMesh for Windows (.exe)](https://github.com/Aayuss/clipmesh/releases/download/v0.1.7-alpha/ClipMesh-Windows.exe)
+- [Download ClipMesh for Android (.apk)](https://github.com/Aayuss/clipmesh/releases/download/v0.1.7-alpha/ClipMesh-Android.apk)
 
 **[Open all ClipMesh releases](https://github.com/Aayuss/clipmesh/releases)**
 
-## v0.1.6 - foreground/self-capture synchronization fix
+## v0.1.7 - Shizuku Binder delivery fix
 
-Real-device testing of v0.1.5 proved that Mac and Android could establish the authenticated encrypted connection and both show **Online**, while local clipboard changes still failed to leave the originating device.
+Real-device testing showed a specific Android failure: Shizuku itself could be **running**, and ClipMesh could appear **authorized** in Shizuku's Application management screen, while ClipMesh still reported that Shizuku was not connected.
 
-The remaining cause was source-app exclusion. Earlier versions included ClipMesh itself in the default exclusion list. That was redundant because remote clipboard echoes are already prevented using content fingerprints, and it could suppress a legitimate local copy when the ClipMesh window became foreground before the watcher/capture path observed the change.
+The cause was the Android client wiring. ClipMesh depended on the Shizuku provider library and requested the Shizuku API permission, but the application manifest did not declare `rikka.shizuku.ShizukuProvider`. Authorization alone is not enough - that provider is the endpoint Shizuku uses to deliver its server Binder into the ClipMesh process. Without it, ClipMesh could remain authorized while `Shizuku.pingBinder()` stayed unavailable.
 
-v0.1.6 therefore:
+v0.1.7 therefore:
 
-- removes `clipmesh` from desktop default exclusions
-- removes `dev.clipmesh` from Android default exclusions
-- migrates the obsolete self-exclusion out of existing installs at runtime - updating does not require clearing data or re-pairing
-- explicitly allows capture while the ClipMesh UI itself is foreground
-- keeps password-manager and other sensitive-app exclusions intact
-- keeps fingerprint-based remote-echo suppression intact
-- makes Android **View clipboard** request an immediate foreground capture in addition to the automatic clipboard listener
-- retains the v0.1.5 authenticated TCP fallback, canonical text MIME handling, macOS 350 ms deduplicated pasteboard fallback, and Android foreground/Accessibility/Shizuku capture paths
+- declares the required `rikka.shizuku.ShizukuProvider` Binder endpoint in the packaged Android application
+- keeps the Shizuku API permission and manager package visibility
+- listens for Shizuku Binder arrival/death and immediately binds the clipboard UserService when an already-authorized install reconnects
+- gives the clipboard UserService a stable tag and bumps its service version so Shizuku replaces stale service code from older ClipMesh builds
+- never asks Shizuku to remove/kill its server; ClipMesh disconnects its own UserService with `remove=false`
+- keeps privileged background clipboard reads/writes through the Shizuku UserService
+- validates the Shizuku provider, authority, permission, UserService wiring and clipboard bridge in CI and again inside the packaged APK
+- retains the v0.1.6 self-capture migration, authenticated transport fallback, canonical text MIME handling, macOS clipboard fallback and Accessibility wake path
 
-### Expected foreground test
+### Shizuku setup after updating
 
-With both devices showing **Online**, Shizuku is not required for this test:
+1. Install/update to the v0.1.7 Android APK.
+2. Start Shizuku normally and confirm **Shizuku is running**.
+3. In Shizuku → **Authorized applications**, keep ClipMesh enabled.
+4. Open ClipMesh → **Settings** → **Request Shizuku permission**.
+5. When the Binder is available and permission is granted, ClipMesh reports that Shizuku is authorized and connected.
 
-1. Copy new text on the Mac. Android's clipboard should update automatically.
-2. Copy new text on Android while ClipMesh is foreground, or return to ClipMesh after copying. The Mac clipboard should update automatically.
+Shizuku is **not required** for Mac/Windows → Android receiving or for Android → desktop capture while ClipMesh has foreground clipboard access. It is the preferred path for reliable automatic Android → desktop capture while ClipMesh is in the background on modern Android.
 
-You do not pair in both directions. One pairing code joins the devices to the same private space.
+## Foreground synchronization
+
+With both devices showing **Online**, test with new clipboard values:
+
+1. Copy new text on the Mac or Windows PC. Android's clipboard should update automatically.
+2. Copy new text on Android while ClipMesh is foreground, or return to ClipMesh immediately after copying. The desktop clipboard should update automatically.
+
+One pairing code joins devices to the same private space; pairing is not performed separately in both directions.
 
 ## Pairing and device UI
 
@@ -61,15 +71,15 @@ Pairing codes contain the private space key and must be treated like a password.
 
 ## Android background clipboard access
 
-Mac/Windows → Android receiving does not require Shizuku. Android → desktop foreground capture also does not require Shizuku.
-
-Android 10+ restricts ordinary background clipboard reads. For automatic Android → desktop capture while ClipMesh is not foreground, ClipMesh supports:
+Android 10+ restricts ordinary background clipboard reads. ClipMesh supports:
 
 - Shizuku - preferred privileged background clipboard access
 - the optional **ClipMesh app exclusions** Accessibility service as an event-driven fallback where Android/OEM behavior allows it
 - the optional compatibility watchdog, which remains off by default because it uses periodic checks
 
 The Accessibility service is configured with `canRetrieveWindowContent=false`; it is used for foreground-app exclusions and clipboard-change signaling, not screen scraping.
+
+For sideloaded APKs on Android 13+, Android may initially block the Accessibility service as a restricted setting. Open ClipMesh's App info, use the top-right menu → **Allow restricted settings**, then return to Accessibility and enable **ClipMesh app exclusions** if you want that fallback.
 
 ## Background icons and desktop behavior
 
@@ -102,10 +112,10 @@ Android stores its space key through Android Keystore-backed storage.
 
 > `SHA256SUMS.txt` is optional. It is only for verifying installer bytes.
 
-> This repository is private. Only GitHub accounts with repository access can use these GitHub download links.
+> The repository may be public during active development. If it is made private later, only GitHub accounts with repository access can use the GitHub release links; installers can also be shared directly with trusted devices.
 
 ## Builds and releases
 
-Every pull request and push to `main` builds macOS, Windows, and Android. CI validates the protocol/core tests, authenticated desktop transport roundtrip, v0.1.6 self-capture migration guards, native builds, first-run behavior, secure-key persistence, Android packaged components, and checksums.
+Every pull request and push to `main` builds macOS, Windows, and Android. CI validates protocol/core tests, the authenticated desktop transport roundtrip, self-capture migration guards, native builds, first-run behavior, Android Shizuku provider/UserService wiring, packaged APK components, and checksums.
 
-A successful `main` build publishes `v0.1.6-alpha` with the raw `.dmg`, `.exe`, `.apk`, icon artwork, and optional checksum file.
+A successful `main` build publishes `v0.1.7-alpha` with the raw `.dmg`, `.exe`, `.apk`, icon artwork, and optional checksum file.
