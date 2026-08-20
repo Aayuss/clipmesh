@@ -19,25 +19,14 @@ jobs:
         run: python ci/prepare-icon-assets.py
       - name: Unpack exact source archive
         run: python ci/unpack.py
-      - name: Inspect config and desktop startup sources
+      - name: Inspect startup and secret-storage sources
         shell: bash
         run: |
-          python - <<'PY'
-          from pathlib import Path
-          root = Path('clipmesh')
-          needles = ['config.json', 'Application Support', 'ProjectDirs', 'Config', 'run_command', 'Command::Run']
-          for p in root.rglob('*.rs'):
-              try:
-                  text = p.read_text(encoding='utf-8')
-              except Exception:
-                  continue
-              if any(n in text for n in needles):
-                  print('\n===== FILE:', p, '=====')
-                  lines = text.splitlines()
-                  for i, line in enumerate(lines, 1):
-                      if any(n in line for n in needles):
-                          lo=max(1,i-25); hi=min(len(lines),i+50)
-                          print(f'--- around line {i} ---')
-                          for j in range(lo, hi+1):
-                              print(f'{j:04d}: {lines[j-1]}')
-          PY
+          echo '===== apps/desktop/src/config.rs ====='
+          cat clipmesh/apps/desktop/src/config.rs
+          echo '===== apps/desktop/src/secrets.rs ====='
+          cat clipmesh/apps/desktop/src/secrets.rs
+          echo '===== apps/desktop/Cargo.toml ====='
+          cat clipmesh/apps/desktop/Cargo.toml
+          echo '===== workspace Cargo.toml ====='
+          cat clipmesh/Cargo.toml
