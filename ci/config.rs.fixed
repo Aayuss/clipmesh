@@ -1,0 +1,314 @@
+use anyhow::{anyhow, Context, Result};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use clipmesh_core::MasterKey;
+use directories::ProjectDirs;
+use serde::{Deserialize, Serialize};
+use std::{
+    fs,
+    net::SocketAddr,
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
+};
+use url::Url;
+use uuid::Uuid;
+
+pub const DISCOVERY_PORT: u16 = 41473;
+pub const DEFAULT_TCP_PORT: u16 = 41474;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Config {
+    pub schema: u8,
+    pub device_id: Uuid,
+    pub device_name: String,
+    pub space_id: Uuid,
+    pub tcp_port: u16,
+    pub max_payload_bytes: usize,
+    pub send_enabled: bool,
+    pub receive_enabled: bool,
+    pub exclusions: Vec<String>,
+    pub static_peers: Vec<SocketAddr>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnownPeer {
+    pub device_id: Uuid,
+    pub name: String,
+    pub address: String,
+    pub port: u16,
+    pub last_seen_ms: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct KnownPeersFile {
+    schema: u8,
+    space_id: Uuid,
+    peers: Vec<KnownPeer>,
+}
+
+pub struct PairingInfo {
+    pub space_id: Uuid,
+    pub key: MasterKey,
+    pub source_device_id: Option<Uuid>,
+    pub source_name: Option<String>,
+}
+
+impl Config {
+    pub fn new(name: String) -> Self {
+        Self {
+            schema: 1,
+            device_id: Uuid::new_v4(),
+            device_name: sanitize_device_name(&name),
+            space_id: Uuid::new_v4(),
+            tcp_port: DEFAULT_TCP_PORT,
+            max_payload_bytes: clipmesh_core::payload::DEFAULT_MAX_PAYLOAD_BYTES,
+            send_enabled: true,
+            receive_enabled: true,
+            exclusions: default_exclusions(),
+            static_peers: Vec::new(),
+        }
+    }
+
+    pub fn joined(name: String, space_id: Uuid) -> Self {
+        let mut cfg = Self::new(name);
+        cfg.space_id = space_id;
+        cfg
+    }
+
+    pub fn path() -> Result<PathBuf> {
+        let dirs = ProjectDirs::from("dev", "ClipMesh", "ClipMesh")
+            .ok_or_else(|| anyhow!("could not resolve application config directory"))?;
+        Ok(dirs.config_dir().join("config.json"))
+    }
+
+    pub fn cache_dir() -> Result<PathBuf> {
+        let dirs = ProjectDirs::from("dev", "ClipMesh", "ClipMesh")
+            .ok_or_else(|| anyhow!("could not resolve application cache directory"))?;
+        Ok(dirs.cache_dir().to_path_buf())
+    }
+
+    pub fn load() -> Result<Self> {
+        let path = Self::path()?;
+        let bytes = fs::read(&path).with_context(|| format!("read {}", path.display()))?;
+        let mut cfg: Self = serde_json::from_slice(&bytes)?;
+        if cfg.schema != 1 {
+            return Err(anyhow!("unsupported config schema"));
+        }
+        cfg.device_name = sanitize_device_name(&cfg.device_name);
+        Ok(cfg)
+    }
+
+    pub fn save(&self) -> Result<()> {
+        let path = Self::path()?;
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let temp = path.with_extension("json.tmp");
+        fs::write(&temp, serde_json::to_vec_pretty(self)?)?;
+        if path.exists() {
+            fs::remove_file(&path)?;
+        }
+        fs::rename(temp, path)?;
+        Ok(())
+    }
+
+    fn peers_path() -> Result<PathBuf> {
+        let config = Self::path()?;
+        Ok(config.with_file_name("peers.json"))
+    }
+
+    pub fn load_known_peers(space_id: Uuid) -> Result<Vec<KnownPeer>> {
+        let path = Self::peers_path()?;
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+        let bytes = fs::read(&path).with_context(|| format!("read {}", path.display()))?;
+        let stored: KnownPeersFile = serde_json::from_slice(&bytes)
+            .with_context(|| format!("parse {}", path.display()))?;
+        if stored.schema != 1 || stored.space_id != space_id {
+            return Ok(Vec::new());
+        }
+        Ok(stored.peers)
+    }
+
+    fn save_known_peers(space_id: Uuid, mut peers: Vec<KnownPeer>) -> Result<()> {
+        peers.sort_by(|a, b| b.last_seen_ms.cmp(&a.last_seen_ms).then_with(|| a.name.cmp(&b.name)));
+        peers.truncate(128);
+        let stored = KnownPeersFile { schema: 1, space_id, peers };
+        let path = Self::peers_path()?;
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let temp = path.with_extension("json.tmp");
+        fs::write(&temp, serde_json::to_vec_pretty(&stored)?)?;
+        if path.exists() {
+            fs::remove_file(&path)?;
+        }
+        fs::rename(temp, path)?;
+        Ok(())
+    }
+
+    pub fn clear_known_peers() -> Result<()> {
+        let path = Self::peers_path()?;
+        if path.exists() {
+            fs::remove_file(path)?;
+        }
+        Ok(())
+    }
+
+    pub fn seed_peer(space_id: Uuid, device_id: Uuid, name: &str) -> Result<()> {
+        let mut peers = Self::load_known_peers(space_id)?;
+        let safe_name = peer_name(name, device_id);
+        if let Some(peer) = peers.iter_mut().find(|p| p.device_id == device_id) {
+            peer.name = safe_name;
+        } else {
+            peers.push(KnownPeer {
+                device_id,
+                name: safe_name,
+                address: String::new(),
+                port: 0,
+                last_seen_ms: 0,
+            });
+        }
+        Self::save_known_peers(space_id, peers)
+    }
+
+    pub fn remember_peer(
+        space_id: Uuid,
+        device_id: Uuid,
+        name: &str,
+        address: &str,
+        port: u16,
+    ) -> Result<()> {
+        let mut peers = Self::load_known_peers(space_id)?;
+        let now = now_ms();
+        let safe_name = peer_name(name, device_id);
+        if let Some(peer) = peers.iter_mut().find(|p| p.device_id == device_id) {
+            peer.name = safe_name;
+            peer.address = address.trim().chars().take(128).collect();
+            peer.port = port;
+            peer.last_seen_ms = now;
+        } else {
+            peers.push(KnownPeer {
+                device_id,
+                name: safe_name,
+                address: address.trim().chars().take(128).collect(),
+                port,
+                last_seen_ms: now,
+            });
+        }
+        Self::save_known_peers(space_id, peers)
+    }
+
+    pub fn touch_peer(space_id: Uuid, device_id: Uuid, address: &str) -> Result<()> {
+        let mut peers = Self::load_known_peers(space_id)?;
+        let now = now_ms();
+        if let Some(peer) = peers.iter_mut().find(|p| p.device_id == device_id) {
+            peer.last_seen_ms = now;
+            let trimmed = address.trim();
+            if !trimmed.is_empty() {
+                peer.address = trimmed.chars().take(128).collect();
+            }
+        } else {
+            peers.push(KnownPeer {
+                device_id,
+                name: device_id.to_string(),
+                address: address.trim().chars().take(128).collect(),
+                port: 0,
+                last_seen_ms: now,
+            });
+        }
+        Self::save_known_peers(space_id, peers)
+    }
+
+    pub fn pairing_uri(&self, master: &MasterKey) -> String {
+        let key = URL_SAFE_NO_PAD.encode(master.0);
+        let mut url = Url::parse("clipmesh://pair").expect("static URL");
+        url.query_pairs_mut()
+            .append_pair("v", "1")
+            .append_pair("space", &self.space_id.to_string())
+            .append_pair("key", &key)
+            .append_pair("device", &self.device_id.to_string())
+            .append_pair("name", &sanitize_device_name(&self.device_name));
+        url.to_string()
+    }
+
+    pub fn parse_pairing_uri(uri: &str) -> Result<PairingInfo> {
+        let url = Url::parse(uri.trim()).context("invalid pairing URI")?;
+        if url.scheme() != "clipmesh" || url.host_str() != Some("pair") {
+            return Err(anyhow!("not a ClipMesh pairing URI"));
+        }
+        let mut version = None;
+        let mut space = None;
+        let mut key = None;
+        let mut device = None;
+        let mut name = None;
+        for (k, v) in url.query_pairs() {
+            match k.as_ref() {
+                "v" => version = Some(v.into_owned()),
+                "space" => space = Some(v.into_owned()),
+                "key" => key = Some(v.into_owned()),
+                "device" => device = Some(v.into_owned()),
+                "name" => name = Some(v.into_owned()),
+                _ => {}
+            }
+        }
+        if version.as_deref() != Some("1") {
+            return Err(anyhow!("unsupported pairing version"));
+        }
+        let space_id = Uuid::parse_str(space.as_deref().ok_or_else(|| anyhow!("missing space"))?)?;
+        let raw = URL_SAFE_NO_PAD.decode(key.as_deref().ok_or_else(|| anyhow!("missing key"))?)?;
+        let source_device_id = device
+            .as_deref()
+            .filter(|v| !v.trim().is_empty())
+            .map(Uuid::parse_str)
+            .transpose()?;
+        let source_name = name
+            .as_deref()
+            .map(sanitize_device_name)
+            .filter(|v| !v.is_empty());
+        Ok(PairingInfo {
+            space_id,
+            key: MasterKey::from_slice(&raw)?,
+            source_device_id,
+            source_name,
+        })
+    }
+}
+
+pub fn sanitize_device_name(value: &str) -> String {
+    let cleaned: String = value
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(80)
+        .collect::<String>()
+        .trim()
+        .to_owned();
+    if cleaned.is_empty() { "Device".to_owned() } else { cleaned }
+}
+
+fn peer_name(value: &str, device_id: Uuid) -> String {
+    let cleaned: String = value
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(80)
+        .collect::<String>()
+        .trim()
+        .to_owned();
+    if cleaned.is_empty() { device_id.to_string() } else { cleaned }
+}
+
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .min(u128::from(u64::MAX)) as u64
+}
+
+pub fn default_exclusions() -> Vec<String> {
+    [
+        "1password", "bitwarden", "keepass", "keepassxc", "proton pass",
+        "lastpass", "dashlane", "enpass", "macos passwords", "passwords",
+        "windows credential manager", "keychain access", "clipmesh"
+    ].into_iter().map(str::to_owned).collect()
+}
