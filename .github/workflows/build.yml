@@ -24,6 +24,8 @@ jobs:
         run: python ci/prepare-icon-assets.py
       - name: Unpack exact source archive
         run: python ci/unpack.py
+      - name: Enable native desktop credential stores
+        run: python ci/patch-desktop.py
       - name: Apply native macOS app wrapper
         run: python ci/patch-macos.py
       - name: Stamp desktop version
@@ -79,6 +81,8 @@ jobs:
         run: python ci/prepare-icon-assets.py
       - name: Unpack exact source archive
         run: python ci/unpack.py
+      - name: Enable native desktop credential stores
+        run: python ci/patch-desktop.py
       - name: Stamp desktop version
         shell: pwsh
         run: |
