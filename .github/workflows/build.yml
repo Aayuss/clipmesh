@@ -24,8 +24,10 @@ jobs:
         run: python ci/prepare-icon-assets.py
       - name: Unpack exact source archive
         run: python ci/unpack.py
+      - name: Apply native macOS app wrapper
+        run: python ci/patch-macos.py
       - name: Stamp desktop version
-        run: python -c "from pathlib import Path; p=Path('clipmesh/Cargo.toml'); s=p.read_text(); p.write_text(s.replace('version = \"0.1.0\"','version = \"0.1.1\"',1))"
+        run: python -c "from pathlib import Path; p=Path('clipmesh/Cargo.toml'); s=p.read_text(); p.write_text(s.replace('version = \"0.1.0\"','version = \"0.1.2\"',1))"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -38,6 +40,19 @@ jobs:
         run: |
           chmod +x scripts/build-macos.sh
           ./scripts/build-macos.sh
+      - name: Smoke-test macOS first launch
+        working-directory: clipmesh
+        shell: bash
+        run: |
+          set -euo pipefail
+          SUPPORT="$HOME/Library/Application Support/dev.ClipMesh.ClipMesh"
+          rm -rf "$SUPPORT"
+          ./dist/macos/ClipMesh.app/Contents/MacOS/ClipMesh --smoke-test
+          test -f "$SUPPORT/config.json"
+          ./dist/macos/ClipMesh.app/Contents/MacOS/clipmesh-bin status
+          file ./dist/macos/ClipMesh.app/Contents/MacOS/ClipMesh
+          plutil -lint ./dist/macos/ClipMesh.app/Contents/Info.plist
+          codesign --verify --deep --strict --verbose=2 ./dist/macos/ClipMesh.app
       - name: Checksums
         working-directory: clipmesh
         run: shasum -a 256 dist/macos/ClipMesh.dmg dist/macos/clipmesh > dist/macos/SHA256SUMS.txt
@@ -69,7 +84,7 @@ jobs:
         run: |
           $p = 'clipmesh/Cargo.toml'
           $s = Get-Content $p -Raw
-          $s = $s -replace 'version = "0.1.0"', 'version = "0.1.1"'
+          $s = $s -replace 'version = "0.1.0"', 'version = "0.1.2"'
           Set-Content $p $s -Encoding utf8
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
@@ -178,8 +193,8 @@ jobs:
             tag="${GITHUB_REF_NAME}"
             title="ClipMesh ${GITHUB_REF_NAME}"
           else
-            tag="v0.1.1-alpha"
-            title="ClipMesh v0.1.1-alpha"
+            tag="v0.1.2-alpha"
+            title="ClipMesh v0.1.2-alpha"
           fi
 
           assets=(
