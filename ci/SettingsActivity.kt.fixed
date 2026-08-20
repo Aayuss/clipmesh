@@ -1,0 +1,219 @@
+package dev.clipmesh
+
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.os.Build
+import android.os.Bundle
+import android.provider.Settings
+import android.view.Gravity
+import android.view.ViewGroup
+import android.widget.*
+import dev.clipmesh.shizuku.ShizukuManager
+
+class SettingsActivity : Activity() {
+    private lateinit var settingsStore: SettingsStore
+    private lateinit var secrets: SecretStore
+    private lateinit var shizuku: ShizukuManager
+
+    private val pageBackground = Color.rgb(246, 247, 249)
+    private val cardBackground = Color.WHITE
+    private val ink = Color.rgb(28, 30, 34)
+    private val muted = Color.rgb(105, 110, 120)
+    private val primary = Color.rgb(31, 35, 42)
+    private val border = Color.rgb(224, 227, 232)
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        settingsStore = SettingsStore(this)
+        secrets = SecretStore(this)
+        shizuku = ShizukuManager(this)
+        render()
+    }
+
+    override fun onDestroy() {
+        shizuku.close()
+        super.onDestroy()
+    }
+
+    private fun render() {
+        window.statusBarColor = pageBackground
+        if (Build.VERSION.SDK_INT >= 23) window.decorView.systemUiVisibility = android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        window.navigationBarColor = pageBackground
+
+        val outer = ScrollView(this).apply { setBackgroundColor(pageBackground); isFillViewport = true }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(20), dp(18), dp(34))
+        }
+        outer.addView(root)
+
+        val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        header.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(label("Settings", 28f, true, ink))
+            addView(label("ClipMesh", 13f, false, muted))
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        header.addView(button("Done", false) { finish() }, LinearLayout.LayoutParams(dp(88), dp(44)))
+        root.addView(header, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(16) })
+
+        val backgroundCard = card(root)
+        backgroundCard.addView(sectionTitle("BACKGROUND SYNC"))
+        val backgroundSwitch = styledSwitch("Background auto-sync", settingsStore.backgroundSync)
+        backgroundSwitch.setOnCheckedChangeListener { _, checked ->
+            if (checked && (settingsStore.spaceId == null || secrets.loadSpaceKey() == null)) {
+                settingsStore.backgroundSync = false
+                backgroundSwitch.isChecked = false
+                toast("Pair this device first")
+            } else {
+                settingsStore.backgroundSync = checked
+                if (checked) startSyncService() else stopService(Intent(this, SyncService::class.java))
+            }
+        }
+        backgroundCard.addView(backgroundSwitch)
+        backgroundCard.addView(toggle("Send clipboard", settingsStore.sendEnabled) { settingsStore.sendEnabled = it })
+        backgroundCard.addView(toggle("Receive clipboard", settingsStore.receiveEnabled) { settingsStore.receiveEnabled = it })
+        backgroundCard.addView(toggle("Start after reboot", settingsStore.runAtBoot) { settingsStore.runAtBoot = it })
+        backgroundCard.addView(toggle("Compatibility watchdog (more battery)", settingsStore.compatibilityWatchdog) {
+            settingsStore.compatibilityWatchdog = it
+            restartSyncIfEnabled()
+        })
+        backgroundCard.addView(label(
+            "The compatibility watchdog is off by default. Leave it off unless your phone suppresses clipboard callbacks.",
+            12f, false, muted
+        ).apply { setPadding(0, dp(8), 0, 0) })
+
+        val contentCard = card(root)
+        contentCard.addView(sectionTitle("CONTENT"))
+        contentCard.addView(toggle("Text + HTML", settingsStore.syncText) { settingsStore.syncText = it })
+        contentCard.addView(toggle("Images / screenshots", settingsStore.syncImages) { settingsStore.syncImages = it })
+        contentCard.addView(toggle("Files", settingsStore.syncFiles) { settingsStore.syncFiles = it })
+
+        val accessCard = card(root)
+        accessCard.addView(sectionTitle("ANDROID CLIPBOARD ACCESS"))
+        accessCard.addView(label(
+            "Shizuku lets ClipMesh read and write the clipboard from the background without continuous polling. On non-rooted phones it may need to be started again after a reboot.",
+            14f, false, muted
+        ).apply { setPadding(0, dp(8), 0, dp(12)) })
+        accessCard.addView(button("Request Shizuku permission") {
+            when {
+                !shizuku.isAvailable() -> toast("Start or install Shizuku first")
+                shizuku.hasPermission() -> toast("Shizuku is already authorized")
+                else -> shizuku.requestPermission()
+            }
+        })
+
+        val privacyCard = card(root)
+        privacyCard.addView(sectionTitle("PRIVACY"))
+        privacyCard.addView(label(
+            "Excluded apps are ignored by ClipMesh's Android exclusion helper so sensitive clipboard content is not intentionally captured from them.",
+            14f, false, muted
+        ).apply { setPadding(0, dp(8), 0, dp(12)) })
+        privacyCard.addView(button("Choose excluded apps", false) {
+            startActivity(Intent(this, ExclusionActivity::class.java))
+        })
+        privacyCard.addView(button("Accessibility settings", false) {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }, fullWidthParams(dp(48)).apply { topMargin = dp(8) })
+
+        val networkCard = card(root)
+        networkCard.addView(sectionTitle("LAN TROUBLESHOOTING"))
+        networkCard.addView(label(
+            "Static peers are optional. Normal ClipMesh pairing uses authenticated LAN discovery automatically.",
+            13f, false, muted
+        ).apply { setPadding(0, dp(8), 0, dp(10)) })
+        val peers = EditText(this).apply {
+            hint = "192.168.1.10:41474\n192.168.1.11:41474"
+            minLines = 3
+            maxLines = 6
+            setText(settingsStore.staticPeers.joinToString("\n"))
+            setTextColor(ink)
+            setHintTextColor(Color.rgb(145, 149, 157))
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+            background = rounded(Color.rgb(250, 250, 251), dp(12).toFloat(), border)
+        }
+        networkCard.addView(peers, fullWidthParams(ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(10) })
+        networkCard.addView(button("Save static peers") {
+            settingsStore.staticPeers = peers.text.lines().map { it.trim() }.filter { it.isNotBlank() }.toSet()
+            restartSyncIfEnabled()
+            toast("Static peers saved")
+        })
+
+        val securityCard = card(root)
+        securityCard.addView(sectionTitle("SECURITY"))
+        securityCard.addView(label(
+            "Encryption is mandatory. ClipMesh has no relay mode, cloud account, analytics, or clipboard-history database. Pairing codes contain your private space key and should be treated like a password.",
+            13f, false, muted
+        ).apply { setPadding(0, dp(8), 0, 0) })
+
+        setContentView(outer)
+    }
+
+    private fun restartSyncIfEnabled() {
+        if (!settingsStore.backgroundSync) return
+        stopService(Intent(this, SyncService::class.java))
+        startSyncService()
+    }
+
+    private fun startSyncService() {
+        val intent = Intent(this, SyncService::class.java)
+        if (Build.VERSION.SDK_INT >= 26) startForegroundService(intent) else startService(intent)
+    }
+
+    private fun card(root: LinearLayout): LinearLayout {
+        val view = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(17), dp(18), dp(17))
+            background = rounded(cardBackground, dp(18).toFloat(), border)
+            elevation = dp(1).toFloat()
+        }
+        root.addView(view, fullWidthParams(ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(14) })
+        return view
+    }
+
+    private fun sectionTitle(text: String) = label(text, 12f, true, muted)
+
+    private fun label(text: String, size: Float, bold: Boolean, color: Int) = TextView(this).apply {
+        this.text = text
+        textSize = size
+        setTextColor(color)
+        if (bold) setTypeface(typeface, Typeface.BOLD)
+    }
+
+    private fun styledSwitch(text: String, checked: Boolean) = Switch(this).apply {
+        this.text = text
+        isChecked = checked
+        textSize = 15f
+        setTextColor(ink)
+        setPadding(0, dp(7), 0, dp(7))
+    }
+
+    private fun toggle(text: String, checked: Boolean, changed: (Boolean) -> Unit) = styledSwitch(text, checked).apply {
+        setOnCheckedChangeListener { _, value -> changed(value) }
+    }
+
+    private fun button(text: String, primaryStyle: Boolean = true, clicked: () -> Unit) = Button(this).apply {
+        this.text = text
+        isAllCaps = false
+        textSize = 14f
+        setTypeface(typeface, Typeface.BOLD)
+        setTextColor(if (primaryStyle) Color.WHITE else ink)
+        background = rounded(if (primaryStyle) primary else Color.rgb(248, 249, 250), dp(12).toFloat(), if (primaryStyle) primary else border)
+        minHeight = dp(46)
+        setOnClickListener { clicked() }
+    }
+
+    private fun rounded(fill: Int, radius: Float, stroke: Int) = GradientDrawable().apply {
+        shape = GradientDrawable.RECTANGLE
+        setColor(fill)
+        cornerRadius = radius
+        setStroke(dp(1), stroke)
+    }
+
+    private fun fullWidthParams(height: Int) = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height)
+    private fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_LONG).show()
+    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+}
