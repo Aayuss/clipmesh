@@ -1,0 +1,41 @@
+name: Diagnose ClipMesh v0.1.6 apply path
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  apply-diagnostics:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python ci/prepare-icon-assets.py
+      - run: python ci/unpack.py
+      - name: Apply product patches
+        run: |
+          python ci/patch-features.py
+          python ci/patch-sync-fixes.py
+          python ci/patch-v014-versions.py
+          python ci/patch-v015-sync.py
+      - name: Dump remaining paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '===== CORE CRYPTO ====='
+          cat clipmesh/crates/clipmesh-core/src/crypto.rs
+          echo '===== ANDROID CLIPBOARD BRIDGE ====='
+          cat clipmesh/android/app/src/main/java/dev/clipmesh/clipboard/ClipboardBridge.kt
+          echo '===== ANDROID SYNC SERVICE ====='
+          cat clipmesh/android/app/src/main/java/dev/clipmesh/SyncService.kt
+          echo '===== DESKTOP MAIN/WIRING ====='
+          cat clipmesh/apps/desktop/src/main.rs
+          echo '===== DESKTOP CLIPBOARD FULL ====='
+          cat clipmesh/apps/desktop/src/clipboard.rs
+          echo '===== ANDROID BUILD ====='
+          cat clipmesh/android/app/build.gradle.kts
