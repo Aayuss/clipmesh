@@ -44,4 +44,23 @@ replace_required(
     "Android authenticated online-state semantics",
 )
 
+# Only the single deterministic encrypted channel is allowed to mark a peer Online.
+# A duplicate simultaneous connection may complete the cryptographic hello before it
+# is rejected; touching lastSeen before that rejection made the UI misleading.
+desktop_network = project / "apps" / "desktop" / "src" / "network.rs"
+replace_required(
+    desktop_network,
+    """    let _=Config::touch_peer(cfg.space_id,peer_id,&peer_addr.ip().to_string());\n    let preferred_outgoing = cfg.device_id.as_bytes() < peer_id.as_bytes();\n    if outgoing != preferred_outgoing {\n        debug!(peer=%peer_id,addr=%peer_addr,\"closing non-preferred duplicate connection\");\n        return Ok(());\n    }\n    info!(peer=%peer_id,addr=%peer_addr,\"peer authenticated\");""",
+    """    let preferred_outgoing = cfg.device_id.as_bytes() < peer_id.as_bytes();\n    if outgoing != preferred_outgoing {\n        debug!(peer=%peer_id,addr=%peer_addr,\"closing non-preferred duplicate connection\");\n        return Ok(());\n    }\n    let _=Config::touch_peer(cfg.space_id,peer_id,&peer_addr.ip().to_string());\n    info!(peer=%peer_id,addr=%peer_addr,\"peer authenticated\");""",
+    "desktop preferred-channel online marker",
+)
+
+android_network = project / "android" / "app" / "src" / "main" / "java" / "dev" / "clipmesh" / "network" / "NetworkEngine.kt"
+replace_required(
+    android_network,
+    """            settings.touchPeer(peerId, socket.inetAddress.hostAddress.orEmpty())\n            val preferredOutgoing = shouldInitiate(settings.deviceId, peerId)\n            if (outgoing != preferredOutgoing) {\n                socket.close()\n                return@withContext\n            }\n\n            val connection = PeerConnection""",
+    """            val preferredOutgoing = shouldInitiate(settings.deviceId, peerId)\n            if (outgoing != preferredOutgoing) {\n                socket.close()\n                return@withContext\n            }\n            settings.touchPeer(peerId, socket.inetAddress.hostAddress.orEmpty())\n\n            val connection = PeerConnection""",
+    "Android preferred-channel online marker",
+)
+
 print("Aligned ClipMesh v0.1.4 package metadata and authenticated peer-status semantics")
