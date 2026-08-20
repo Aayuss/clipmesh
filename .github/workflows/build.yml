@@ -24,6 +24,8 @@ jobs:
         run: python ci/prepare-icon-assets.py
       - name: Unpack exact source archive
         run: python ci/unpack.py
+      - name: Inspect extracted source
+        run: python ci/inspect-source.py
       - name: Enable native desktop credential stores
         run: python ci/patch-desktop.py
       - name: Apply native macOS app wrapper
