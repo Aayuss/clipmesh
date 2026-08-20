@@ -1,1 +1,0 @@
-Cross-platform device-management and clipboard-inspection UI implementation.
