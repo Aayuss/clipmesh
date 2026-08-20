@@ -1,0 +1,402 @@
+package dev.clipmesh
+
+import android.Manifest
+import android.app.Activity
+import android.app.AlertDialog
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.os.Build
+import android.os.Bundle
+import android.text.InputType
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
+import android.widget.*
+import java.util.concurrent.TimeUnit
+
+class MainActivity : Activity() {
+    private lateinit var settings: SettingsStore
+    private lateinit var secrets: SecretStore
+    private lateinit var status: TextView
+    private lateinit var deviceNameText: TextView
+    private lateinit var deviceIdText: TextView
+    private lateinit var peersContainer: LinearLayout
+    private lateinit var pairPanel: LinearLayout
+    private lateinit var pairInput: EditText
+
+    private val pageBackground = Color.rgb(246, 247, 249)
+    private val cardBackground = Color.WHITE
+    private val ink = Color.rgb(28, 30, 34)
+    private val muted = Color.rgb(105, 110, 120)
+    private val primary = Color.rgb(31, 35, 42)
+    private val border = Color.rgb(224, 227, 232)
+    private val good = Color.rgb(31, 138, 76)
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        settings = SettingsStore(this)
+        secrets = SecretStore(this)
+        requestNotificationPermission()
+        render()
+        consumePairingIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        consumePairingIntent(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::status.isInitialized) refreshHome()
+    }
+
+    private fun render() {
+        window.statusBarColor = pageBackground
+        if (Build.VERSION.SDK_INT >= 23) window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        window.navigationBarColor = pageBackground
+
+        val outer = ScrollView(this).apply {
+            isFillViewport = true
+            setBackgroundColor(pageBackground)
+            clipToPadding = false
+        }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(22), dp(18), dp(34))
+        }
+        outer.addView(root)
+
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(2), 0, dp(2), dp(18))
+        }
+        header.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(label("ClipMesh", 30f, true, ink))
+            addView(label("Private clipboard sync", 14f, false, muted))
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        header.addView(button("Settings", primaryStyle = false) {
+            startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
+        }, LinearLayout.LayoutParams(dp(104), dp(46)))
+        root.addView(header)
+
+        status = label("Starting…", 13f, false, muted).apply {
+            setPadding(dp(4), 0, dp(4), dp(12))
+        }
+        root.addView(status)
+
+        val deviceCard = card(root)
+        deviceCard.addView(label("THIS DEVICE", 12f, true, muted))
+        deviceNameText = label("", 23f, true, ink).apply { setPadding(0, dp(7), 0, 0) }
+        deviceCard.addView(deviceNameText)
+        deviceIdText = label("", 12f, false, muted).apply { setPadding(0, dp(3), 0, dp(13)) }
+        deviceCard.addView(deviceIdText)
+        deviceCard.addView(button("Rename device", primaryStyle = false) { renameDevice() })
+
+        val peersCard = card(root)
+        val peersHeader = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        peersHeader.addView(label("DEVICES", 12f, true, muted), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        peersHeader.addView(button("Refresh", primaryStyle = false) { refreshHome() }, LinearLayout.LayoutParams(dp(92), dp(42)))
+        peersCard.addView(peersHeader)
+        peersContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(8), 0, 0) }
+        peersCard.addView(peersContainer)
+
+        val actions = card(root)
+        actions.addView(label("QUICK ACTIONS", 12f, true, muted))
+        actions.addView(horizontal(
+            button("Copy pairing code") { copyPairingCode() },
+            button("View clipboard", primaryStyle = false) { showClipboard() }
+        ).apply { setPadding(0, dp(10), 0, 0) })
+
+        root.addView(button("Pair another device") {
+            pairPanel.visibility = if (pairPanel.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+        }, fullWidthParams(dp(50)).apply { bottomMargin = dp(14) })
+
+        pairPanel = card(root).apply { visibility = View.GONE }
+        pairPanel.addView(label("PAIR DEVICE", 12f, true, muted))
+        pairPanel.addView(label(
+            "Paste a pairing code from another trusted ClipMesh device, or create a new private space.",
+            14f, false, muted
+        ).apply { setPadding(0, dp(8), 0, dp(10)) })
+        pairInput = EditText(this).apply {
+            hint = "clipmesh://pair?..."
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            minLines = 2
+            maxLines = 4
+            setTextColor(ink)
+            setHintTextColor(Color.rgb(145, 149, 157))
+            setPadding(dp(14), dp(11), dp(14), dp(11))
+            background = rounded(Color.rgb(250, 250, 251), dp(12).toFloat(), border)
+        }
+        pairPanel.addView(pairInput, fullWidthParams(ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(10) })
+        pairPanel.addView(horizontal(
+            button("Join") { joinSpace() },
+            button("Create new", primaryStyle = false) { createSpace() }
+        ))
+        pairPanel.addView(button("Copy this device's pairing code", primaryStyle = false) { copyPairingCode() },
+            fullWidthParams(dp(48)).apply { topMargin = dp(9) })
+
+        val privacy = label(
+            "Pairing codes contain the private space key. Only share them directly with devices you trust.",
+            12f, false, muted
+        ).apply { setPadding(dp(4), dp(3), dp(4), 0) }
+        root.addView(privacy)
+
+        setContentView(outer)
+        refreshHome()
+    }
+
+    private fun refreshHome() {
+        val paired = settings.spaceId != null && secrets.loadSpaceKey() != null
+        deviceNameText.text = settings.deviceName
+        val id = settings.deviceId.toString()
+        deviceIdText.text = "Device ID  ${id.take(8)}…${id.takeLast(4)}"
+        status.text = when {
+            !paired -> "Not paired yet"
+            settings.backgroundSync -> "Background sync enabled  •  ${SyncService.status}"
+            else -> "Paired  •  Background sync is off"
+        }
+        renderPeers()
+    }
+
+    private fun renderPeers() {
+        peersContainer.removeAllViews()
+        val peers = settings.knownPeers()
+        if (peers.isEmpty()) {
+            peersContainer.addView(label(
+                "No other devices discovered yet. Keep ClipMesh running on both devices on the same local network, then tap Refresh.",
+                14f, false, muted
+            ).apply { setPadding(0, dp(5), 0, dp(5)) })
+            return
+        }
+        val now = System.currentTimeMillis()
+        peers.forEachIndexed { index, peer ->
+            if (index > 0) peersContainer.addView(View(this).apply { setBackgroundColor(border) },
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)).apply { topMargin = dp(10); bottomMargin = dp(10) })
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+            val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            texts.addView(label(peer.name, 16f, true, ink))
+            texts.addView(label(peer.deviceId.toString().take(8) + "…", 12f, false, muted))
+            row.addView(texts, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            val online = peer.lastSeenMs > 0 && now - peer.lastSeenMs < 90_000L
+            val state = if (online) "●  Online" else if (peer.lastSeenMs == 0L) "○  Paired" else "○  ${lastSeen(peer.lastSeenMs)}"
+            row.addView(label(state, 13f, online, if (online) good else muted).apply { gravity = Gravity.END })
+            peersContainer.addView(row)
+        }
+    }
+
+    private fun lastSeen(timestamp: Long): String {
+        val elapsed = (System.currentTimeMillis() - timestamp).coerceAtLeast(0L)
+        return when {
+            elapsed < 60_000L -> "Just now"
+            elapsed < TimeUnit.HOURS.toMillis(1) -> "${elapsed / 60_000L}m ago"
+            elapsed < TimeUnit.DAYS.toMillis(1) -> "${elapsed / TimeUnit.HOURS.toMillis(1)}h ago"
+            else -> "${elapsed / TimeUnit.DAYS.toMillis(1)}d ago"
+        }
+    }
+
+    private fun renameDevice() {
+        val input = EditText(this).apply {
+            setText(settings.deviceName)
+            setSelection(text.length)
+            setSingleLine(true)
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Rename this device")
+            .setView(input)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Save") { _, _ ->
+                settings.deviceName = input.text.toString()
+                refreshHome()
+                toast("Device name updated")
+            }
+            .show()
+    }
+
+    private fun consumePairingIntent(incoming: Intent?) {
+        val data = incoming?.dataString ?: return
+        if (data.startsWith("clipmesh://pair")) {
+            pairPanel.visibility = View.VISIBLE
+            pairInput.setText(data)
+            toast("Pairing code received. Review it and tap Join.")
+        }
+    }
+
+    private fun createSpace() {
+        confirmSpaceReplacement("Create a new private space?") { createSpaceNow() }
+    }
+
+    private fun createSpaceNow() {
+        val restart = settings.backgroundSync
+        if (restart) stopService(Intent(this, SyncService::class.java))
+        val data = Pairing.createSpace(settings.deviceName, settings.deviceId)
+        settings.spaceId = data.spaceId
+        secrets.saveSpaceKey(data.key)
+        settings.clearKnownPeers()
+        if (restart) startSyncService()
+        pairInput.setText("")
+        refreshHome()
+        toast("New private space created")
+    }
+
+    private fun joinSpace() {
+        val parsed = runCatching { Pairing.parse(pairInput.text.toString()) }
+            .getOrElse { toast(it.message ?: "Invalid pairing code"); return }
+        confirmSpaceReplacement("Join this private space?") { joinSpaceNow(parsed) }
+    }
+
+    private fun joinSpaceNow(data: Pairing.PairingData) {
+        val restart = settings.backgroundSync
+        if (restart) stopService(Intent(this, SyncService::class.java))
+        settings.spaceId = data.spaceId
+        secrets.saveSpaceKey(data.key)
+        settings.clearKnownPeers()
+        val sourceId = data.deviceId
+        if (sourceId != null && sourceId != settings.deviceId) settings.seedPeer(sourceId, data.name)
+        if (restart) startSyncService()
+        refreshHome()
+        toast("Joined private space")
+    }
+
+    private fun confirmSpaceReplacement(title: String, action: () -> Unit) {
+        val alreadyPaired = settings.spaceId != null && secrets.loadSpaceKey() != null
+        if (!alreadyPaired) {
+            action()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setMessage("This device is already paired. Continuing will replace its current ClipMesh space and known-device list.")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Continue") { _, _ -> action() }
+            .show()
+    }
+
+    private fun copyPairingCode() {
+        val space = settings.spaceId ?: run { toast("Create or join a space first"); return }
+        val key = secrets.loadSpaceKey() ?: run { toast("Space key missing"); return }
+        val uri = Pairing.toUri(Pairing.PairingData(space, key, settings.deviceName, settings.deviceId))
+        (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+            .setPrimaryClip(ClipData.newPlainText("ClipMesh pairing code", uri))
+        toast("Pairing code copied")
+    }
+
+    private fun showClipboard() {
+        val manager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val summary = runCatching {
+            val clip = manager.primaryClip ?: return@runCatching "Clipboard is empty."
+            val description = clip.description
+            buildString {
+                append("Items: ${clip.itemCount}\n")
+                if (description.label != null) append("Label: ${description.label}\n")
+                if (description.mimeTypeCount > 0) {
+                    append("Types: ")
+                    append((0 until description.mimeTypeCount).joinToString(", ") { description.getMimeType(it) })
+                    append("\n")
+                }
+                for (i in 0 until clip.itemCount.coerceAtMost(12)) {
+                    val item = clip.getItemAt(i)
+                    append("\nItem ${i + 1}:\n")
+                    val text = item.text?.toString()
+                    val html = item.htmlText
+                    val uri = item.uri
+                    val intent = item.intent
+                    when {
+                        !text.isNullOrEmpty() -> append(text.take(12_000))
+                        !html.isNullOrEmpty() -> append("HTML: ").append(html.take(12_000))
+                        uri != null -> append("URI: ").append(uri.toString().take(12_000))
+                        intent != null -> append("Intent: ").append(intent.toUri(Intent.URI_INTENT_SCHEME).take(12_000))
+                        else -> append("Content exists, but Android does not expose a text/URI preview for this item.")
+                    }
+                }
+            }.take(24_000)
+        }.getOrElse { "Could not read the clipboard: ${it.message ?: "unknown error"}" }
+
+        val text = TextView(this).apply {
+            setText(summary)
+            setTextColor(ink)
+            textSize = 14f
+            setTextIsSelectable(true)
+            setPadding(dp(20), dp(14), dp(20), dp(14))
+        }
+        val scroll = ScrollView(this).apply { addView(text) }
+        AlertDialog.Builder(this)
+            .setTitle("Current clipboard")
+            .setView(scroll)
+            .setPositiveButton("Done", null)
+            .show()
+    }
+
+    private fun startSyncService() {
+        if (settings.spaceId == null || secrets.loadSpaceKey() == null) return
+        val intent = Intent(this, SyncService::class.java)
+        if (Build.VERSION.SDK_INT >= 26) startForegroundService(intent) else startService(intent)
+    }
+
+    private fun card(root: LinearLayout): LinearLayout {
+        val view = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(17), dp(18), dp(17))
+            background = rounded(cardBackground, dp(18).toFloat(), border)
+            elevation = dp(1).toFloat()
+        }
+        root.addView(view, fullWidthParams(ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(14) })
+        return view
+    }
+
+    private fun label(text: String, size: Float, bold: Boolean, color: Int) = TextView(this).apply {
+        this.text = text
+        textSize = size
+        setTextColor(color)
+        if (bold) setTypeface(typeface, Typeface.BOLD)
+    }
+
+    private fun button(text: String, primaryStyle: Boolean = true, clicked: () -> Unit) = Button(this).apply {
+        this.text = text
+        isAllCaps = false
+        textSize = 14f
+        setTypeface(typeface, Typeface.BOLD)
+        setTextColor(if (primaryStyle) Color.WHITE else ink)
+        background = rounded(if (primaryStyle) primary else Color.rgb(248, 249, 250), dp(12).toFloat(), if (primaryStyle) primary else border)
+        setPadding(dp(12), 0, dp(12), 0)
+        minHeight = dp(46)
+        setOnClickListener { clicked() }
+    }
+
+    private fun horizontal(vararg views: View): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        views.forEachIndexed { index, view ->
+            addView(view, LinearLayout.LayoutParams(0, dp(48), 1f).apply {
+                if (index > 0) leftMargin = dp(8)
+            })
+        }
+    }
+
+    private fun rounded(fill: Int, radius: Float, stroke: Int) = GradientDrawable().apply {
+        shape = GradientDrawable.RECTANGLE
+        setColor(fill)
+        cornerRadius = radius
+        setStroke(dp(1), stroke)
+    }
+
+    private fun fullWidthParams(height: Int) = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height)
+
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 200)
+        }
+    }
+
+    private fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_LONG).show()
+    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+}

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/Aayuss/clipmesh/releases/download/v0.1.2-alpha/ClipMesh-icon.png" width="180" alt="ClipMesh icon">
+  <img src="https://github.com/Aayuss/clipmesh/releases/download/v0.1.3-alpha/ClipMesh-icon.png" width="180" alt="ClipMesh icon">
 </p>
 
 <h1 align="center">ClipMesh</h1>
@@ -12,48 +12,77 @@ This repository is used to build the private ClipMesh source package created for
 
 ## Download ClipMesh
 
-### Direct downloads - v0.1.2-alpha
+### Direct downloads - v0.1.3-alpha
 
-- [Download ClipMesh for macOS (.dmg)](https://github.com/Aayuss/clipmesh/releases/download/v0.1.2-alpha/ClipMesh-macOS.dmg)
-- [Download ClipMesh for Windows (.exe)](https://github.com/Aayuss/clipmesh/releases/download/v0.1.2-alpha/ClipMesh-Windows.exe)
-- [Download ClipMesh for Android (.apk)](https://github.com/Aayuss/clipmesh/releases/download/v0.1.2-alpha/ClipMesh-Android.apk)
+- [Download ClipMesh for macOS (.dmg)](https://github.com/Aayuss/clipmesh/releases/download/v0.1.3-alpha/ClipMesh-macOS.dmg)
+- [Download ClipMesh for Windows (.exe)](https://github.com/Aayuss/clipmesh/releases/download/v0.1.3-alpha/ClipMesh-Windows.exe)
+- [Download ClipMesh for Android (.apk)](https://github.com/Aayuss/clipmesh/releases/download/v0.1.3-alpha/ClipMesh-Android.apk)
 
 **[Open all ClipMesh releases](https://github.com/Aayuss/clipmesh/releases)**
 
-## Desktop behavior - v0.1.2
+## v0.1.3 - device-focused UI
+
+The normal application window is now deliberately simple on macOS, Windows, and Android. The home screen focuses on the things needed day to day:
+
+- this device's editable name and short device ID
+- known/paired devices, with recently seen devices marked online
+- **Copy Pairing Code**
+- **Pair Device**, which reveals the pairing-code field, **Join**, **Create New**, and another copy-code action
+- **View Clipboard**, which shows the current local clipboard contents/metadata for testing
+- **Settings**, with non-pairing controls kept away from the home screen
+
+Device names are now supported consistently across all three platforms. New v0.1.3 pairing codes also include the source device ID and device name, while remaining compatible with older v0.1.x pairing codes that contain only the space/key data.
+
+The known-device list is local. ClipMesh records peer identity/name information from the authenticated LAN discovery and connection handshakes it already uses for synchronization. It does not add a cloud device registry.
+
+### Unified background icon
+
+The background-status icon is now the same simple left/right-arrow concept on every platform:
+
+- macOS menu bar - native `arrow.left.arrow.right` symbol
+- Windows notification area/system tray - matching two-way-arrow tray glyph
+- Android foreground-service notification - matching two-way-arrow monochrome notification glyph
+
+The full ClipMesh artwork remains the normal application/launcher identity; the compact background indicators use the simpler two-way-arrow symbol.
+
+### Android UI and battery use
+
+Android's home/settings UI has been redesigned with native static views, cards, spacing, and modern button styling. The visual redesign itself adds no timer, animation loop, clipboard polling loop, or additional network discovery loop.
+
+The device list reuses ClipMesh's existing signed LAN discovery traffic and authenticated connections. The optional **Compatibility watchdog (more battery)** remains off by default and is still clearly separated under Settings.
+
+## Desktop background behavior
 
 ### macOS
 
-Double-clicking **ClipMesh.app** opens the ClipMesh window and creates a ClipMesh menu-bar icon. Clipboard sync runs in the background.
+Double-clicking **ClipMesh.app** opens the ClipMesh window and creates the ClipMesh menu-bar icon. Clipboard sync runs in the background.
 
-- Clicking the red window close button hides the ClipMesh window, removes ClipMesh from the Dock, and keeps synchronization running.
-- Left-clicking the ClipMesh menu-bar icon opens the application window again and restores normal Dock presence while the window is open.
-- Right-clicking the menu-bar icon opens the ClipMesh menu, including **Show ClipMesh**, **Copy Pairing Link**, and **Quit ClipMesh**.
-- **Quit ClipMesh** from the menu-bar menu is the normal way to completely stop the desktop client and its background sync engine.
+- Clicking the red window close button hides the window, removes ClipMesh from the Dock, and keeps synchronization running.
+- Left-clicking the ClipMesh menu-bar icon restores the application window and normal Dock presence.
+- Right-clicking the menu-bar icon opens the ClipMesh menu, including **Show ClipMesh**, **Copy Pairing Code**, and **Quit ClipMesh**.
+- **Quit ClipMesh** from the menu-bar menu completely stops the desktop client and its background sync engine.
 
 ### Windows
 
-Opening **ClipMesh-Windows.exe** opens the ClipMesh window and creates a ClipMesh notification-area/system-tray icon.
+Opening **ClipMesh-Windows.exe** opens the ClipMesh window and creates the ClipMesh system-tray icon.
 
 - Clicking the window **X** hides the ClipMesh window and removes it from the taskbar while synchronization keeps running.
-- Left-clicking the ClipMesh tray icon restores the application window.
-- Right-clicking the tray icon opens the ClipMesh menu, including **Show ClipMesh**, **Copy Pairing Link**, and **Quit ClipMesh**.
+- Left-clicking the tray icon restores the application window.
+- Right-clicking the tray icon opens the ClipMesh menu, including **Show ClipMesh**, **Copy Pairing Code**, and **Quit ClipMesh**.
 - **Quit ClipMesh** from the tray menu completely stops the desktop client and its background sync engine.
 
 The Windows release remains a single `.exe`: the encrypted Rust sync engine is embedded inside the native tray application and is extracted into ClipMesh's private local runtime directory when needed.
 
-## First-run and secure-key fix
+## Secure-key storage and first run
 
-The macOS build is now a real native Cocoa application instead of a shell wrapper around the CLI. On a fresh Mac it automatically creates its configuration and encryption key. The Windows tray application does the equivalent first-run initialization automatically.
+The macOS build is a native Cocoa application and automatically creates its configuration and encryption key on first launch. The Windows tray application performs the equivalent first-run initialization automatically.
 
-Both desktop builds now explicitly use the native secure credential stores:
+Desktop secure keys use the operating system's credential store:
 
 - macOS - Apple Keychain
 - Windows - Windows Credential Manager
 
-This fixes a v0.1.1 alpha configuration mistake where the `keyring` dependency had no native backend feature enabled and therefore fell back to its non-persistent mock credential store. v0.1.2 detects that unusable v0.1.1 state, preserves the old config as a backup, and creates a working secure-key-backed space.
-
-The ClipMesh artwork is used as the native macOS application icon, Windows executable/tray icon, Android launcher icon, Android in-app identity artwork, and notification branding.
+v0.1.2 and newer also repair the unusable state that could be left by v0.1.1's temporary/mock keyring configuration, preserving the old config as a backup before creating a working secure-key-backed space.
 
 > `SHA256SUMS.txt` is optional. You do **not** need it to install or run ClipMesh. It is only there if you want to verify that a downloaded installer is byte-for-byte identical to the CI-produced file.
 
@@ -63,6 +92,6 @@ The ClipMesh artwork is used as the native macOS application icon, Windows execu
 
 Every pull request and push to `main` builds and tests macOS, Windows, and Android.
 
-The macOS job performs a clean first-launch smoke test, initializes the secure key, reloads it from Keychain in a separate process, validates the native app bundle, and verifies its ad-hoc signature. The Windows job builds the single-file tray application, starts it in first-run smoke-test mode, verifies that the embedded engine is extracted, and confirms that its configuration and Windows Credential Manager-backed key can be loaded successfully.
+The macOS job performs a clean first-launch smoke test, initializes the secure key, reloads it from Keychain in a separate process, validates UI-state access, validates the native app bundle, and verifies its ad-hoc signature. The Windows job builds the single-file tray application, starts it in first-run smoke-test mode, verifies that the embedded engine is extracted, and validates its configuration/UI state with the Windows Credential Manager-backed key. Android is built from the same patched source package in CI.
 
-Successful workflow runs also expose temporary **Artifacts** under Actions for debugging/testing. A successful `main` build publishes `v0.1.2-alpha` with the raw `.dmg`, `.exe`, `.apk`, icon artwork, and optional SHA-256 checksum file.
+Successful workflow runs expose temporary **Artifacts** under Actions for debugging/testing. A successful `main` build publishes `v0.1.3-alpha` with the raw `.dmg`, `.exe`, `.apk`, icon artwork, and optional SHA-256 checksum file.
