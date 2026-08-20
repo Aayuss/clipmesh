@@ -142,7 +142,7 @@ enum Runtime {
         var receive = true
         var peers: [PeerState] = []
 
-        for line in output.split(whereSeparator: \ .isNewline) {
+        for line in output.split(whereSeparator: { $0.isNewline }) {
             let parts = line.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
             guard let kind = parts.first else { continue }
             switch kind {
@@ -497,7 +497,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApp.setActivationPolicy(.regular)
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        if window != nil { refreshHome() }
+        if latestState != nil { refreshHome() }
     }
 
     private func hideWindow() {
