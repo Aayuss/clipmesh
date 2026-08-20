@@ -1,0 +1,317 @@
+name: Build ClipMesh
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: macOS DMG
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Reconstruct source and assets
+        run: |
+          python ci/prepare-icon-assets.py
+          python ci/unpack.py
+      - name: Apply ClipMesh patches
+        run: |
+          python ci/patch-features.py
+          python ci/patch-sync-fixes.py
+          python ci/patch-desktop.py
+          python ci/patch-macos.py
+          python ci/patch-v014-versions.py
+          python ci/patch-v015-sync.py
+          python ci/patch-v016-sync.py
+      - name: Stamp v0.1.6
+        run: python -c "from pathlib import Path; p=Path('clipmesh/Cargo.toml'); s=p.read_text(); p.write_text(s.replace('version = \"0.1.0\"','version = \"0.1.6\"',1))"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: clipmesh
+      - name: Validate self-capture migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'source_is_clipmesh' clipmesh/apps/desktop/src/clipboard.rs
+          grep -q 'retain(|item| !item.trim().eq_ignore_ascii_case("clipmesh"))' clipmesh/apps/desktop/src/config.rs
+          python - <<'PY'
+          from pathlib import Path
+          text = Path('clipmesh/apps/desktop/src/config.rs').read_text()
+          defaults = text[text.index('pub fn default_exclusions()'):]
+          assert '"clipmesh"' not in defaults, defaults
+          PY
+      - name: Test protocol, core, and transport
+        working-directory: clipmesh
+        run: |
+          python -m pip install --disable-pip-version-check cryptography
+          python tools/protocol_selftest.py
+          cargo test -p clipmesh-core
+          cargo test -p clipmesh
+      - name: Build macOS app and DMG
+        working-directory: clipmesh
+        run: |
+          chmod +x scripts/build-macos.sh
+          ./scripts/build-macos.sh
+      - name: Smoke-test macOS first launch
+        working-directory: clipmesh
+        shell: bash
+        run: |
+          set -euo pipefail
+          SUPPORT="$HOME/Library/Application Support/dev.ClipMesh.ClipMesh"
+          rm -rf "$SUPPORT"
+          ./dist/macos/ClipMesh.app/Contents/MacOS/ClipMesh --smoke-test
+          test -f "$SUPPORT/config.json"
+          ./dist/macos/ClipMesh.app/Contents/MacOS/clipmesh-bin status
+          ./dist/macos/ClipMesh.app/Contents/MacOS/clipmesh-bin ui-state
+          plutil -extract CFBundleShortVersionString raw ./dist/macos/ClipMesh.app/Contents/Info.plist | grep -qx '0.1.6'
+          plutil -lint ./dist/macos/ClipMesh.app/Contents/Info.plist
+          codesign --verify --deep --strict --verbose=2 ./dist/macos/ClipMesh.app
+      - name: Checksums
+        working-directory: clipmesh
+        run: shasum -a 256 dist/macos/ClipMesh.dmg dist/macos/clipmesh > dist/macos/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ClipMesh-macOS
+          if-no-files-found: error
+          path: |
+            clipmesh/dist/macos/ClipMesh.dmg
+            clipmesh/dist/macos/ClipMesh.app
+            clipmesh/dist/macos/clipmesh
+            clipmesh/dist/macos/ClipMesh-icon.png
+            clipmesh/dist/macos/SHA256SUMS.txt
+
+  windows:
+    name: Windows EXE
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Reconstruct source and assets
+        shell: pwsh
+        run: |
+          python ci/prepare-icon-assets.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python ci/unpack.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Apply ClipMesh patches
+        shell: pwsh
+        run: |
+          python ci/patch-features.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python ci/patch-sync-fixes.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python ci/patch-desktop.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python ci/patch-windows.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python ci/patch-v014-versions.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python ci/patch-v015-sync.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python ci/patch-v016-sync.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Stamp v0.1.6
+        shell: pwsh
+        run: |
+          $p = 'clipmesh/Cargo.toml'
+          $s = Get-Content $p -Raw
+          $s = $s -replace 'version = "0.1.0"', 'version = "0.1.6"'
+          Set-Content $p $s -Encoding utf8
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: clipmesh
+      - name: Validate self-capture migration
+        shell: pwsh
+        run: |
+          $clip = Get-Content 'clipmesh/apps/desktop/src/clipboard.rs' -Raw
+          $cfg = Get-Content 'clipmesh/apps/desktop/src/config.rs' -Raw
+          if (-not $clip.Contains('source_is_clipmesh')) { throw 'Desktop self-capture guard missing' }
+          if (-not $cfg.Contains('retain(|item| !item.trim().eq_ignore_ascii_case("clipmesh"))')) { throw 'Desktop self-exclusion migration missing' }
+          $defaults = $cfg.Substring($cfg.IndexOf('pub fn default_exclusions()'))
+          if ($defaults.Contains('"clipmesh"')) { throw 'ClipMesh remains in desktop default exclusions' }
+      - name: Test protocol, core, and transport
+        working-directory: clipmesh
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check cryptography
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/protocol_selftest.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test -p clipmesh-core
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test -p clipmesh
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build Windows tray application
+        working-directory: clipmesh
+        shell: pwsh
+        run: .\scripts\build-windows.ps1
+      - name: Smoke-test Windows first launch
+        working-directory: clipmesh
+        shell: pwsh
+        run: |
+          $roaming = Join-Path $env:APPDATA 'ClipMesh\ClipMesh'
+          $local = Join-Path $env:LOCALAPPDATA 'ClipMesh'
+          Remove-Item -Recurse -Force $roaming -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force $local -ErrorAction SilentlyContinue
+          $process = Start-Process -FilePath '.\dist\windows\clipmesh.exe' -ArgumentList '--smoke-test' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Windows smoke test failed with exit code $($process.ExitCode)" }
+          $configs = @((Join-Path $env:APPDATA 'ClipMesh\ClipMesh\config\config.json'), (Join-Path $env:APPDATA 'ClipMesh\ClipMesh\config.json'))
+          if (-not ($configs | Where-Object { Test-Path $_ })) { throw 'Windows first-run smoke test did not create config.json.' }
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.1.6\clipmesh-bin.exe'))) { throw 'Windows launcher did not extract its embedded v0.1.6 sync engine.' }
+      - name: Checksum
+        working-directory: clipmesh
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash dist\windows\clipmesh.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  clipmesh.exe" | Set-Content -Encoding ascii dist\windows\SHA256SUMS.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ClipMesh-Windows
+          if-no-files-found: error
+          path: |
+            clipmesh/dist/windows/clipmesh.exe
+            clipmesh/dist/windows/SHA256SUMS.txt
+
+  android:
+    name: Android APK
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Reconstruct source and assets
+        run: |
+          python ci/prepare-icon-assets.py
+          python ci/unpack.py
+      - name: Apply ClipMesh patches
+        run: |
+          python ci/patch-features.py
+          python ci/patch-sync-fixes.py
+          python ci/patch-v014-versions.py
+          python ci/patch-v015-sync.py
+          python ci/patch-v016-sync.py
+      - name: Validate Android synchronization sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'sourcePackage != context.packageName' clipmesh/android/app/src/main/java/dev/clipmesh/clipboard/ClipboardBridge.kt
+          grep -q 'filterNot { it.equals("dev.clipmesh", ignoreCase = true) }' clipmesh/android/app/src/main/java/dev/clipmesh/SettingsStore.kt
+          grep -q 'ACTION_CAPTURE_CURRENT' clipmesh/android/app/src/main/java/dev/clipmesh/MainActivity.kt
+          grep -q 'versionName = "0.1.6"' clipmesh/android/app/build.gradle.kts
+          grep -q 'versionCode = 6' clipmesh/android/app/build.gradle.kts
+          python - <<'PY'
+          from pathlib import Path
+          s = Path('clipmesh/android/app/src/main/java/dev/clipmesh/SettingsStore.kt').read_text()
+          defaults = s[s.index('val DEFAULT_EXCLUSIONS = setOf('):]
+          assert '"dev.clipmesh"' not in defaults, defaults
+          PY
+          grep -q 'moe.shizuku.manager.permission.API_V23' clipmesh/android/app/src/main/AndroidManifest.xml
+          grep -q 'android:name=".ExclusionActivity"' clipmesh/android/app/src/main/AndroidManifest.xml
+          grep -q 'ExclusionAccessibilityService' clipmesh/android/app/src/main/AndroidManifest.xml
+          grep -q 'addBinderReceivedListenerSticky' clipmesh/android/app/src/main/java/dev/clipmesh/shizuku/ShizukuManager.kt
+          ! grep -q 'exitProcess(0)' clipmesh/android/app/src/main/java/dev/clipmesh/shizuku/ClipboardUserService.kt
+          grep -q '2_500L' clipmesh/android/app/src/main/java/dev/clipmesh/network/NetworkEngine.kt
+          grep -q 'text/plain; charset=utf-8' clipmesh/android/app/src/main/java/dev/clipmesh/clipboard/ClipboardBridge.kt
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+          cache-dependency-path: clipmesh/android/**/*.gradle*
+      - uses: android-actions/setup-android@v4
+      - name: Install Android SDK 36
+        run: sdkmanager "platforms;android-36" "build-tools;35.0.0" "platform-tools"
+      - name: Build debug APK
+        working-directory: clipmesh
+        run: |
+          chmod +x android/gradlew scripts/build-android-debug.sh
+          ./scripts/build-android-debug.sh
+      - name: Validate packaged APK components
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=clipmesh/dist/android/ClipMesh-debug.apk
+          test -s "$APK"
+          unzip -p "$APK" AndroidManifest.xml > /tmp/manifest.bin
+          strings -el /tmp/manifest.bin | grep -q 'dev.clipmesh.ExclusionActivity'
+          strings -el /tmp/manifest.bin | grep -q 'dev.clipmesh.exclusion.ExclusionAccessibilityService'
+          strings -el /tmp/manifest.bin | grep -q 'moe.shizuku.manager.permission.API_V23'
+      - name: Checksum
+        working-directory: clipmesh
+        run: sha256sum dist/android/ClipMesh-debug.apk > dist/android/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ClipMesh-Android
+          if-no-files-found: error
+          path: |
+            clipmesh/dist/android/ClipMesh-debug.apk
+            clipmesh/dist/android/SHA256SUMS.txt
+
+  release:
+    name: Publish GitHub Release
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    needs: [macos, windows, android]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: ClipMesh-macOS
+          path: artifacts/macos
+      - uses: actions/download-artifact@v8
+        with:
+          name: ClipMesh-Windows
+          path: artifacts/windows
+      - uses: actions/download-artifact@v8
+        with:
+          name: ClipMesh-Android
+          path: artifacts/android
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          cp artifacts/macos/ClipMesh.dmg release/ClipMesh-macOS.dmg
+          cp artifacts/macos/ClipMesh-icon.png release/ClipMesh-icon.png
+          cp artifacts/windows/clipmesh.exe release/ClipMesh-Windows.exe
+          cp artifacts/android/ClipMesh-debug.apk release/ClipMesh-Android.apk
+          cd release
+          sha256sum ClipMesh-macOS.dmg ClipMesh-Windows.exe ClipMesh-Android.apk > SHA256SUMS.txt
+      - name: Publish release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            tag="${GITHUB_REF_NAME}"
+            title="ClipMesh ${GITHUB_REF_NAME}"
+          else
+            tag="v0.1.6-alpha"
+            title="ClipMesh v0.1.6-alpha"
+          fi
+          assets=(release/ClipMesh-macOS.dmg release/ClipMesh-Windows.exe release/ClipMesh-Android.apk release/ClipMesh-icon.png release/SHA256SUMS.txt)
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "${assets[@]}" --clobber
+            exit 0
+          fi
+          args=(--title "$title" --generate-notes --target "$GITHUB_SHA")
+          if [[ "$tag" == *-* ]]; then args+=(--prerelease); fi
+          gh release create "$tag" "${assets[@]}" "${args[@]}"
