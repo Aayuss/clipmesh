@@ -83,6 +83,8 @@ jobs:
         run: python ci/unpack.py
       - name: Enable native desktop credential stores
         run: python ci/patch-desktop.py
+      - name: Apply native Windows tray wrapper
+        run: python ci/patch-windows.py
       - name: Stamp desktop version
         shell: pwsh
         run: |
@@ -97,10 +99,32 @@ jobs:
       - name: Test core
         working-directory: clipmesh
         run: cargo test -p clipmesh-core
-      - name: Build Windows executable
+      - name: Build Windows tray application
         working-directory: clipmesh
         shell: pwsh
         run: .\scripts\build-windows.ps1
+      - name: Smoke-test Windows first launch
+        working-directory: clipmesh
+        shell: pwsh
+        run: |
+          $roaming = Join-Path $env:APPDATA 'ClipMesh\ClipMesh'
+          $local = Join-Path $env:LOCALAPPDATA 'ClipMesh'
+          Remove-Item -Recurse -Force $roaming -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force $local -ErrorAction SilentlyContinue
+
+          .\dist\windows\clipmesh.exe --smoke-test
+          if ($LASTEXITCODE -ne 0) { throw "Windows smoke test failed with exit code $LASTEXITCODE" }
+
+          $configs = @(
+            (Join-Path $env:APPDATA 'ClipMesh\ClipMesh\config\config.json'),
+            (Join-Path $env:APPDATA 'ClipMesh\ClipMesh\config.json')
+          )
+          if (-not ($configs | Where-Object { Test-Path $_ })) {
+            throw 'Windows first-run smoke test did not create config.json.'
+          }
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.1.2\clipmesh-bin.exe'))) {
+            throw 'Windows launcher did not extract its embedded sync engine.'
+          }
       - name: Checksum
         working-directory: clipmesh
         shell: pwsh
