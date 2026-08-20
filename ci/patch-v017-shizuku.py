@@ -97,6 +97,24 @@ replace_once(
     "Normalize Shizuku controls for v0.1.8",
 )
 
+# v0.1.8 adds a third Settings button. Keep the generic Save/Cancel anchor unique
+# by making the rename dialog's identical button pair textually distinct while
+# preserving the same native UI behavior.
+mac_ui = root / "ci/ClipMeshApp.swift"
+replace_once(
+    mac_ui,
+    '''        alert.messageText = "Rename this device"
+        alert.informativeText = "This name is shown to your other ClipMesh devices."
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")''',
+    '''        alert.messageText = "Rename this device"
+        alert.informativeText = "This name is shown to your other ClipMesh devices."
+        alert.addButton(withTitle: "Save")
+        // Keep this dialog distinct from the Settings alert patch anchor.
+        alert.addButton(withTitle: "Cancel")''',
+    "Normalize macOS Settings patch anchor for v0.1.8",
+)
+
 # ---------------------------------------------------------------------------
 # Package metadata for the fixed build.
 # Earlier patch stages normalize the generated project to v0.1.6 first.
