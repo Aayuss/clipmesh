@@ -26,19 +26,23 @@ jobs:
         run: python ci/unpack.py
       - name: Apply cross-platform device UI features
         run: python ci/patch-features.py
+      - name: Apply sync and Shizuku fixes
+        run: python ci/patch-sync-fixes.py
       - name: Enable native desktop credential stores
         run: python ci/patch-desktop.py
       - name: Apply native macOS app wrapper
         run: python ci/patch-macos.py
       - name: Stamp desktop version
-        run: python -c "from pathlib import Path; p=Path('clipmesh/Cargo.toml'); s=p.read_text(); p.write_text(s.replace('version = \"0.1.0\"','version = \"0.1.3\"',1))"
+        run: python -c "from pathlib import Path; p=Path('clipmesh/Cargo.toml'); s=p.read_text(); p.write_text(s.replace('version = \"0.1.0\"','version = \"0.1.4\"',1))"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: clipmesh
-      - name: Test core
+      - name: Test protocol and core
         working-directory: clipmesh
-        run: cargo test -p clipmesh-core
+        run: |
+          python tools/protocol_selftest.py
+          cargo test -p clipmesh-core
       - name: Build macOS app and DMG
         working-directory: clipmesh
         run: |
@@ -86,6 +90,8 @@ jobs:
         run: python ci/unpack.py
       - name: Apply cross-platform device UI features
         run: python ci/patch-features.py
+      - name: Apply sync and Shizuku fixes
+        run: python ci/patch-sync-fixes.py
       - name: Enable native desktop credential stores
         run: python ci/patch-desktop.py
       - name: Apply native Windows tray wrapper
@@ -95,15 +101,18 @@ jobs:
         run: |
           $p = 'clipmesh/Cargo.toml'
           $s = Get-Content $p -Raw
-          $s = $s -replace 'version = "0.1.0"', 'version = "0.1.3"'
+          $s = $s -replace 'version = "0.1.0"', 'version = "0.1.4"'
           Set-Content $p $s -Encoding utf8
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: clipmesh
-      - name: Test core
+      - name: Test protocol and core
         working-directory: clipmesh
-        run: cargo test -p clipmesh-core
+        shell: pwsh
+        run: |
+          python tools/protocol_selftest.py
+          cargo test -p clipmesh-core
       - name: Build Windows tray application
         working-directory: clipmesh
         shell: pwsh
@@ -123,7 +132,7 @@ jobs:
             (Join-Path $env:APPDATA 'ClipMesh\ClipMesh\config.json')
           )
           if (-not ($configs | Where-Object { Test-Path $_ })) { throw 'Windows first-run smoke test did not create config.json.' }
-          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.1.3\clipmesh-bin.exe'))) { throw 'Windows launcher did not extract its embedded sync engine.' }
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.1.4\clipmesh-bin.exe'))) { throw 'Windows launcher did not extract its embedded sync engine.' }
       - name: Checksum
         working-directory: clipmesh
         shell: pwsh
@@ -150,20 +159,20 @@ jobs:
         run: python ci/prepare-icon-assets.py
       - name: Unpack exact source archive
         run: python ci/unpack.py
-      - name: Diagnose Android integration source
+      - name: Apply cross-platform device UI features
+        run: python ci/patch-features.py
+      - name: Apply sync and Shizuku fixes
+        run: python ci/patch-sync-fixes.py
+      - name: Validate patched Android sources
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== Android Java/Kotlin files ==='
-          find clipmesh/android/app/src/main/java -type f | sort
-          echo '=== Android manifest ==='
-          cat clipmesh/android/app/src/main/AndroidManifest.xml
-          echo '=== Shizuku sources ==='
-          find clipmesh/android -type f \( -iname '*shizuku*' -o -iname '*clipboard*' -o -iname '*accessibility*' -o -iname '*exclusion*' \) -print | sort | while read -r f; do echo "--- $f"; sed -n '1,320p' "$f"; done
-          echo '=== SyncService ==='
-          sed -n '1,420p' clipmesh/android/app/src/main/java/dev/clipmesh/SyncService.kt
-      - name: Apply cross-platform device UI features
-        run: python ci/patch-features.py
+          grep -q 'moe.shizuku.manager.permission.API_V23' clipmesh/android/app/src/main/AndroidManifest.xml
+          grep -q 'android:name=".ExclusionActivity"' clipmesh/android/app/src/main/AndroidManifest.xml
+          grep -q 'ExclusionAccessibilityService' clipmesh/android/app/src/main/AndroidManifest.xml
+          grep -q 'addBinderReceivedListenerSticky' clipmesh/android/app/src/main/java/dev/clipmesh/shizuku/ShizukuManager.kt
+          grep -q 'captureNowForBackgroundMonitor' clipmesh/android/app/src/main/java/dev/clipmesh/SyncService.kt
+          grep -q 'preferredOutgoing' clipmesh/android/app/src/main/java/dev/clipmesh/network/NetworkEngine.kt
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -178,6 +187,16 @@ jobs:
         run: |
           chmod +x android/gradlew scripts/build-android-debug.sh
           ./scripts/build-android-debug.sh
+      - name: Validate packaged APK components
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=clipmesh/dist/android/ClipMesh-debug.apk
+          test -s "$APK"
+          unzip -p "$APK" AndroidManifest.xml > /tmp/manifest.bin
+          strings -el /tmp/manifest.bin | grep -q 'dev.clipmesh.ExclusionActivity'
+          strings -el /tmp/manifest.bin | grep -q 'dev.clipmesh.exclusion.ExclusionAccessibilityService'
+          strings -el /tmp/manifest.bin | grep -q 'moe.shizuku.manager.permission.API_V23'
       - name: Checksum
         working-directory: clipmesh
         run: sha256sum dist/android/ClipMesh-debug.apk > dist/android/SHA256SUMS.txt
@@ -234,10 +253,16 @@ jobs:
             tag="${GITHUB_REF_NAME}"
             title="ClipMesh ${GITHUB_REF_NAME}"
           else
-            tag="v0.1.3-alpha"
-            title="ClipMesh v0.1.3-alpha"
+            tag="v0.1.4-alpha"
+            title="ClipMesh v0.1.4-alpha"
           fi
-          assets=(release/ClipMesh-macOS.dmg release/ClipMesh-Windows.exe release/ClipMesh-Android.apk release/ClipMesh-icon.png release/SHA256SUMS.txt)
+          assets=(
+            release/ClipMesh-macOS.dmg
+            release/ClipMesh-Windows.exe
+            release/ClipMesh-Android.apk
+            release/ClipMesh-icon.png
+            release/SHA256SUMS.txt
+          )
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" "${assets[@]}" --clobber
             exit 0
