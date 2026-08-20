@@ -12,6 +12,14 @@ def replace_once(path: Path, old: str, new: str, label: str) -> None:
     path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
 
+def replace_if_present(path: Path, old: str, new: str) -> None:
+    if not path.is_file():
+        return
+    text = path.read_text(encoding="utf-8")
+    if old in text:
+        path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+
 # ---------------------------------------------------------------------------
 # v0.1.6: never exclude ClipMesh itself from clipboard capture.
 #
@@ -135,9 +143,34 @@ replace_once(
     "Android View Clipboard foreground capture",
 )
 
+# ---------------------------------------------------------------------------
 # Native package metadata.
+# patch-v014-versions.py first normalizes the old wrappers to v0.1.5; advance every
+# platform wrapper to v0.1.6 here so the binaries, runtime extraction directory and
+# macOS bundle metadata all agree with Cargo/Android package versions.
+# ---------------------------------------------------------------------------
 android_gradle = project / "android/app/build.gradle.kts"
 replace_once(android_gradle, 'versionCode = 5', 'versionCode = 6', "Android v0.1.6 versionCode")
 replace_once(android_gradle, 'versionName = "0.1.5"', 'versionName = "0.1.6"', "Android v0.1.6 versionName")
 
-print("Applied ClipMesh v0.1.6 self-capture migration and foreground clipboard reliability fixes")
+mac_build = project / "scripts/build-macos.sh"
+replace_once(
+    mac_build,
+    '<key>CFBundleShortVersionString</key><string>0.1.5</string>',
+    '<key>CFBundleShortVersionString</key><string>0.1.6</string>',
+    "macOS v0.1.6 short version",
+)
+replace_once(
+    mac_build,
+    '<key>CFBundleVersion</key><string>0.1.5</string>',
+    '<key>CFBundleVersion</key><string>0.1.6</string>',
+    "macOS v0.1.6 bundle version",
+)
+
+replace_if_present(
+    root / "ci/ClipMeshWindows.cs",
+    'private const string Version = "0.1.5";',
+    'private const string Version = "0.1.6";',
+)
+
+print("Applied ClipMesh v0.1.6 self-capture migration, foreground clipboard reliability, and native version fixes")
