@@ -162,7 +162,10 @@ replace_once(
 replace_once(
     mac_build,
     'swiftc -O "$LAUNCHER_SRC" -o "$APP/Contents/MacOS/ClipMesh" -framework Cocoa',
-    'swiftc -O "$LAUNCHER_SRC" "$TRANSFER_SRC" -o "$APP/Contents/MacOS/ClipMesh" -framework Cocoa -framework Network -framework UniformTypeIdentifiers',
+    '''MAIN_SRC="$OUT/main.swift"
+cp "$LAUNCHER_SRC" "$MAIN_SRC"
+swiftc -O "$MAIN_SRC" "$TRANSFER_SRC" -o "$APP/Contents/MacOS/ClipMesh" -framework Cocoa -framework Network -framework UniformTypeIdentifiers
+rm -f "$MAIN_SRC"''',
     "macOS compile transfer source",
 )
 replace_once(
