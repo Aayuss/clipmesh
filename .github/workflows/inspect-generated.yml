@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Reconstruct and apply current Android/desktop patches
+      - name: Reconstruct and apply current patches
         run: |
           python ci/prepare-icon-assets.py
           python ci/unpack.py
@@ -29,9 +29,11 @@ jobs:
           python ci/patch-v018-features.py
           python ci/patch-v019-fixes.py
           python ci/patch-v020-fileshare.py
+          python ci/patch-v020-macos.py
+          python ci/patch-v020-windows.py
       - name: Collect generated sources
         run: |
-          mkdir -p snapshot/android snapshot/rust
+          mkdir -p snapshot/android snapshot/rust snapshot/native
           cp clipmesh/android/app/src/main/java/dev/clipmesh/clipboard/ClipboardBridge.kt snapshot/android/
           cp clipmesh/android/app/src/main/java/dev/clipmesh/SyncService.kt snapshot/android/
           cp clipmesh/android/app/src/main/java/dev/clipmesh/network/NetworkEngine.kt snapshot/android/
@@ -41,6 +43,12 @@ jobs:
           cp clipmesh/android/app/src/main/java/dev/clipmesh/shizuku/ClipboardUserService.kt snapshot/android/
           cp clipmesh/apps/desktop/src/clipboard.rs snapshot/rust/
           cp clipmesh/apps/desktop/src/network.rs snapshot/rust/
+          cp ci/ClipMeshApp.swift snapshot/native/
+          cp ci/ClipMeshTransfer.swift snapshot/native/
+          cp ci/ClipMeshWindows.cs snapshot/native/
+          cp ci/ClipMeshTransfer.cs snapshot/native/
+          cp clipmesh/scripts/build-macos.sh snapshot/native/
+          cp clipmesh/scripts/build-windows.ps1 snapshot/native/
       - uses: actions/upload-artifact@v7
         with:
           name: ClipMesh-generated-source-snapshot
