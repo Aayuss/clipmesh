@@ -1,0 +1,238 @@
+name: Build ClipMesh v0.2.1
+
+on:
+  push:
+    branches: [clipmesh-v021-finalize]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: macOS DMG v0.2.1
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with: { python-version: '3.12' }
+      - name: Reconstruct and patch
+        run: |
+          set -euo pipefail
+          python ci/prepare-icon-assets.py
+          python ci/unpack.py
+          python ci/patch-features.py
+          python ci/patch-sync-fixes.py
+          python ci/patch-desktop.py
+          python ci/patch-macos.py
+          python ci/patch-v014-versions.py
+          python ci/patch-v015-sync.py
+          python ci/patch-v016-sync.py
+          python ci/patch-v017-shizuku.py
+          python ci/patch-v018-features.py
+          python ci/patch-v019-fixes.py
+          python ci/patch-v020-fileshare.py
+          python ci/patch-v020-native.py
+          python ci/patch-v021-final.py
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('clipmesh/Cargo.toml'); s=p.read_text(); p.write_text(s.replace('version = "0.1.0"','version = "0.2.1"',1))
+          PY
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: clipmesh }
+      - name: Source guards
+        run: |
+          set -euo pipefail
+          grep -q 'Clipboard   ·   encrypted sync' ci/ClipMeshApp.swift
+          grep -q 'File Transfer   ·   nearby drop' ci/ClipMeshApp.swift
+          grep -q 'NSImage(pasteboard:pasteboard)' ci/ClipMeshApp.swift
+          grep -q 'func discoverNow()' ci/ClipMeshTransfer.swift
+          grep -q 'repeating: 120.0' ci/ClipMeshTransfer.swift
+          grep -q 'com.apple.share-services' clipmesh/scripts/build-macos.sh
+          grep -q 'clipmesh-share' clipmesh/scripts/build-macos.sh
+          grep -q '/api/localsend/v2/prepare-upload' ci/ClipMeshTransfer.swift
+      - name: Test protocol/core/transport
+        working-directory: clipmesh
+        run: |
+          python -m pip install --disable-pip-version-check cryptography
+          python tools/protocol_selftest.py
+          cargo test -p clipmesh-core
+          cargo test -p clipmesh
+      - name: Build
+        working-directory: clipmesh
+        run: |
+          chmod +x scripts/build-macos.sh
+          ./scripts/build-macos.sh
+      - name: Smoke and package guards
+        working-directory: clipmesh
+        run: |
+          set -euo pipefail
+          SUPPORT="$HOME/Library/Application Support/dev.ClipMesh.ClipMesh"
+          rm -rf "$SUPPORT"
+          ./dist/macos/ClipMesh.app/Contents/MacOS/ClipMesh --smoke-test
+          test -s dist/macos/ClipMesh.dmg
+          test -x dist/macos/ClipMesh.app/Contents/PlugIns/ClipMeshShare.appex/Contents/MacOS/ClipMeshShare
+          python - <<'PY'
+          import plistlib
+          from pathlib import Path
+          main=plistlib.loads(Path('dist/macos/ClipMesh.app/Contents/Info.plist').read_bytes())
+          ext=plistlib.loads(Path('dist/macos/ClipMesh.app/Contents/PlugIns/ClipMeshShare.appex/Contents/Info.plist').read_bytes())
+          assert main['CFBundleShortVersionString']=='0.2.1', main
+          assert any('clipmesh-share' in x.get('CFBundleURLSchemes',[]) for x in main.get('CFBundleURLTypes',[])), main.get('CFBundleURLTypes')
+          assert ext['NSExtension']['NSExtensionPointIdentifier']=='com.apple.share-services', ext
+          print('macOS v0.2.1 Share extension validated')
+          PY
+          codesign --verify --deep --strict --verbose=2 dist/macos/ClipMesh.app
+          shasum -a 256 dist/macos/ClipMesh.dmg > dist/macos/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ClipMesh-macOS-v021
+          if-no-files-found: error
+          path: |
+            clipmesh/dist/macos/ClipMesh.dmg
+            clipmesh/dist/macos/ClipMesh.app
+            clipmesh/dist/macos/ClipMesh-icon.png
+            clipmesh/dist/macos/SHA256SUMS.txt
+
+  windows:
+    name: Windows EXE v0.2.1
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with: { python-version: '3.12' }
+      - name: Reconstruct and patch
+        shell: pwsh
+        run: |
+          python ci/prepare-icon-assets.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/unpack.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/patch-features.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/patch-sync-fixes.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/patch-desktop.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/patch-windows.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/patch-v014-versions.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/patch-v015-sync.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/patch-v016-sync.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/patch-v017-shizuku.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/patch-v018-features.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/patch-v019-fixes.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/patch-v020-fileshare.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/patch-v020-native.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/patch-v021-final.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $p='clipmesh/Cargo.toml'; $s=Get-Content $p -Raw; $s=$s -replace 'version = "0.1.0"','version = "0.2.1"'; Set-Content $p $s -Encoding utf8
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: clipmesh }
+      - name: Guards
+        shell: pwsh
+        run: |
+          $ui=Get-Content ci/ClipMeshWindows.cs -Raw
+          $tx=Get-Content ci/ClipMeshTransfer.cs -Raw
+          if (-not $ui.Contains('0.2.1')) { throw 'Windows version missing' }
+          if (-not $tx.Contains('Share with ClipMesh')) { throw 'Explorer integration missing' }
+          if (-not $tx.Contains('224.0.0.167')) { throw 'LAN discovery missing' }
+          if (-not $tx.Contains('/api/localsend/v2/prepare-upload')) { throw 'LocalSend prepare endpoint missing' }
+      - name: Test
+        working-directory: clipmesh
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check cryptography; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tools/protocol_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo test -p clipmesh-core; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo test -p clipmesh; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Build and smoke
+        working-directory: clipmesh
+        shell: pwsh
+        run: |
+          .\scripts\build-windows.ps1
+          $roaming=Join-Path $env:APPDATA 'ClipMesh\ClipMesh'; $local=Join-Path $env:LOCALAPPDATA 'ClipMesh'; Remove-Item -Recurse -Force $roaming,$local -ErrorAction SilentlyContinue
+          $p=Start-Process -FilePath '.\dist\windows\clipmesh.exe' -ArgumentList '--smoke-test' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Smoke failed $($p.ExitCode)" }
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.2.1\clipmesh-bin.exe'))) { throw 'v0.2.1 runtime missing' }
+          $hash=(Get-FileHash dist\windows\clipmesh.exe -Algorithm SHA256).Hash.ToLower(); "$hash  clipmesh.exe" | Set-Content -Encoding ascii dist\windows\SHA256SUMS.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ClipMesh-Windows-v021
+          if-no-files-found: error
+          path: |
+            clipmesh/dist/windows/clipmesh.exe
+            clipmesh/dist/windows/SHA256SUMS.txt
+
+  android:
+    name: Android APK v0.2.1
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with: { python-version: '3.12' }
+      - name: Reconstruct and patch
+        run: |
+          set -euo pipefail
+          python ci/prepare-icon-assets.py
+          python ci/unpack.py
+          python ci/patch-features.py
+          python ci/patch-sync-fixes.py
+          python ci/patch-v014-versions.py
+          python ci/patch-v015-sync.py
+          python ci/patch-v016-sync.py
+          python ci/patch-v017-shizuku.py
+          python ci/patch-v018-features.py
+          python ci/patch-v019-fixes.py
+          python ci/patch-v020-fileshare.py
+          python ci/patch-v021-final.py
+      - name: Requirement and battery guards
+        run: |
+          set -euo pipefail
+          M=clipmesh/android/app/src/main/AndroidManifest.xml
+          J=clipmesh/android/app/src/main/java/dev/clipmesh
+          grep -q 'versionName = "0.2.1"' clipmesh/android/app/build.gradle.kts
+          grep -q 'versionCode = 11' clipmesh/android/app/build.gradle.kts
+          grep -q 'ProcessBuilder("/system/bin/content", "read", "--uri"' "$J/shizuku/ClipboardUserService.kt"
+          grep -q '.version(4)' "$J/shizuku/ShizukuManager.kt"
+          grep -q 'BackgroundRuntime.start(this)' "$J/exclusion/ExclusionAccessibilityService.kt"
+          grep -q 'buildClipboardPreview' "$J/MainActivity.kt"
+          grep -q 'File Transfer' "$J/MainActivity.kt"
+          grep -q 'fun discoverNow()' "$J/fileshare/LocalTransferEngine.kt"
+          grep -q 'DEVICE_TTL_MS = 180_000L' "$J/fileshare/LocalTransferEngine.kt"
+          grep -q 'soTimeout = 0' "$J/network/NetworkEngine.kt"
+          grep -q 'ClipMesh/Images' "$J/fileshare/LocalTransferEngine.kt"
+          grep -q 'ClipMesh/Videos' "$J/fileshare/LocalTransferEngine.kt"
+          grep -q 'Intent.ACTION_SEND_MULTIPLE' "$J/fileshare/FileShareActivity.kt"
+          grep -q 'TransferActionReceiver' "$M"
+          ! grep -q 'FileTransferService' "$M"
+          ! grep -q 'SyncService' "$M"
+          ! grep -q 'FOREGROUND_SERVICE' "$M"
+          ! grep -q 'BOOT_COMPLETED' "$M"
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+          cache-dependency-path: clipmesh/android/**/*.gradle*
+      - uses: android-actions/setup-android@v4
+      - name: SDK and build
+        run: |
+          sdkmanager "platforms;android-36" "build-tools;35.0.0" "platform-tools"
+          cd clipmesh
+          chmod +x android/gradlew scripts/build-android-debug.sh
+          ./scripts/build-android-debug.sh
+      - name: Package guards and checksum
+        run: |
+          set -euo pipefail
+          APK=clipmesh/dist/android/ClipMesh-debug.apk
+          test -s "$APK"
+          unzip -p "$APK" AndroidManifest.xml >/tmp/manifest.bin
+          strings -el /tmp/manifest.bin | grep -q 'dev.clipmesh.exclusion.ExclusionAccessibilityService'
+          strings -el /tmp/manifest.bin | grep -q 'dev.clipmesh.fileshare.FileShareActivity'
+          strings -el /tmp/manifest.bin | grep -q 'android.intent.action.SEND_MULTIPLE'
+          ! strings -el /tmp/manifest.bin | grep -q 'dev.clipmesh.SyncService'
+          ! strings -el /tmp/manifest.bin | grep -q 'dev.clipmesh.fileshare.FileTransferService'
+          sha256sum "$APK" > clipmesh/dist/android/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ClipMesh-Android-v021
+          if-no-files-found: error
+          path: |
+            clipmesh/dist/android/ClipMesh-debug.apk
+            clipmesh/dist/android/SHA256SUMS.txt
