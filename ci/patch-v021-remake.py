@@ -1,5 +1,6 @@
 from pathlib import Path
 import base64
+import hashlib
 import io
 import lzma
 import platform
@@ -8,16 +9,29 @@ import tarfile
 
 root = Path(__file__).resolve().parents[1]
 project = root / "clipmesh"
+ci = root / "ci"
 system = platform.system()
-payload = root / "ci/v021_sources.b64"
 unpacked = project / ".v021"
+
+# Keep the generated v0.2.1 source bundle in small text chunks. GitHub's contents
+# API is reliable for these chunks; the previous single large file was silently
+# corrupted during upload and failed XZ validation in CI.
+parts = [ci / f"v021s.part{i:02d}.b64" for i in range(9)]
+missing = [str(p) for p in parts if not p.is_file()]
+if missing:
+    raise SystemExit(f"v0.2.1 source bundle chunks missing: {missing}")
+encoded = "".join(p.read_text(encoding="ascii").strip() for p in parts)
+raw = base64.b64decode(encoded, validate=True)
+expected_sha = "3768014034d04274b0ed6aead789392aea7cb47e059fcb72e49d3f155a77f042"
+actual_sha = hashlib.sha256(raw).hexdigest()
+if actual_sha != expected_sha:
+    raise SystemExit(f"v0.2.1 source bundle checksum mismatch: {actual_sha}")
 
 if unpacked.exists():
     shutil.rmtree(unpacked)
 unpacked.mkdir(parents=True)
-raw = base64.b64decode(payload.read_text(encoding="ascii"))
 with tarfile.open(fileobj=io.BytesIO(lzma.decompress(raw)), mode="r:") as tar:
-    tar.extractall(unpacked)
+    tar.extractall(unpacked, filter="data")
 
 
 def copy(src: str, dst: Path):
@@ -61,7 +75,7 @@ elif system == "Darwin":
     copy("macos/build-macos.sh", project / "scripts/build-macos.sh")
     target = root / "ci/v021"
     target.mkdir(parents=True, exist_ok=True)
-    for name in ("ClipMeshApp.swift", "ClipMeshTransfer.swift", "ClipMeshClipboardPreview.swift", "ClipMeshShareExtension.swift"):
+    for name in ("ClipMeshApp.swift", "ClipMeshTransfer.swift", "ClipMeshClipboardPreview.swift", "ClipMeshShareExtension.swift", "ClipMeshShare.m", "ClipMeshShare-Info.plist", "ClipMeshShare.entitlements"):
         copy(f"macos/{name}", target / name)
 
 elif system == "Windows":
@@ -76,4 +90,4 @@ elif system == "Windows":
 else:
     raise SystemExit(f"v0.2.1 platform patch unsupported on {system}")
 
-print(f"Applied ClipMesh v0.2.1 remake for {system}")
+print(f"Applied ClipMesh v0.2.1 remake for {system}; source sha256={actual_sha}")
