@@ -1,0 +1,48 @@
+name: Inspect generated ClipMesh sources
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Reconstruct and apply current Android/desktop patches
+        run: |
+          python ci/prepare-icon-assets.py
+          python ci/unpack.py
+          python ci/patch-features.py
+          python ci/patch-sync-fixes.py
+          python ci/patch-desktop.py
+          python ci/patch-v014-versions.py
+          python ci/patch-v015-sync.py
+          python ci/patch-v016-sync.py
+          python ci/patch-v017-shizuku.py
+          python ci/patch-v018-features.py
+          python ci/patch-v019-fixes.py
+          python ci/patch-v020-fileshare.py
+      - name: Collect generated sources
+        run: |
+          mkdir -p snapshot/android snapshot/rust
+          cp clipmesh/android/app/src/main/java/dev/clipmesh/clipboard/ClipboardBridge.kt snapshot/android/
+          cp clipmesh/android/app/src/main/java/dev/clipmesh/SyncService.kt snapshot/android/
+          cp clipmesh/android/app/src/main/java/dev/clipmesh/network/NetworkEngine.kt snapshot/android/
+          cp clipmesh/android/app/src/main/java/dev/clipmesh/MainActivity.kt snapshot/android/
+          cp clipmesh/android/app/src/main/java/dev/clipmesh/SettingsActivity.kt snapshot/android/
+          cp clipmesh/android/app/src/main/java/dev/clipmesh/SettingsStore.kt snapshot/android/
+          cp clipmesh/android/app/src/main/java/dev/clipmesh/shizuku/ClipboardUserService.kt snapshot/android/
+          cp clipmesh/apps/desktop/src/clipboard.rs snapshot/rust/
+          cp clipmesh/apps/desktop/src/network.rs snapshot/rust/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ClipMesh-generated-source-snapshot
+          if-no-files-found: error
+          path: snapshot
