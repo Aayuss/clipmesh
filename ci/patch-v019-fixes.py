@@ -175,7 +175,7 @@ bridge.write_text(
 # Foreground-service notification.
 # Android requires a notification for a reliable foreground sync service; it
 # cannot legally be removed while retaining this service architecture. Make the
-# channel minimum-importance/silent and stop advertising the peer count.
+# channel minimum-importance/quiet and stop advertising the peer count.
 # ---------------------------------------------------------------------------
 sync = project / "android/app/src/main/java/dev/clipmesh/SyncService.kt"
 sync_text = sync.read_text(encoding="utf-8")
@@ -195,12 +195,12 @@ if "NotificationManager.IMPORTANCE_LOW" in sync_text:
     )
 elif "NotificationManager.IMPORTANCE_MIN" not in sync_text:
     raise SystemExit("Android foreground notification importance anchor missing")
-if ".setSilent(true)" not in sync_text:
+if ".setPriority(android.app.Notification.PRIORITY_MIN)" not in sync_text:
     if ".setOngoing(true)" not in sync_text:
         raise SystemExit("Android foreground notification builder anchor missing")
     sync_text = sync_text.replace(
         ".setOngoing(true)",
-        ".setOngoing(true)\n            .setSilent(true)\n            .setShowWhen(false)\n            .setPriority(android.app.Notification.PRIORITY_MIN)",
+        ".setOngoing(true)\n            .setShowWhen(false)\n            .setPriority(android.app.Notification.PRIORITY_MIN)",
         1,
     )
 sync.write_text(sync_text, encoding="utf-8")
@@ -257,7 +257,7 @@ if 'prefs.getBoolean("show_remote_copy_overlay", false)' not in final_store:
     raise SystemExit("v0.1.9 remote-copy popup must default to off")
 
 final_sync = sync.read_text(encoding="utf-8")
-for required in ("NotificationManager.IMPORTANCE_MIN", ".setSilent(true)", "android.app.Notification.PRIORITY_MIN", "clipmesh_sync_quiet_v019"):
+for required in ("NotificationManager.IMPORTANCE_MIN", "android.app.Notification.PRIORITY_MIN", "clipmesh_sync_quiet_v019"):
     if required not in final_sync:
         raise SystemExit(f"v0.1.9 missing quiet foreground notification guard: {required}")
 
