@@ -86,12 +86,23 @@ jobs:
           ./dist/macos/ClipMesh.app/Contents/MacOS/ClipMesh --smoke-test
           test -f "$SUPPORT/config.json"
           ./dist/macos/ClipMesh.app/Contents/MacOS/clipmesh-bin status
-          BEFORE="$(./dist/macos/ClipMesh.app/Contents/MacOS/clipmesh-bin ui-state | head -n1 | cut -f2)"
+          BEFORE="$(./dist/macos/ClipMesh.app/Contents/MacOS/clipmesh-bin ui-state | awk -F '\t' '$1 == "DEVICE" { print $2 }')"
           ./dist/macos/ClipMesh.app/Contents/MacOS/clipmesh-bin reset --name 'CI Mac'
-          AFTER="$(./dist/macos/ClipMesh.app/Contents/MacOS/clipmesh-bin ui-state | head -n1 | cut -f2)"
-          test -n "$BEFORE" && test -n "$AFTER" && test "$BEFORE" != "$AFTER"
-          plutil -extract CFBundleShortVersionString raw ./dist/macos/ClipMesh.app/Contents/Info.plist | grep -qx '0.2.0'
-          plutil -extract NSServices xml1 ./dist/macos/ClipMesh.app/Contents/Info.plist | grep -q 'Share with ClipMesh'
+          AFTER="$(./dist/macos/ClipMesh.app/Contents/MacOS/clipmesh-bin ui-state | awk -F '\t' '$1 == "DEVICE" { print $2 }')"
+          test -n "$BEFORE"
+          test -n "$AFTER"
+          test "$BEFORE" != "$AFTER"
+          echo "Device reset validated: $BEFORE -> $AFTER"
+          python - <<'PY'
+          import plistlib
+          from pathlib import Path
+          path = Path('dist/macos/ClipMesh.app/Contents/Info.plist')
+          plist = plistlib.loads(path.read_bytes())
+          assert plist.get('CFBundleShortVersionString') == '0.2.0', plist.get('CFBundleShortVersionString')
+          services = plist.get('NSServices', [])
+          assert any((service.get('NSMenuItem') or {}).get('default') == 'Share with ClipMesh' for service in services), services
+          print('macOS version and Finder Service metadata validated')
+          PY
           plutil -lint ./dist/macos/ClipMesh.app/Contents/Info.plist
           codesign --verify --deep --strict --verbose=2 ./dist/macos/ClipMesh.app
       - name: Checksums
