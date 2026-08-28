@@ -15,6 +15,11 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+      - name: Upload raw v0.2.1 source bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: ClipMesh-v021-source-bundle
+          path: ci/v021_sources.b64
       - name: Reconstruct and apply current patches
         run: |
           python ci/prepare-icon-assets.py
