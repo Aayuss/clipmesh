@@ -35,8 +35,9 @@ jobs:
           python ci/patch-v016-sync.py
           python ci/patch-v017-shizuku.py
           python ci/patch-v018-features.py
-      - name: Stamp v0.1.8
-        run: python -c "from pathlib import Path; p=Path('clipmesh/Cargo.toml'); s=p.read_text(); p.write_text(s.replace('version = \"0.1.0\"','version = \"0.1.8\"',1))"
+          python ci/patch-v019-fixes.py
+      - name: Stamp v0.1.9
+        run: python -c "from pathlib import Path; p=Path('clipmesh/Cargo.toml'); s=p.read_text(); p.write_text(s.replace('version = \"0.1.0\"','version = \"0.1.9\"',1))"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -84,7 +85,7 @@ jobs:
           ./dist/macos/ClipMesh.app/Contents/MacOS/clipmesh-bin reset --name 'CI Mac'
           AFTER="$(./dist/macos/ClipMesh.app/Contents/MacOS/clipmesh-bin ui-state | head -n1 | cut -f2)"
           test -n "$BEFORE" && test -n "$AFTER" && test "$BEFORE" != "$AFTER"
-          plutil -extract CFBundleShortVersionString raw ./dist/macos/ClipMesh.app/Contents/Info.plist | grep -qx '0.1.8'
+          plutil -extract CFBundleShortVersionString raw ./dist/macos/ClipMesh.app/Contents/Info.plist | grep -qx '0.1.9'
           plutil -lint ./dist/macos/ClipMesh.app/Contents/Info.plist
           codesign --verify --deep --strict --verbose=2 ./dist/macos/ClipMesh.app
       - name: Checksums
@@ -137,12 +138,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python ci/patch-v018-features.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Stamp v0.1.8
+          python ci/patch-v019-fixes.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Stamp v0.1.9
         shell: pwsh
         run: |
           $p = 'clipmesh/Cargo.toml'
           $s = Get-Content $p -Raw
-          $s = $s -replace 'version = "0.1.0"', 'version = "0.1.8"'
+          $s = $s -replace 'version = "0.1.0"', 'version = "0.1.9"'
           Set-Content $p $s -Encoding utf8
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
@@ -189,7 +192,7 @@ jobs:
           if ($process.ExitCode -ne 0) { throw "Windows smoke test failed with exit code $($process.ExitCode)" }
           $configs = @((Join-Path $env:APPDATA 'ClipMesh\ClipMesh\config\config.json'), (Join-Path $env:APPDATA 'ClipMesh\ClipMesh\config.json'))
           if (-not ($configs | Where-Object { Test-Path $_ })) { throw 'Windows first-run smoke test did not create config.json.' }
-          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.1.8\clipmesh-bin.exe'))) { throw 'Windows launcher did not extract its embedded v0.1.8 sync engine.' }
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.1.9\clipmesh-bin.exe'))) { throw 'Windows launcher did not extract its embedded v0.1.9 sync engine.' }
       - name: Checksum
         working-directory: clipmesh
         shell: pwsh
@@ -225,6 +228,7 @@ jobs:
           python ci/patch-v016-sync.py
           python ci/patch-v017-shizuku.py
           python ci/patch-v018-features.py
+          python ci/patch-v019-fixes.py
       - name: Validate Android Shizuku and synchronization sources
         shell: bash
         run: |
@@ -249,8 +253,8 @@ jobs:
           grep -q 'fun isBound()' "$SHIZUKU"
           grep -q 'Shizuku connected' "$SETTINGS"
           grep -q 'Reset all pairing' "$SETTINGS"
-          grep -q 'versionName = "0.1.8"' clipmesh/android/app/build.gradle.kts
-          grep -q 'versionCode = 8' clipmesh/android/app/build.gradle.kts
+          grep -q 'versionName = "0.1.9"' clipmesh/android/app/build.gradle.kts
+          grep -q 'versionCode = 9' clipmesh/android/app/build.gradle.kts
           python - <<'PY'
           from pathlib import Path
           s = Path('clipmesh/android/app/src/main/java/dev/clipmesh/SettingsStore.kt').read_text()
@@ -271,6 +275,12 @@ jobs:
           ! grep -q 'exitProcess(0)' "$USER_SERVICE"
           grep -q '2_500L' clipmesh/android/app/src/main/java/dev/clipmesh/network/NetworkEngine.kt
           grep -q 'text/plain; charset=utf-8' "$BRIDGE"
+          grep -q 'for (index in 0 until clip.itemCount)' "$BRIDGE"
+          grep -q 'showRemoteCopyOverlay' "$BRIDGE"
+          grep -q 'showRemoteCopyOverlay' "$STORE"
+          grep -q 'Show remote copy popup' "$SETTINGS"
+          grep -q 'NotificationManager.IMPORTANCE_MIN' clipmesh/android/app/src/main/java/dev/clipmesh/SyncService.kt
+          grep -q 'onStatus("Sync active")' clipmesh/android/app/src/main/java/dev/clipmesh/network/NetworkEngine.kt
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -351,8 +361,8 @@ jobs:
             tag="${GITHUB_REF_NAME}"
             title="ClipMesh ${GITHUB_REF_NAME}"
           else
-            tag="v0.1.8-alpha"
-            title="ClipMesh v0.1.8-alpha"
+            tag="v0.1.9-alpha"
+            title="ClipMesh v0.1.9-alpha"
           fi
           assets=(release/ClipMesh-macOS.dmg release/ClipMesh-Windows.exe release/ClipMesh-Android.apk release/ClipMesh-icon.png release/SHA256SUMS.txt)
           if gh release view "$tag" >/dev/null 2>&1; then
