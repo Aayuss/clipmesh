@@ -2,7 +2,7 @@ name: Inspect generated ClipMesh sources
 
 on:
   push:
-    branches: [main]
+    branches: [main, clipmesh-v021-finalize]
 
 permissions:
   contents: read
@@ -33,6 +33,7 @@ jobs:
           python ci/patch-v020-fileshare.py
           python ci/patch-v020-macos.py
           python ci/patch-v020-windows.py
+          python ci/patch-v021-remake.py
       - name: Collect generated sources
         run: |
           mkdir -p snapshot/android snapshot/rust snapshot/native
@@ -43,6 +44,13 @@ jobs:
           cp clipmesh/android/app/src/main/java/dev/clipmesh/SettingsActivity.kt snapshot/android/
           cp clipmesh/android/app/src/main/java/dev/clipmesh/SettingsStore.kt snapshot/android/
           cp clipmesh/android/app/src/main/java/dev/clipmesh/shizuku/ClipboardUserService.kt snapshot/android/
+          cp clipmesh/android/app/src/main/java/dev/clipmesh/shizuku/ShizukuManager.kt snapshot/android/
+          cp clipmesh/android/app/src/main/java/dev/clipmesh/fileshare/FileShareActivity.kt snapshot/android/
+          cp clipmesh/android/app/src/main/java/dev/clipmesh/fileshare/FileTransferService.kt snapshot/android/
+          cp clipmesh/android/app/src/main/java/dev/clipmesh/fileshare/LocalTransferEngine.kt snapshot/android/
+          cp clipmesh/android/app/src/main/java/dev/clipmesh/fileshare/TransferBootReceiver.kt snapshot/android/
+          cp clipmesh/android/app/src/main/AndroidManifest.xml snapshot/android/
+          cp clipmesh/android/app/build.gradle.kts snapshot/android/
           cp clipmesh/apps/desktop/src/clipboard.rs snapshot/rust/
           cp clipmesh/apps/desktop/src/network.rs snapshot/rust/
           cp ci/ClipMeshApp.swift snapshot/native/
