@@ -111,8 +111,9 @@ replace_once(
         MethodInvoker prompt = delegate
         {
             string what = files.Count == 1 ? files[0].Name : files.Count + " files";
-            accepted = MessageBox.Show(this,
-                sender + " wants to send you " + what + ".\r\n\r\nAccept to save it in Downloads\\ClipMesh.",
+            string message = sender + " wants to send you " + what + "." + Environment.NewLine + Environment.NewLine
+                + "Accept to save it in Downloads" + Path.DirectorySeparatorChar + "ClipMesh.";
+            accepted = MessageBox.Show(this, message,
                 "Incoming ClipMesh transfer", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes;
         };
         if (InvokeRequired) Invoke(prompt); else prompt();
