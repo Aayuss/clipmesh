@@ -1,0 +1,104 @@
+name: Inspect ClipMesh v0.2.2 generated sources
+
+on:
+  push:
+    branches: [clipmesh-v022-work]
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with: { python-version: '3.12' }
+      - name: Reconstruct v0.2.1 macOS
+        run: |
+          set -euo pipefail
+          python ci/prepare-icon-assets.py
+          python ci/unpack.py
+          python ci/patch-features.py
+          python ci/patch-sync-fixes.py
+          python ci/patch-desktop.py
+          python ci/patch-macos.py
+          python ci/patch-v014-versions.py
+          python ci/patch-v015-sync.py
+          python ci/patch-v016-sync.py
+          python ci/patch-v017-shizuku.py
+          python ci/patch-v018-features.py
+          python ci/patch-v019-fixes.py
+          python ci/patch-v020-fileshare.py
+          python ci/patch-v020-native.py
+          python ci/patch-v021-final.py
+          python ci/patch-v021-compile-hotfix.py
+          mkdir -p generated
+          cp ci/ClipMeshApp.swift ci/ClipMeshTransfer.swift clipmesh/scripts/build-macos.sh generated/
+          cp clipmesh/apps/desktop/src/clipboard.rs generated/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: generated-macos-v021
+          path: generated
+
+  windows:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with: { python-version: '3.12' }
+      - name: Reconstruct v0.2.1 Windows
+        shell: pwsh
+        run: |
+          python ci/prepare-icon-assets.py
+          python ci/unpack.py
+          python ci/patch-features.py
+          python ci/patch-sync-fixes.py
+          python ci/patch-desktop.py
+          python ci/patch-windows.py
+          python ci/patch-v014-versions.py
+          python ci/patch-v015-sync.py
+          python ci/patch-v016-sync.py
+          python ci/patch-v017-shizuku.py
+          python ci/patch-v018-features.py
+          python ci/patch-v019-fixes.py
+          python ci/patch-v020-fileshare.py
+          python ci/patch-v020-native.py
+          python ci/patch-v021-final.py
+          python ci/patch-v021-compile-hotfix.py
+          New-Item -ItemType Directory -Force generated | Out-Null
+          Copy-Item ci/ClipMeshWindows.cs,ci/ClipMeshTransfer.cs,clipmesh/scripts/build-windows.ps1 generated/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: generated-windows-v021
+          path: generated
+
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with: { python-version: '3.12' }
+      - name: Reconstruct v0.2.1 Android
+        run: |
+          set -euo pipefail
+          python ci/prepare-icon-assets.py
+          python ci/unpack.py
+          python ci/patch-features.py
+          python ci/patch-sync-fixes.py
+          python ci/patch-v014-versions.py
+          python ci/patch-v015-sync.py
+          python ci/patch-v016-sync.py
+          python ci/patch-v017-shizuku.py
+          python ci/patch-v018-features.py
+          python ci/patch-v019-fixes.py
+          python ci/patch-v020-fileshare.py
+          python ci/patch-v021-final.py
+          python ci/patch-v021-compile-hotfix.py
+          mkdir -p generated
+          cp -R clipmesh/android/app/src/main generated/main
+          cp clipmesh/android/app/build.gradle.kts generated/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: generated-android-v021
+          path: generated
