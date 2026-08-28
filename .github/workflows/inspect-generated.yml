@@ -22,6 +22,8 @@ jobs:
           python ci/patch-features.py
           python ci/patch-sync-fixes.py
           python ci/patch-desktop.py
+          python ci/patch-macos.py
+          python ci/patch-windows.py
           python ci/patch-v014-versions.py
           python ci/patch-v015-sync.py
           python ci/patch-v016-sync.py
