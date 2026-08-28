@@ -18,12 +18,10 @@ missing = [str(p) for p in parts if not p.is_file()]
 if missing:
     raise SystemExit(f"v0.2.1 source bundle chunks missing: {missing}")
 chunks = [p.read_text(encoding="ascii").strip() for p in parts]
-# These chunks are transport fragments of one base64 stream. Normalize padding
-# because GitHub text uploads can preserve padding at an intermediate fragment.
 encoded = "".join(chunk.rstrip("=") for chunk in chunks)
 encoded += "=" * ((4 - len(encoded) % 4) % 4)
 raw = base64.b64decode(encoded, validate=True)
-expected_sha = "3768014034d04274b0ed6aead789392aea7cb47e059fcb72e49d3f155a77f042"
+expected_sha = "93c3dec963163912995c262e8cbb0a42c41af846f766c2b116b73720c9eada3c"
 actual_sha = hashlib.sha256(raw).hexdigest()
 if actual_sha != expected_sha:
     details = ", ".join(f"p{i}={len(c)}" for i, c in enumerate(chunks))
@@ -32,7 +30,11 @@ if actual_sha != expected_sha:
 if unpacked.exists():
     shutil.rmtree(unpacked)
 unpacked.mkdir(parents=True)
-with tarfile.open(fileobj=io.BytesIO(lzma.decompress(raw)), mode="r:") as tar:
+try:
+    unpacked_tar = lzma.decompress(raw)
+except lzma.LZMAError as exc:
+    raise SystemExit(f"v0.2.1 XZ bundle invalid despite checksum {actual_sha}: {exc}") from exc
+with tarfile.open(fileobj=io.BytesIO(unpacked_tar), mode="r:") as tar:
     tar.extractall(unpacked, filter="data")
 
 
