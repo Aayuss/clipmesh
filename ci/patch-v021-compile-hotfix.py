@@ -215,6 +215,14 @@ elif system == "Darwin":
             raise SystemExit(f"macOS hotfix guard missing: {required}")
     app.write_text(text, encoding="utf-8")
 
+    build = project / "scripts/build-macos.sh"
+    build_text = build.read_text(encoding="utf-8")
+    old_callback = 'completionHandler:^(id<NSSecureCoding> value,NSError*e)'
+    new_callback = 'completionHandler:^(id value,NSError*e)'
+    if old_callback not in build_text:
+        raise SystemExit("macOS Share extension callback anchor missing")
+    build.write_text(build_text.replace(old_callback, new_callback, 1), encoding="utf-8")
+
 elif system == "Windows":
     pass
 else:
