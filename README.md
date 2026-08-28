@@ -1,144 +1,128 @@
-<p align="center">
-  <img src="https://github.com/Aayuss/clipmesh/releases/download/v0.1.9-alpha/ClipMesh-icon.png" width="180" alt="ClipMesh icon">
-</p>
+# ClipMesh
 
-<h1 align="center">ClipMesh</h1>
+ClipMesh is a private cross-platform clipboard sync and nearby file-transfer app for macOS, Windows, and Android.
 
-<p align="center">
-  Private LAN-only encrypted clipboard sync for macOS, Windows, and Android.
-</p>
+Clipboard sync is still a first-class part of ClipMesh. v0.2.0 adds a LocalSend-style LAN file-drop system alongside it, so the same lightweight background app can handle both everyday copy/paste and deliberate file transfers.
 
-ClipMesh synchronizes text, images, and files directly between your paired devices over the local network. Clipboard payload encryption is mandatory and there is no cloud relay, account, analytics service, or clipboard-history database.
+## Download v0.2.0-alpha
 
-## Download ClipMesh
+- [macOS DMG](https://github.com/Aayuss/clipmesh/releases/download/v0.2.0-alpha/ClipMesh-macOS.dmg)
+- [Windows EXE](https://github.com/Aayuss/clipmesh/releases/download/v0.2.0-alpha/ClipMesh-Windows.exe)
+- [Android APK](https://github.com/Aayuss/clipmesh/releases/download/v0.2.0-alpha/ClipMesh-Android.apk)
+- [SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.0-alpha/SHA256SUMS.txt)
 
-### Direct downloads - v0.1.9-alpha
+## Clipboard sync
 
-- [Download ClipMesh for macOS (.dmg)](https://github.com/Aayuss/clipmesh/releases/download/v0.1.9-alpha/ClipMesh-macOS.dmg)
-- [Download ClipMesh for Windows (.exe)](https://github.com/Aayuss/clipmesh/releases/download/v0.1.9-alpha/ClipMesh-Windows.exe)
-- [Download ClipMesh for Android (.apk)](https://github.com/Aayuss/clipmesh/releases/download/v0.1.9-alpha/ClipMesh-Android.apk)
+- Text, HTML, images/screenshots, and clipboard file payloads
+- End-to-end encrypted ClipMesh spaces
+- macOS menu-bar app, Windows tray app, and Android background service
+- Android Shizuku integration for reliable background clipboard access
+- Android remote-copy popup can be enabled or disabled
+- Background sync is enabled by default after pairing
+- Device exclusions and per-platform clipboard handling remain independent from file transfer
 
-**[Open all ClipMesh releases](https://github.com/Aayuss/clipmesh/releases)**
+## Nearby file transfer
 
-## v0.1.9 - Android image reliability and quieter background sync
+ClipMesh v0.2.0 adds a second LAN subsystem inspired by LocalSend's open protocol and UX model:
 
-v0.1.9 focuses on the Android -> desktop image path and removing distracting Android clipboard/background UI.
+- LAN discovery with UDP multicast on `224.0.0.167:53317`
+- Direct device-to-device HTTP transfer on the local network - no cloud relay
+- Prepare/upload handshake with per-file upload tokens
+- Persistent favorite/trusted devices
+- Favorite senders are accepted automatically
+- Non-favorite senders require explicit Accept/Reject confirmation
+- Works macOS ↔ Windows ↔ Android, including Android ↔ Android
+- File transfer does not require the devices to share the same encrypted clipboard space
 
-- **Android -> macOS/Windows image fix** - Android clipboard entries are no longer required to contain exactly one item before an image is promoted to a real `image/png` clipboard representation. ClipMesh now scans ordinary Android clipboard items and prioritizes the first real image item in Shizuku snapshots even when Android/Samsung adds extra metadata or clip items.
-- **Remote-copy popup setting** - Android Settings now includes **Show remote copy popup**. It defaults to **off**. With it off, mirrored text uses ClipMesh's Shizuku/shell clipboard write with Android's clipboard-overlay suppression metadata. Turn it on if you prefer Android's normal local "Copied" popup.
-- **Quieter foreground sync notification** - the Android foreground-service channel is now minimum-importance and silent, uses a new quiet channel for upgrades, and no longer advertises `Connected peers: N`. Android still requires a foreground-service notification for reliable always-on sync; ClipMesh does not fake-remove the OS-required service indicator at the cost of background reliability.
-- **v0.1.9 package metadata** - Android, macOS, Windows, the sync engine, CI checks, and release assets are aligned to v0.1.9.
+### Android receiving
 
-## Pairing
+The Android file-transfer service can stay running while the main UI is closed. Incoming files are stored as:
 
-One pairing code joins devices to the same encrypted private space. Pairing is not performed separately in both directions.
+- Images → `Downloads/ClipMesh/Images`
+- Videos → `Downloads/ClipMesh/Videos`
+- Everything else → `Downloads/ClipMesh`
 
-The macOS, Windows, and Android apps provide:
+If the sender is not favorited, Android shows an incoming-transfer notification with **Accept** and **Reject** actions. Favorited senders save directly without opening ClipMesh.
 
-- editable device name and short device ID
-- known/paired devices and authenticated online state
-- **Copy Pairing Code**
-- **Pair Device** / **Join** / **Create New**
-- **View Clipboard**
-- synchronization settings
-- **Reset all pairing**
+### Android sending
 
-Pairing codes contain the private space key and should be treated like a password.
+Select one or more files/images/videos in another Android app and use:
 
-## Android background clipboard access
+**Share → Send with ClipMesh**
 
-Android 10+ restricts ordinary background clipboard reads. ClipMesh supports:
+ClipMesh opens its nearby-device picker. Tap a visible device to send, or star it to mark it trusted for future incoming transfers.
 
-- **Shizuku** - preferred for reliable Android -> desktop background clipboard capture
-- the optional **ClipMesh app exclusions** Accessibility service as an event-driven fallback where Android/OEM behavior allows it
-- an optional compatibility watchdog, off by default
+You can also open ClipMesh and choose **Send files** manually.
 
-Background sync defaults to **on**.
+### macOS sending
 
-### Shizuku setup
+ClipMesh runs in the menu bar and provides **Send Files…** from both the app and menu-bar menu.
 
-1. Install/update the v0.1.9 Android APK.
-2. Start Shizuku and confirm it is running.
-3. In Shizuku -> **Authorized applications**, keep ClipMesh enabled.
-4. Open ClipMesh -> **Settings**.
-5. If needed, use **Request Shizuku permission** / **Connect Shizuku**.
-6. Once bound, ClipMesh reports that background clipboard access is ready.
+Finder also registers **Share with ClipMesh** as a macOS Service. Depending on the macOS/Finder version, Apple may surface Services under the right-click **Services** or **Quick Actions** section rather than allowing an ordinary app to choose the exact root-menu placement. Selecting the service opens ClipMesh's live LAN device picker for the selected file(s).
 
-Shizuku is not required for Mac/Windows -> Android receiving or when Android has ordinary foreground clipboard access. It is the preferred path for reliable automatic Android -> desktop capture while ClipMesh is in the background.
+Incoming non-favorite transfers display an Accept/Reject dialog. Favorite devices save directly to `~/Downloads/ClipMesh`, with image/video subfolders.
 
-## Testing synchronization
+### Windows sending
 
-With both devices online, copy a fresh clipboard value each time:
+ClipMesh registers a per-user Explorer shell verb:
 
-1. Copy text or an image on macOS/Windows. Android should receive it automatically.
-2. Copy text or an image on Android. With foreground clipboard access or Shizuku available, the desktop clipboard should update automatically.
+**Right click → Share with ClipMesh**
 
-## Android clipboard popup behavior
+On Windows 11, Microsoft may place classic app verbs under **Show more options**. The command opens ClipMesh's nearby-device picker for the selected file.
 
-**Settings -> Show remote copy popup** controls whether mirrored text should intentionally use Android's visible local-copy UI.
+You can also send from the tray menu or the main ClipMesh window.
 
-- **Off (default)** - ClipMesh uses the quiet Shizuku/shell path and asks SystemUI to suppress the clipboard overlay.
-- **On** - ClipMesh allows Android's normal copied popup.
+Incoming non-favorite transfers display an Accept/Reject dialog. Favorite devices save directly to `Downloads\ClipMesh`, with image/video subfolders.
 
-The exact visual behavior is ultimately controlled by the Android/OEM SystemUI implementation.
+## Favorites and trust
 
-## Background icons and desktop behavior
+Favorites are a receiver-side convenience rule, similar to LocalSend's paired/quick-save behavior:
+
+- Favorite a device → future incoming files from that device can save automatically
+- Do not favorite it → each incoming transfer asks first
+- Favoriting does not grant clipboard-space access
+- Clipboard encryption/pairing and file-transfer trust remain separate security boundaries
+
+## v0.2.0 design
+
+The Android, macOS, and Windows surfaces now use a shared warmer, darker, minimal visual direction:
+
+- warm charcoal/taupe surfaces
+- large clear headings
+- rounded cards and pill-style actions
+- quieter secondary text
+- dedicated nearby-device transfer picker
+- less stock utility-app styling while keeping native platform behavior
+
+## Network model
+
+ClipMesh has two independent local-network roles:
+
+1. **Encrypted clipboard mesh** - existing ClipMesh paired-space protocol.
+2. **Nearby file drop** - LAN discovery and explicit/favorite-gated file transfer.
+
+The file-drop protocol uses LocalSend v2-compatible discovery and upload endpoint semantics (`/api/localsend/v2/prepare-upload`, `/api/localsend/v2/upload`) so the design stays simple, local-first, and auditable. ClipMesh implements the subsystem natively on each platform rather than embedding the LocalSend application.
+
+## Android notes
+
+Android requires a foreground service notification for reliable continuous background work. ClipMesh keeps this channel at minimum importance and does not show the old peer-count status. Incoming non-favorite transfer requests use a separate actionable notification because user approval must remain visible.
+
+On newer Android versions, aggressive OEM battery restrictions can still stop any background app. Opening ClipMesh or using the Android Share sheet starts the receiver again.
+
+## Installation trust
 
 ### macOS
 
-- Opening ClipMesh shows the application window and menu-bar icon.
-- Standard shortcuts such as Cmd-C, Cmd-V, Cmd-W, Cmd-Q, and Cmd-M work through the native macOS menu/responder chain.
-- Red close hides the window and keeps synchronization running.
-- Use the menu-bar icon to restore or quit ClipMesh.
-
-### Windows
-
-- Opening ClipMesh shows the application window and system-tray icon.
-- X hides the window/taskbar entry while synchronization keeps running.
-- Use the tray icon to restore or quit ClipMesh.
-
-## macOS Gatekeeper and Android install warnings
-
-The current GitHub builds are suitable for direct personal testing, but operating-system trust prompts cannot be removed just by changing application code.
-
-### macOS
-
-The GitHub build is ad-hoc code-signed. To eliminate the normal Gatekeeper **Open Anyway / Privacy & Security** flow for downloaded builds, ClipMesh needs:
-
-1. an Apple Developer Program **Developer ID Application** certificate,
-2. signing with that certificate,
-3. Apple notarization of the finished app/DMG,
-4. stapling the notarization ticket to the distributed build.
-
-Without those Apple-issued credentials, CI cannot legitimately make macOS treat the downloaded app as notarized.
+The GitHub DMG is ad-hoc signed. Eliminating Gatekeeper's first-run warning for downloaded builds requires an Apple Developer ID certificate plus Apple notarization/stapling. That cannot be honestly bypassed in application code.
 
 ### Android
 
-The current GitHub workflow produces a sideloaded debug APK. Android/Play Protect may therefore require an **Install anyway** confirmation. The proper production path is a release APK/AAB signed with a stable private release key, ideally distributed through Google Play (including an internal-testing track if the app is private).
+The GitHub APK is sideloaded. Android/Play Protect/Samsung may show an install warning for apps that were not installed from a recognized store. The durable fix is a stable release-signing key and, ideally, Play Store/internal-test distribution. Signing secrets should never be committed to this public repository.
 
-A private signing key should not be committed to this public repository. It should be stored as a protected GitHub Actions secret before switching the public release workflow to stable release signing.
+## Build
 
-## Security and storage
+GitHub Actions reconstructs the source, applies the versioned platform patches, tests the existing encrypted clipboard core/protocol, compiles the native macOS/Windows wrappers and Android APK, smoke-tests the packaged apps, computes checksums, and publishes the `v0.2.0-alpha` release assets.
 
-Desktop space keys use the operating-system credential store:
+## LocalSend acknowledgement
 
-- macOS - Apple Keychain
-- Windows - Windows Credential Manager
-
-Android stores its space key through Android Keystore-backed storage.
-
-The Accessibility service is configured with `canRetrieveWindowContent=false`; it is used for foreground-app exclusions and clipboard-change signaling, not screen scraping.
-
-For sideloaded APKs on Android 13+, Android may initially block an Accessibility service as a restricted setting. If you use that optional fallback, open ClipMesh App info -> top-right menu -> **Allow restricted settings**, then enable **ClipMesh app exclusions** in Accessibility.
-
-## Builds and releases
-
-Every pull request and push to `main` builds macOS, Windows, and Android. CI validates protocol/core tests, authenticated desktop transport, Android Shizuku wiring, image synchronization guards, package metadata, native builds, packaged APK components, first-run behavior, reset behavior, and checksums.
-
-A successful `main` build publishes `v0.1.9-alpha` with:
-
-- `ClipMesh-macOS.dmg`
-- `ClipMesh-Windows.exe`
-- `ClipMesh-Android.apk`
-- `ClipMesh-icon.png`
-- `SHA256SUMS.txt`
+The nearby-transfer design and protocol compatibility were developed after reviewing the open-source LocalSend project and its public protocol specification. LocalSend is licensed under Apache-2.0. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
