@@ -8,23 +8,20 @@ permissions:
   contents: read
 
 jobs:
-  validate:
+  android-base:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Reconstruct through v0.2.1
+      - name: Reconstruct Android through v0.2.0
         run: |
           set -euo pipefail
           python ci/prepare-icon-assets.py
           python ci/unpack.py
           python ci/patch-features.py
           python ci/patch-sync-fixes.py
-          python ci/patch-desktop.py
-          python ci/patch-macos.py
-          python ci/patch-windows.py
           python ci/patch-v014-versions.py
           python ci/patch-v015-sync.py
           python ci/patch-v016-sync.py
@@ -32,23 +29,6 @@ jobs:
           python ci/patch-v018-features.py
           python ci/patch-v019-fixes.py
           python ci/patch-v020-fileshare.py
-          python ci/patch-v020-macos.py
-          python ci/patch-v020-windows.py
-          python ci/patch-v021-remake.py
-      - name: Validate v0.2.1 generated Android source
+      - name: Print ClipboardUserService
         run: |
-          set -euo pipefail
-          grep -q 'versionName = "0.2.1"' clipmesh/android/app/build.gradle.kts
-          grep -q 'versionCode = 11' clipmesh/android/app/build.gradle.kts
-          grep -q 'ProcessBuilder("/system/bin/content", "read", "--uri"' clipmesh/android/app/src/main/java/dev/clipmesh/shizuku/ClipboardUserService.kt
-          grep -q 'renderClipboardPreview' clipmesh/android/app/src/main/java/dev/clipmesh/MainActivity.kt
-          grep -q 'File Transfer' clipmesh/android/app/src/main/java/dev/clipmesh/MainActivity.kt
-          grep -q 'NEARBY DEVICES' clipmesh/android/app/src/main/java/dev/clipmesh/MainActivity.kt
-      - name: Upload generated v0.2.1 Android sources
-        uses: actions/upload-artifact@v7
-        with:
-          name: ClipMesh-v021-generated-android
-          if-no-files-found: error
-          path: |
-            clipmesh/android/app/src/main
-            clipmesh/android/app/build.gradle.kts
+          nl -ba clipmesh/android/app/src/main/java/dev/clipmesh/shizuku/ClipboardUserService.kt | sed -n '1,260p'
