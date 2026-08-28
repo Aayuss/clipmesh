@@ -8,15 +8,16 @@ permissions:
   contents: read
 
 jobs:
-  internals:
+  validate:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Reconstruct through v0.2.0
+      - name: Reconstruct through v0.2.1
         run: |
+          set -euo pipefail
           python ci/prepare-icon-assets.py
           python ci/unpack.py
           python ci/patch-features.py
@@ -33,13 +34,21 @@ jobs:
           python ci/patch-v020-fileshare.py
           python ci/patch-v020-macos.py
           python ci/patch-v020-windows.py
-      - name: Collect Android internals
+          python ci/patch-v021-remake.py
+      - name: Validate v0.2.1 generated Android source
         run: |
-          mkdir -p internals
-          cp -R clipmesh/android/app/src/main internals/android-main
-          cp clipmesh/android/app/build.gradle.kts internals/android-build.gradle.kts
-      - uses: actions/upload-artifact@v7
+          set -euo pipefail
+          grep -q 'versionName = "0.2.1"' clipmesh/android/app/build.gradle.kts
+          grep -q 'versionCode = 11' clipmesh/android/app/build.gradle.kts
+          grep -q 'ProcessBuilder("/system/bin/content", "read", "--uri"' clipmesh/android/app/src/main/java/dev/clipmesh/shizuku/ClipboardUserService.kt
+          grep -q 'renderClipboardPreview' clipmesh/android/app/src/main/java/dev/clipmesh/MainActivity.kt
+          grep -q 'File Transfer' clipmesh/android/app/src/main/java/dev/clipmesh/MainActivity.kt
+          grep -q 'NEARBY DEVICES' clipmesh/android/app/src/main/java/dev/clipmesh/MainActivity.kt
+      - name: Upload generated v0.2.1 Android sources
+        uses: actions/upload-artifact@v7
         with:
-          name: ClipMesh-android-internals
+          name: ClipMesh-v021-generated-android
           if-no-files-found: error
-          path: internals
+          path: |
+            clipmesh/android/app/src/main
+            clipmesh/android/app/build.gradle.kts
