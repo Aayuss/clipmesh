@@ -1,34 +1,10 @@
-name: Inspect generated ClipMesh sources
+name: Inspect generated ClipMesh sources (manual)
 
 on:
-  push:
-    branches: [clipmesh-v021-finalize]
-
-permissions:
-  contents: read
+  workflow_dispatch:
 
 jobs:
-  android-base:
+  retired:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - name: Reconstruct Android through v0.2.0
-        run: |
-          set -euo pipefail
-          python ci/prepare-icon-assets.py
-          python ci/unpack.py
-          python ci/patch-features.py
-          python ci/patch-sync-fixes.py
-          python ci/patch-v014-versions.py
-          python ci/patch-v015-sync.py
-          python ci/patch-v016-sync.py
-          python ci/patch-v017-shizuku.py
-          python ci/patch-v018-features.py
-          python ci/patch-v019-fixes.py
-          python ci/patch-v020-fileshare.py
-      - name: Print ClipboardUserService
-        run: |
-          nl -ba clipmesh/android/app/src/main/java/dev/clipmesh/shizuku/ClipboardUserService.kt | sed -n '1,260p'
+      - run: echo "Temporary source inspection workflow retired after v0.2.1 debugging"
