@@ -15,9 +15,8 @@ def replace_if(path: Path, old: str, new: str, required: bool = True) -> None:
     path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
 
-# ---------------------------------------------------------------------------
-# Android: install the LocalSend-v2-compatible LAN file transfer subsystem.
-# ---------------------------------------------------------------------------
+# Android-only v0.2.0 file-transfer patch. Desktop wrappers are patched by
+# their own platform-specific scripts so every CI runner touches only its own UI.
 android_src = root / "ci" / "android-v020"
 android_dst = project / "android/app/src/main/java/dev/clipmesh/fileshare"
 android_dst.mkdir(parents=True, exist_ok=True)
@@ -33,10 +32,8 @@ application = manifest_root.find("application")
 if application is None:
     raise SystemExit("Android application node missing")
 
-permissions = {
-    node.get(ANDROID + "name")
-    for node in manifest_root.findall("uses-permission")
-}
+permissions = {node.get(ANDROID + "name") for node in manifest_root.findall("uses-permission")}
+
 
 def add_permission(name: str, max_sdk: str | None = None):
     if name in permissions:
@@ -46,12 +43,12 @@ def add_permission(name: str, max_sdk: str | None = None):
     if max_sdk is not None:
         node.set(ANDROID + "maxSdkVersion", max_sdk)
     insert_at = 0
-    children = list(manifest_root)
-    for i, child in enumerate(children):
+    for i, child in enumerate(list(manifest_root)):
         if child.tag == "uses-permission":
             insert_at = i + 1
     manifest_root.insert(insert_at, node)
     permissions.add(name)
+
 
 for permission in (
     "android.permission.INTERNET",
@@ -66,7 +63,6 @@ for permission in (
 add_permission("android.permission.WRITE_EXTERNAL_STORAGE", "28")
 
 application.set(ANDROID + "requestLegacyExternalStorage", "true")
-
 existing_components = {
     node.get(ANDROID + "name")
     for node in application
@@ -171,15 +167,4 @@ android_gradle = project / "android/app/build.gradle.kts"
 replace_if(android_gradle, "versionCode = 9", "versionCode = 10")
 replace_if(android_gradle, 'versionName = "0.1.9"', 'versionName = "0.2.0"')
 
-# ---------------------------------------------------------------------------
-# Desktop version metadata. Native transfer source files are compiled directly
-# from ci/ by the patched native packaging scripts.
-# ---------------------------------------------------------------------------
-mac_build = project / "scripts/build-macos.sh"
-replace_if(mac_build, "<key>CFBundleShortVersionString</key><string>0.1.9</string>", "<key>CFBundleShortVersionString</key><string>0.2.0</string>")
-replace_if(mac_build, "<key>CFBundleVersion</key><string>0.1.9</string>", "<key>CFBundleVersion</key><string>0.2.0</string>")
-
-windows = root / "ci/ClipMeshWindows.cs"
-replace_if(windows, 'private const string Version = "0.1.9";', 'private const string Version = "0.2.0";')
-
-print("Applied ClipMesh v0.2.0 LocalSend-compatible file transfer, Android share sheet/background receiving, and warm-glass Android theme")
+print("Applied ClipMesh v0.2.0 Android LocalSend-compatible file transfer, share sheet, background receiving, and warm-glass theme")
