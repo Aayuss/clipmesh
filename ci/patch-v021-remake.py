@@ -13,19 +13,21 @@ ci = root / "ci"
 system = platform.system()
 unpacked = project / ".v021"
 
-# Keep the generated v0.2.1 source bundle in small text chunks. GitHub's contents
-# API is reliable for these chunks; the previous single large file was silently
-# corrupted during upload and failed XZ validation in CI.
 parts = [ci / f"v021s.part{i:02d}.b64" for i in range(9)]
 missing = [str(p) for p in parts if not p.is_file()]
 if missing:
     raise SystemExit(f"v0.2.1 source bundle chunks missing: {missing}")
-encoded = "".join(p.read_text(encoding="ascii").strip() for p in parts)
+chunks = [p.read_text(encoding="ascii").strip() for p in parts]
+# These chunks are transport fragments of one base64 stream. Normalize padding
+# because GitHub text uploads can preserve padding at an intermediate fragment.
+encoded = "".join(chunk.rstrip("=") for chunk in chunks)
+encoded += "=" * ((4 - len(encoded) % 4) % 4)
 raw = base64.b64decode(encoded, validate=True)
 expected_sha = "3768014034d04274b0ed6aead789392aea7cb47e059fcb72e49d3f155a77f042"
 actual_sha = hashlib.sha256(raw).hexdigest()
 if actual_sha != expected_sha:
-    raise SystemExit(f"v0.2.1 source bundle checksum mismatch: {actual_sha}")
+    details = ", ".join(f"p{i}={len(c)}" for i, c in enumerate(chunks))
+    raise SystemExit(f"v0.2.1 source bundle checksum mismatch: {actual_sha}; {details}")
 
 if unpacked.exists():
     shutil.rmtree(unpacked)
