@@ -69,9 +69,11 @@ elif system == "Linux":
     assert 'bridge.captureNowForForeground()' in runtime
     assert 'private object ClipMeshUiVisibility' in runtime
     assert 'Application.ActivityLifecycleCallbacks' in runtime
-    assert 'ClipMeshUiVisibility.install(app)' in runtime
+    assert 'IdentityHashMap<android.app.Activity, Boolean>()' in runtime
+    assert 'ClipMeshUiVisibility.install(context)' in runtime
     assert 'override fun onActivityStarted' in runtime
     assert 'override fun onActivityStopped' in runtime
+    assert 'startedActivities.isEmpty()' in runtime
     assert 'LocalTransferEngine.setUiVisible(true)' in runtime
     assert 'LocalTransferEngine.setUiVisible(false)' in runtime
     assert '350L' in runtime
