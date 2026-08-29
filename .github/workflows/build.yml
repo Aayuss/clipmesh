@@ -20,7 +20,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Reconstruct and patch v0.2.3
+      - name: Reconstruct and patch v0.2.4
         run: |
           set -euo pipefail
           python ci/prepare-icon-assets.py
@@ -42,17 +42,18 @@ jobs:
           python ci/patch-v022-final.py
           python ci/patch-v022-hotfix.py
           python ci/patch-v023-final.py
+          python ci/patch-v024-repair.py
           python - <<'PY'
           from pathlib import Path
           p = Path('clipmesh/Cargo.toml')
           s = p.read_text()
-          p.write_text(s.replace('version = "0.1.0"', 'version = "0.2.3"', 1))
+          p.write_text(s.replace('version = "0.1.0"', 'version = "0.2.4"', 1))
           PY
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: clipmesh
-      - name: Validate macOS v0.2.3 sources
+      - name: Validate macOS v0.2.4 sources
         run: |
           set -euo pipefail
           grep -q 'buildClipboardPage()' ci/ClipMeshApp.swift
@@ -62,10 +63,15 @@ jobs:
           grep -q 'hasVerticalScroller = true' ci/ClipMeshApp.swift
           grep -q 'registerShareExtension' ci/ClipMeshApp.swift
           grep -q 'dev.clipmesh.private.Share' ci/ClipMeshApp.swift
+          grep -q 'Choose file manually' ci/ClipMeshApp.swift
+          grep -q 'Drop files anywhere in the ClipMesh window' ci/ClipMeshApp.swift
+          grep -q '/api/clipmesh/v1/prepare-upload' ci/ClipMeshTransfer.swift
+          grep -q 'static let port: UInt16 = 53421' ci/ClipMeshTransfer.swift
+          ! grep -q '/api/localsend/' ci/ClipMeshTransfer.swift
           grep -q 'convenience init(title: String, handler:' ci/ClipMeshTransfer.swift
           grep -q 'TransferSelfTest' ci/ClipMeshTransfer.swift
           grep -q 'clipmesh://pair?' clipmesh/apps/desktop/src/clipboard.rs
-          grep -q 'CFBundleShortVersionString</key><string>0.2.3' clipmesh/scripts/build-macos.sh
+          grep -q 'CFBundleShortVersionString</key><string>0.2.4' clipmesh/scripts/build-macos.sh
           grep -q 'NSExtensionActivationSupportsImageWithMaxCount' clipmesh/scripts/build-macos.sh
           python ci/v022_fileshare_selftest.py
       - name: Test protocol core and transport
@@ -94,13 +100,13 @@ jobs:
           from pathlib import Path
           main = plistlib.loads(Path('dist/macos/ClipMesh.app/Contents/Info.plist').read_bytes())
           ext = plistlib.loads(Path('dist/macos/ClipMesh.app/Contents/PlugIns/ClipMeshShare.appex/Contents/Info.plist').read_bytes())
-          assert main['CFBundleShortVersionString'] == '0.2.3'
+          assert main['CFBundleShortVersionString'] == '0.2.4'
           assert ext['CFBundleIdentifier'] == 'dev.clipmesh.private.Share'
           assert ext['NSExtension']['NSExtensionPointIdentifier'] == 'com.apple.share-services'
           rule = ext['NSExtension']['NSExtensionAttributes']['NSExtensionActivationRule']
           assert rule['NSExtensionActivationSupportsFileWithMaxCount'] >= 100
           assert rule['NSExtensionActivationSupportsImageWithMaxCount'] >= 100
-          print('macOS v0.2.3 Share extension metadata validated')
+          print('macOS v0.2.4 Share extension metadata validated')
           PY
           plutil -lint dist/macos/ClipMesh.app/Contents/Info.plist
           plutil -lint dist/macos/ClipMesh.app/Contents/PlugIns/ClipMeshShare.appex/Contents/Info.plist
@@ -124,7 +130,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Reconstruct and patch v0.2.3
+      - name: Reconstruct and patch v0.2.4
         shell: pwsh
         run: |
           python ci/prepare-icon-assets.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
@@ -146,25 +152,31 @@ jobs:
           python ci/patch-v022-final.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/patch-v022-hotfix.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/patch-v023-windows.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/patch-v024-repair.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $p = 'clipmesh/Cargo.toml'
           $s = Get-Content $p -Raw
-          $s = $s -replace 'version = "0.1.0"', 'version = "0.2.3"'
+          $s = $s -replace 'version = "0.1.0"', 'version = "0.2.4"'
           Set-Content $p $s -Encoding utf8
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: clipmesh
-      - name: Validate Windows v0.2.3 sources
+      - name: Validate Windows v0.2.4 sources
         shell: pwsh
         run: |
           $ui = Get-Content 'ci/ClipMeshWindows.cs' -Raw
           $transfer = Get-Content 'ci/ClipMeshTransfer.cs' -Raw
           $clip = Get-Content 'clipmesh/apps/desktop/src/clipboard.rs' -Raw
-          if (-not $ui.Contains('private const string Version = "0.2.3";')) { throw 'Windows v0.2.3 runtime version missing' }
+          if (-not $ui.Contains('private const string Version = "0.2.4";')) { throw 'Windows v0.2.4 runtime version missing' }
           if (-not $ui.Contains('"Clipboard", "File transfer", "Settings"')) { throw 'Left navigation missing' }
           if (-not $ui.Contains('AllowDrop = true')) { throw 'Desktop drag/drop missing' }
           if (-not $ui.Contains('RefreshClipboardPreview()')) { throw 'Clipboard preview missing' }
           if (-not $ui.Contains('ChooseTransferFiles()')) { throw 'Integrated file picker missing' }
+          if (-not $ui.Contains('Choose file manually')) { throw 'Manual picker action missing' }
+          if (-not $ui.Contains('transferFilePanel')) { throw 'Visual selected-file strip missing' }
+          if (-not $transfer.Contains('/api/clipmesh/v1/prepare-upload')) { throw 'ClipMesh transport namespace missing' }
+          if (-not $transfer.Contains('public const int Port = 53421;')) { throw 'ClipMesh isolated port missing' }
+          if ($transfer.Contains('/api/localsend/')) { throw 'LocalSend namespace leaked into ClipMesh' }
           if (-not $transfer.Contains('public void DiscoverNow()')) { throw 'Immediate discovery missing' }
           if (-not $transfer.Contains('AddSeconds(-180)')) { throw 'Nearby TTL battery pass missing' }
           if (-not $transfer.Contains('i < 1200 && Running')) { throw 'Discovery battery interval missing' }
@@ -189,7 +201,7 @@ jobs:
           Remove-Item -Recurse -Force $roaming,$local -ErrorAction SilentlyContinue
           $process = Start-Process -FilePath '.\dist\windows\clipmesh.exe' -ArgumentList '--smoke-test' -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "Windows smoke test failed with exit code $($process.ExitCode)" }
-          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.2.3\clipmesh-bin.exe'))) { throw 'Windows v0.2.3 runtime missing' }
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.2.4\clipmesh-bin.exe'))) { throw 'Windows v0.2.4 runtime missing' }
           $hash = (Get-FileHash dist\windows\clipmesh.exe -Algorithm SHA256).Hash.ToLower()
           "$hash  clipmesh.exe" | Set-Content -Encoding ascii dist\windows\SHA256SUMS.txt
       - uses: actions/upload-artifact@v7
@@ -208,7 +220,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Reconstruct and patch v0.2.3
+      - name: Reconstruct and patch v0.2.4
         run: |
           set -euo pipefail
           python ci/prepare-icon-assets.py
@@ -228,13 +240,14 @@ jobs:
           python ci/patch-v022-hotfix.py
           python ci/patch-v023-final.py
           python ci/patch-v023-android-hotfix.py
-      - name: Validate Android v0.2.3 sources
+          python ci/patch-v024-repair.py
+      - name: Validate Android v0.2.4 sources
         run: |
           set -euo pipefail
           M=clipmesh/android/app/src/main/AndroidManifest.xml
           J=clipmesh/android/app/src/main/java/dev/clipmesh
-          grep -q 'versionCode = 13' clipmesh/android/app/build.gradle.kts
-          grep -q 'versionName = "0.2.3"' clipmesh/android/app/build.gradle.kts
+          grep -q 'versionCode = 14' clipmesh/android/app/build.gradle.kts
+          grep -q 'versionName = "0.2.4"' clipmesh/android/app/build.gradle.kts
           grep -q 'android:usesCleartextTraffic="true"' "$M"
           grep -q 'android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE' "$M"
           grep -q 'android.permission.POST_NOTIFICATIONS' "$M"
@@ -256,6 +269,13 @@ jobs:
           grep -q 'NotificationManager.IMPORTANCE_HIGH' "$J/fileshare/TransferNotifications.kt"
           grep -q '"Reject"' "$J/fileshare/TransferNotifications.kt"
           grep -q '"Accept"' "$J/fileshare/TransferNotifications.kt"
+          grep -q 'receiveFilesInBackground' "$J/SettingsStore.kt"
+          grep -q 'Receive files when the app is not opened' "$J/SettingsActivity.kt"
+          grep -q 'Choose file manually' "$J/fileshare/FileShareActivity.kt"
+          grep -q 'IncomingRequestUi.show' "$J/fileshare/LocalTransferEngine.kt"
+          grep -q 'const val PORT = 53421' "$J/fileshare/LocalTransferEngine.kt"
+          grep -q '/api/clipmesh/v1/prepare-upload' "$J/fileshare/LocalTransferEngine.kt"
+          ! grep -q '/api/localsend/' "$J/fileshare/LocalTransferEngine.kt"
           python ci/v022_fileshare_selftest.py
       - uses: actions/setup-java@v5
         with:
@@ -281,7 +301,7 @@ jobs:
           grep -q 'dev.clipmesh.BackgroundService' /tmp/manifest.xml
           grep -q 'android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE' /tmp/manifest.xml
           grep -q 'dev.clipmesh.fileshare.TransferBootReceiver' /tmp/manifest.xml
-          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-name "$APK" | grep -qx '0.2.3'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-name "$APK" | grep -qx '0.2.4'
           sha256sum "$APK" > clipmesh/dist/android/SHA256SUMS.txt
       - name: Enable KVM
         run: |
@@ -334,16 +354,16 @@ jobs:
           cp artifacts/android/ClipMesh-debug.apk release/ClipMesh-Android.apk
           cd release
           sha256sum ClipMesh-macOS.dmg ClipMesh-Windows.exe ClipMesh-Android.apk > SHA256SUMS.txt
-      - name: Publish v0.2.3-alpha
+      - name: Publish v0.2.4-alpha
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          tag="v0.2.3-alpha"
+          tag="v0.2.4-alpha"
           assets=(release/ClipMesh-macOS.dmg release/ClipMesh-Windows.exe release/ClipMesh-Android.apk release/ClipMesh-icon.png release/SHA256SUMS.txt)
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" "${assets[@]}" --clobber
           else
-            gh release create "$tag" "${assets[@]}" --title "ClipMesh v0.2.3-alpha" --generate-notes --target "$GITHUB_SHA" --prerelease
+            gh release create "$tag" "${assets[@]}" --title "ClipMesh v0.2.4-alpha" --generate-notes --target "$GITHUB_SHA" --prerelease
           fi
