@@ -65,6 +65,8 @@ jobs:
           grep -q 'dev.clipmesh.private.Share' ci/ClipMeshApp.swift
           grep -q 'Choose file manually' ci/ClipMeshApp.swift
           grep -q 'Drop files anywhere in the ClipMesh window' ci/ClipMeshApp.swift
+          grep -q 'private func startTransferTimer()' ci/ClipMeshApp.swift
+          grep -q 'private func refreshTransferDevices()' ci/ClipMeshApp.swift
           grep -q '/api/clipmesh/v1/prepare-upload' ci/ClipMeshTransfer.swift
           grep -q 'static let port: UInt16 = 53421' ci/ClipMeshTransfer.swift
           ! grep -q '/api/localsend/' ci/ClipMeshTransfer.swift

@@ -92,7 +92,7 @@ if system == "Darwin":
 
     private func buildSettingsPage''', "macOS file-transfer layout")
 
-    regex(app, r"    private func updateTransferSelection\(\) \{.*?\n    \}\n", r'''    private func updateTransferSelection() {
+    replace(app, '    private func updateTransferSelection() { transferFileLabel?.stringValue = transferFiles.isEmpty ? "No files selected" : transferFiles.count == 1 ? transferFiles[0].lastPathComponent : "\\(transferFiles.count) files selected" }', r'''    private func updateTransferSelection() {
         guard let transferFilesStack else { return }
         transferFilesStack.arrangedSubviews.forEach { transferFilesStack.removeArrangedSubview($0); $0.removeFromSuperview() }
         if transferFiles.isEmpty {
@@ -109,7 +109,7 @@ if system == "Darwin":
             transferFilesStack.addArrangedSubview(chip)
         }
     }
-''', "macOS visual selected-file strip")
+'''.rstrip(), "macOS visual selected-file strip", 1)
     replace(app,
         "let b = CMClosureButton(title, handler: handler); b.bezelStyle = .rounded; b.controlSize = .large;",
         "let b = CMClosureButton(title, handler: handler); b.bezelStyle = .rounded; b.controlSize = .large; b.translatesAutoresizingMaskIntoConstraints = false; b.heightAnchor.constraint(greaterThanOrEqualToConstant: 38).isActive = true; b.widthAnchor.constraint(greaterThanOrEqualToConstant: max(84, CGFloat(title.count * 8 + 28))).isActive = true;",
