@@ -68,8 +68,8 @@ fi
 MAC_KEYCHAIN_ARGS=()
 mac_identity(){
   if [ -n "${CLIPMESH_CODESIGN_IDENTITY:-}" ]; then MAC_SIGN_IDENTITY="$CLIPMESH_CODESIGN_IDENTITY"; return; fi
-  line="$(security find-identity -v -p codesigning 2>/dev/null | grep '\"Apple Development:' | head -n1 || true)"
-  [ -n "$line" ] || line="$(security find-identity -v -p codesigning 2>/dev/null | grep '\"Developer ID Application:' | head -n1 || true)"
+  line="$(security find-identity -v -p codesigning 2>/dev/null | grep '"Apple Development:' | head -n1 || true)"
+  [ -n "$line" ] || line="$(security find-identity -v -p codesigning 2>/dev/null | grep '"Developer ID Application:' | head -n1 || true)"
   if [ -n "$line" ]; then MAC_SIGN_IDENTITY="$(printf '%s\n' "$line" | awk '{print $2}')"; say "Using existing Apple code-signing identity."; return; fi
   KEYCHAIN="$STATE/clipmesh-dev.keychain-db"; KCPASS_FILE="$STATE/macos-keychain.password"; P12PASS_FILE="$STATE/macos-p12.password"
   CERT="$STATE/macos-dev-cert.pem"; KEY="$STATE/macos-dev-key.pem"; P12="$STATE/macos-dev.p12"; CN="ClipMesh Local Development"
