@@ -79,7 +79,7 @@ class CiBackgroundCaptureReceiver : BroadcastReceiver() {
 
         val settings = SettingsStore(app)
         if (settings.spaceId == null || SecretStore(app).loadSpaceKey() == null) {
-            settings.spaceId = CI_SPACE_ID
+            settings.spaceId = java.util.UUID.fromString(CI_SPACE_ID)
             SecretStore(app).saveSpaceKey(ByteArray(32) { index -> (index + 1).toByte() })
         }
         settings.backgroundSync = true
@@ -139,6 +139,7 @@ class CiBackgroundCaptureReceiver : BroadcastReceiver() {
     for required in (
         "BackgroundRuntime.restart(app)",
         "BackgroundRuntime.captureAccessibility",
+        "java.util.UUID.fromString(CI_SPACE_ID)",
         "saveSpaceKey(ByteArray(32)",
         'putLong("receiver_seen_at"',
     ):
