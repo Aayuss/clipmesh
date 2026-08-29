@@ -254,4 +254,9 @@ if system == "Linux":
 '''
         main.write_text(text.replace(bad, good, 1), encoding="utf-8")
 
+# Android Activity instances can remain alive after BACK, so the request helper
+# cannot be the owner of global UI visibility. Apply the process-wide lifecycle
+# tracker after the cross-platform presence patch has been generated.
+runpy.run_path(str(root / "ci/patch-v029-android-presence.py"), run_name="__main__")
+
 print(f"Applied ClipMesh v0.2.7 daemon ownership + background/transfer repair on {system}")
