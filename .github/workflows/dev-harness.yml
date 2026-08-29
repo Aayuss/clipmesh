@@ -43,7 +43,7 @@ jobs:
           python -m py_compile ci/reconstruct.py ci/patch-v031-dev-test.py ci/v031_devtest_selftest.py dev/uia-find-allow.py
           bash -n dev-test.sh
           swiftc dev/macos-pasteboard-helper.swift -o /tmp/clipmesh-pasteboard-helper
-          /tmp/clipmesh-pasteboard-helper image-info | grep -qx 'NONE'
+          /tmp/clipmesh-pasteboard-helper image-info >/dev/null
       - name: Reconstruct macOS dev source
         run: |
           set -euo pipefail
@@ -77,8 +77,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-          cache: gradle
-          cache-dependency-path: clipmesh/android/**/*.gradle*
       - uses: android-actions/setup-android@v4
       - name: Reconstruct Android dev source
         run: |
@@ -109,4 +107,5 @@ jobs:
           grep -q 'dev.clipmesh.CiBackgroundCaptureReceiver' /tmp/app-manifest.xml
           grep -q 'dev.clipmesh.DevTestReceiver' /tmp/app-manifest.xml
           grep -q 'android.permission.DUMP' /tmp/app-manifest.xml
-          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest application-id devdriver/build/outputs/apk/debug/devdriver-debug.apk | grep -qx 'dev.clipmesh.testdriver'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest print devdriver/build/outputs/apk/debug/devdriver-debug.apk > /tmp/driver-manifest.xml
+          grep -q 'package="dev.clipmesh.testdriver"' /tmp/driver-manifest.xml
