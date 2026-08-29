@@ -1,26 +1,27 @@
-# ClipMesh v0.2.2
+# ClipMesh v0.2.3
 
 ClipMesh combines encrypted clipboard sync with nearby LAN file transfer across macOS, Windows, and Android.
 
-## v0.2.2 changes
+## v0.2.3
 
-- LocalSend-inspired navigation: desktop left rail; Android bottom navigation for Clipboard, File transfer, Settings.
-- macOS/Windows UI rebuilt to match the dark charcoal, warm-white, amber ClipMesh theme.
-- File transfer supports drag and drop on desktop plus normal file selection.
-- macOS Choose files and favorite/star actions fixed.
-- macOS main content is vertically scrollable.
-- macOS packages a real `com.apple.share-services` Share extension and registers it when the app launches. Finder controls the exact placement; normally use Right click → Share → ClipMesh.
-- Android LAN HTTP transfer policy fixed so direct local transfers are no longer blocked by the cleartext-policy error.
-- Android pairing-code clipboard values are excluded from clipboard sync, and rapid clipboard events are coalesced so screenshots are not dropped behind the pairing URI.
-- Android switch active states use visible amber/cream colors.
-- No permanent Android foreground-service notification was reintroduced.
-- CI validates the actual packages plus a LocalSend-v2-style prepare/upload byte-transfer loopback before release.
+- macOS, Windows, and Android use the dark charcoal, warm-white, amber ClipMesh interface introduced in v0.2.2.
+- Clipboard and file transfer remain separate workflows, with actual clipboard content previews instead of raw URI/MIME dumps.
+- Desktop file transfer supports drag and drop plus normal file selection.
+- Android supports sending through the system share sheet and receiving while the ClipMesh UI is closed.
+- Android now uses one `connectedDevice` foreground service to own the encrypted clipboard runtime and nearby LAN file-transfer listener. This is the Android-supported mechanism for reliable continuous peer connectivity.
+- The Android service is `START_STICKY`, survives closing the visible activity, and is restored after boot/app replacement.
+- Unknown Android senders trigger a high-priority Accept/Reject notification. Favorited senders can be auto-accepted when that setting is enabled.
+- Incoming Android files are saved under `Downloads/ClipMesh`, with images in `Downloads/ClipMesh/Images` and videos in `Downloads/ClipMesh/Videos`.
+- macOS packages a real `com.apple.share-services` Share extension for Finder sharing.
+- Clipboard pairing links are excluded from clipboard propagation so pairing does not overwrite useful clipboard content.
+- CI builds and runtime-smoke-tests native macOS and Windows packages and now installs the Android APK into an Android 15 emulator. The Android runtime gate closes the visible UI, confirms the background service remains alive, calls the actual LocalTransferEngine HTTP endpoint, and verifies an unknown sender produces the Accept/Reject notification.
+- CI also runs the authenticated clipboard transport tests and a LocalSend-v2-style prepare/upload byte-transfer loopback.
 
 ## Downloads
 
 Release assets are published at:
 
-https://github.com/Aayuss/clipmesh/releases/tag/v0.2.2-alpha
+https://github.com/Aayuss/clipmesh/releases/tag/v0.2.3-alpha
 
 Expected assets:
 
@@ -29,6 +30,14 @@ Expected assets:
 - `ClipMesh-Android.apk`
 - `ClipMesh-icon.png`
 - `SHA256SUMS.txt`
+
+## Android background behavior
+
+Reliable always-ready receiving on modern Android requires a foreground service. ClipMesh therefore shows one low-importance ongoing **ClipMesh** notification while background clipboard/file receiving is active. This replaces the unreliable no-notification approach from v0.2.2.
+
+The persistent notification is deliberately low importance. Incoming transfers from an unknown sender use a separate high-priority notification with **Reject** and **Accept** actions.
+
+Android/OEM battery controls can still override applications if the user manually places ClipMesh in a restricted/deep-sleep state. For reliable receiving, do not put ClipMesh in Samsung Deep sleeping apps or Android's Restricted battery mode.
 
 ## macOS Finder Share
 
