@@ -62,24 +62,39 @@ PY
 
 # Regression for the Android -> desktop bug: while every ClipMesh Activity is
 # hidden, inject a DEBUG-only clipboard event through the same process-level
-# BackgroundRuntime/ClipboardBridge path used by Accessibility. The outgoing
-# callback records a debug marker immediately before the real network send.
+# BackgroundRuntime/ClipboardBridge path used by Accessibility. Use an explicit
+# component so Android cannot silently skip implicit receiver resolution.
 CI_TEXT="clipmesh-ci-background-outgoing-$(date +%s%N)"
 adb shell am broadcast \
+  -n dev.clipmesh/.CiBackgroundCaptureReceiver \
   -a dev.clipmesh.action.CI_BACKGROUND_CAPTURE \
   --es text "$CI_TEXT" | tee /tmp/background-capture-broadcast.txt
+
+RECEIVER_SEEN=0
 OUTGOING_OK=0
-for i in $(seq 1 30); do
+for i in $(seq 1 40); do
   adb shell run-as dev.clipmesh cat shared_prefs/clipmesh_ci.xml > /tmp/clipmesh-ci-prefs.xml 2>/dev/null || true
+  if grep -q 'receiver_seen_at' /tmp/clipmesh-ci-prefs.xml; then
+    RECEIVER_SEEN=1
+  fi
   if grep -q 'last_outgoing_at' /tmp/clipmesh-ci-prefs.xml && \
      grep -Eq 'last_outgoing_representation_count[^>]*value="[1-9][0-9]*"' /tmp/clipmesh-ci-prefs.xml; then
     OUTGOING_OK=1
     break
   fi
-  sleep 0.2
+  sleep 0.25
 done
+
+echo '--- ClipMesh CI preferences after hidden-UI capture ---'
 cat /tmp/clipmesh-ci-prefs.xml || true
+if [ "$RECEIVER_SEEN" != 1 ] || [ "$OUTGOING_OK" != 1 ]; then
+  echo '--- ClipMesh runtime diagnostics ---'
+  adb shell dumpsys package dev.clipmesh | grep -A12 -B4 'CiBackgroundCaptureReceiver' || true
+  adb shell logcat -d -v brief | grep -E 'AndroidRuntime|FATAL EXCEPTION|dev\.clipmesh|CiBackgroundCaptureReceiver|BackgroundRuntime|ClipboardBridge' | tail -n 250 || true
+fi
+test "$RECEIVER_SEEN" = 1
 test "$OUTGOING_OK" = 1
+
 adb shell dumpsys activity activities > /tmp/activities-after-capture.txt
 if grep -E 'mResumedActivity|topResumedActivity' /tmp/activities-after-capture.txt | grep -q 'dev.clipmesh'; then
   echo 'Background clipboard probe incorrectly opened ClipMesh UI'
