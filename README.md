@@ -1,4 +1,4 @@
-# ClipMesh v0.2.6
+# ClipMesh v0.2.7
 
 ClipMesh provides encrypted clipboard sync and direct nearby file transfer across macOS, Windows, and Android.
 
@@ -6,12 +6,19 @@ ClipMesh provides encrypted clipboard sync and direct nearby file transfer acros
 
 Download the current installers directly—there is no need to browse the Releases page:
 
-- [Download ClipMesh for macOS](https://github.com/Aayuss/clipmesh/releases/download/v0.2.6-alpha/ClipMesh-macOS.dmg)
-- [Download ClipMesh for Windows](https://github.com/Aayuss/clipmesh/releases/download/v0.2.6-alpha/ClipMesh-Windows.exe)
-- [Download ClipMesh for Android](https://github.com/Aayuss/clipmesh/releases/download/v0.2.6-alpha/ClipMesh-Android.apk)
-- [Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.6-alpha/SHA256SUMS.txt)
+- [Download ClipMesh for macOS](https://github.com/Aayuss/clipmesh/releases/download/v0.2.7-alpha/ClipMesh-macOS.dmg)
+- [Download ClipMesh for Windows](https://github.com/Aayuss/clipmesh/releases/download/v0.2.7-alpha/ClipMesh-Windows.exe)
+- [Download ClipMesh for Android](https://github.com/Aayuss/clipmesh/releases/download/v0.2.7-alpha/ClipMesh-Android.apk)
+- [Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.7-alpha/SHA256SUMS.txt)
 
-These links become live after the `Build ClipMesh` GitHub Action completes and publishes `v0.2.6-alpha`.
+These links become live after the `Build ClipMesh` GitHub Action completes and publishes `v0.2.7-alpha`.
+
+## What changed in v0.2.7
+
+- Fixed the macOS startup failure that showed **Background sync stopped (exit 1)** when an older ClipMesh background process still owned clipboard port `41474` after a crash or force-quit.
+- macOS now validates the listener executable before replacing it. It will reclaim only an exact `clipmesh-bin` process and will leave unrelated applications untouched.
+- A single-instance lock prevents a second ClipMesh window from interrupting a healthy first instance.
+- Startup now verifies that the encrypted background engine remains alive before reporting that sync is running.
 
 ## What changed in v0.2.6
 

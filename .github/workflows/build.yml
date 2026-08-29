@@ -20,7 +20,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Reconstruct and patch v0.2.6
+      - name: Reconstruct and patch v0.2.7
         run: |
           set -euo pipefail
           python ci/prepare-icon-assets.py
@@ -45,17 +45,18 @@ jobs:
           python ci/patch-v024-repair.py
           python ci/patch-v025-nearby-pairing.py
           python ci/patch-v026-regressions.py
+          python ci/patch-v027-macos-daemon.py
           python - <<'PY'
           from pathlib import Path
           p = Path('clipmesh/Cargo.toml')
           s = p.read_text()
-          p.write_text(s.replace('version = "0.1.0"', 'version = "0.2.6"', 1))
+          p.write_text(s.replace('version = "0.1.0"', 'version = "0.2.7"', 1))
           PY
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: clipmesh
-      - name: Validate macOS v0.2.6 sources
+      - name: Validate macOS v0.2.7 sources
         run: |
           set -euo pipefail
           grep -q 'buildClipboardPage()' ci/ClipMeshApp.swift
@@ -80,7 +81,9 @@ jobs:
           grep -q 'convenience init(title: String, handler:' ci/ClipMeshTransfer.swift
           grep -q 'TransferSelfTest' ci/ClipMeshTransfer.swift
           grep -q 'clipmesh://pair?' clipmesh/apps/desktop/src/clipboard.rs
-          grep -q 'CFBundleShortVersionString</key><string>0.2.6' clipmesh/scripts/build-macos.sh
+          grep -q 'CFBundleShortVersionString</key><string>0.2.7' clipmesh/scripts/build-macos.sh
+          grep -q 'static func reclaimStaleDaemonListener() throws' ci/ClipMeshApp.swift
+          grep -q 'Darwin.flock(descriptor, LOCK_EX | LOCK_NB)' ci/ClipMeshApp.swift
           grep -q '100 Continue' ci/ClipMeshTransfer.swift
           ! grep -q 'NSAlert' ci/ClipMeshApp.swift
           ! grep -q 'NSAlert' ci/ClipMeshTransfer.swift
@@ -88,6 +91,7 @@ jobs:
           python ci/v022_fileshare_selftest.py
           python ci/v025_pairing_protocol_selftest.py
           python ci/v026_regression_selftest.py
+          python ci/v027_macos_daemon_selftest.py
       - name: Test protocol core and transport
         working-directory: clipmesh
         run: |
@@ -107,6 +111,23 @@ jobs:
           SUPPORT="$HOME/Library/Application Support/dev.ClipMesh.ClipMesh"
           rm -rf "$SUPPORT"
           ./dist/macos/ClipMesh.app/Contents/MacOS/ClipMesh --smoke-test
+          stale_pid=$(sh -c './dist/macos/ClipMesh.app/Contents/MacOS/clipmesh-bin run >/tmp/clipmesh-stale-test.log 2>&1 & echo $!')
+          for _ in {1..30}; do lsof -nP -iTCP:41474 -sTCP:LISTEN >/dev/null 2>&1 && break; sleep 0.1; done
+          kill -0 "$stale_pid"
+          ./dist/macos/ClipMesh.app/Contents/MacOS/ClipMesh --reclaim-stale-daemon-test
+          if kill -0 "$stale_pid" 2>/dev/null; then echo "stale ClipMesh daemon survived takeover"; exit 1; fi
+          python3 -m http.server 41474 --bind 127.0.0.1 >/tmp/clipmesh-foreign-listener-test.log 2>&1 &
+          foreign_pid=$!
+          for _ in {1..30}; do lsof -nP -iTCP:41474 -sTCP:LISTEN >/dev/null 2>&1 && break; sleep 0.1; done
+          kill -0 "$foreign_pid"
+          set +e
+          ./dist/macos/ClipMesh.app/Contents/MacOS/ClipMesh --reclaim-stale-daemon-test
+          ownership_status=$?
+          set -e
+          test "$ownership_status" -ne 0
+          kill -0 "$foreign_pid"
+          kill "$foreign_pid"
+          wait "$foreign_pid" || true
           test -s dist/macos/ClipMesh.dmg
           test -x dist/macos/ClipMesh.app/Contents/PlugIns/ClipMeshShare.appex/Contents/MacOS/ClipMeshShare
           python - <<'PY'
@@ -114,13 +135,13 @@ jobs:
           from pathlib import Path
           main = plistlib.loads(Path('dist/macos/ClipMesh.app/Contents/Info.plist').read_bytes())
           ext = plistlib.loads(Path('dist/macos/ClipMesh.app/Contents/PlugIns/ClipMeshShare.appex/Contents/Info.plist').read_bytes())
-          assert main['CFBundleShortVersionString'] == '0.2.6'
+          assert main['CFBundleShortVersionString'] == '0.2.7'
           assert ext['CFBundleIdentifier'] == 'dev.clipmesh.private.Share'
           assert ext['NSExtension']['NSExtensionPointIdentifier'] == 'com.apple.share-services'
           rule = ext['NSExtension']['NSExtensionAttributes']['NSExtensionActivationRule']
           assert rule['NSExtensionActivationSupportsFileWithMaxCount'] >= 100
           assert rule['NSExtensionActivationSupportsImageWithMaxCount'] >= 100
-          print('macOS v0.2.6 Share extension metadata validated')
+          print('macOS v0.2.7 Share extension metadata validated')
           PY
           plutil -lint dist/macos/ClipMesh.app/Contents/Info.plist
           plutil -lint dist/macos/ClipMesh.app/Contents/PlugIns/ClipMeshShare.appex/Contents/Info.plist
@@ -144,7 +165,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Reconstruct and patch v0.2.6
+      - name: Reconstruct and patch v0.2.7
         shell: pwsh
         run: |
           python ci/prepare-icon-assets.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
@@ -169,21 +190,22 @@ jobs:
           python ci/patch-v024-repair.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/patch-v025-nearby-pairing.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/patch-v026-regressions.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/patch-v027-macos-daemon.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $p = 'clipmesh/Cargo.toml'
           $s = Get-Content $p -Raw
-          $s = $s -replace 'version = "0.1.0"', 'version = "0.2.6"'
+          $s = $s -replace 'version = "0.1.0"', 'version = "0.2.7"'
           Set-Content $p $s -Encoding utf8
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: clipmesh
-      - name: Validate Windows v0.2.6 sources
+      - name: Validate Windows v0.2.7 sources
         shell: pwsh
         run: |
           $ui = Get-Content 'ci/ClipMeshWindows.cs' -Raw
           $transfer = Get-Content 'ci/ClipMeshTransfer.cs' -Raw
           $clip = Get-Content 'clipmesh/apps/desktop/src/clipboard.rs' -Raw
-          if (-not $ui.Contains('private const string Version = "0.2.6";')) { throw 'Windows v0.2.6 runtime version missing' }
+          if (-not $ui.Contains('private const string Version = "0.2.7";')) { throw 'Windows v0.2.7 runtime version missing' }
           if (-not $transfer.Contains('100 Continue')) { throw 'Windows Expect handshake missing' }
           if ($ui.Contains('MessageBox.Show') -or $transfer.Contains('MessageBox.Show')) { throw 'Native Windows dialogs remain' }
           if (-not $ui.Contains('"Clipboard", "File transfer", "Settings"')) { throw 'Left navigation missing' }
@@ -206,6 +228,7 @@ jobs:
           python ci/v022_fileshare_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/v025_pairing_protocol_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/v026_regression_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/v027_macos_daemon_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Test protocol core and transport
         working-directory: clipmesh
         shell: pwsh
@@ -225,7 +248,7 @@ jobs:
           Remove-Item -Recurse -Force $roaming,$local -ErrorAction SilentlyContinue
           $process = Start-Process -FilePath '.\dist\windows\clipmesh.exe' -ArgumentList '--smoke-test' -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "Windows smoke test failed with exit code $($process.ExitCode)" }
-          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.2.6\clipmesh-bin.exe'))) { throw 'Windows v0.2.6 runtime missing' }
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.2.7\clipmesh-bin.exe'))) { throw 'Windows v0.2.7 runtime missing' }
           $hash = (Get-FileHash dist\windows\clipmesh.exe -Algorithm SHA256).Hash.ToLower()
           "$hash  clipmesh.exe" | Set-Content -Encoding ascii dist\windows\SHA256SUMS.txt
       - uses: actions/upload-artifact@v7
@@ -244,7 +267,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Reconstruct and patch v0.2.6
+      - name: Reconstruct and patch v0.2.7
         run: |
           set -euo pipefail
           python ci/prepare-icon-assets.py
@@ -267,13 +290,14 @@ jobs:
           python ci/patch-v024-repair.py
           python ci/patch-v025-nearby-pairing.py
           python ci/patch-v026-regressions.py
-      - name: Validate Android v0.2.6 sources
+          python ci/patch-v027-macos-daemon.py
+      - name: Validate Android v0.2.7 sources
         run: |
           set -euo pipefail
           M=clipmesh/android/app/src/main/AndroidManifest.xml
           J=clipmesh/android/app/src/main/java/dev/clipmesh
-          grep -q 'versionCode = 16' clipmesh/android/app/build.gradle.kts
-          grep -q 'versionName = "0.2.6"' clipmesh/android/app/build.gradle.kts
+          grep -q 'versionCode = 17' clipmesh/android/app/build.gradle.kts
+          grep -q 'versionName = "0.2.7"' clipmesh/android/app/build.gradle.kts
           grep -q '100 Continue' "$J/fileshare/LocalTransferEngine.kt"
           grep -q 'clipboard?.primaryClip' "$J/exclusion/ExclusionAccessibilityService.kt"
           grep -q 'lastRemoteAppliedAt' "$J/clipboard/ClipboardBridge.kt"
@@ -317,6 +341,7 @@ jobs:
           python ci/v022_fileshare_selftest.py
           python ci/v025_pairing_protocol_selftest.py
           python ci/v026_regression_selftest.py
+          python ci/v027_macos_daemon_selftest.py
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -341,7 +366,7 @@ jobs:
           grep -q 'dev.clipmesh.BackgroundService' /tmp/manifest.xml
           grep -q 'android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE' /tmp/manifest.xml
           grep -q 'dev.clipmesh.fileshare.TransferBootReceiver' /tmp/manifest.xml
-          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-name "$APK" | grep -qx '0.2.6'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-name "$APK" | grep -qx '0.2.7'
           sha256sum "$APK" > clipmesh/dist/android/SHA256SUMS.txt
       - name: Enable KVM
         run: |
@@ -394,16 +419,16 @@ jobs:
           cp artifacts/android/ClipMesh-debug.apk release/ClipMesh-Android.apk
           cd release
           sha256sum ClipMesh-macOS.dmg ClipMesh-Windows.exe ClipMesh-Android.apk > SHA256SUMS.txt
-      - name: Publish v0.2.6-alpha
+      - name: Publish v0.2.7-alpha
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          tag="v0.2.6-alpha"
+          tag="v0.2.7-alpha"
           assets=(release/ClipMesh-macOS.dmg release/ClipMesh-Windows.exe release/ClipMesh-Android.apk release/ClipMesh-icon.png release/SHA256SUMS.txt)
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" "${assets[@]}" --clobber
           else
-            gh release create "$tag" "${assets[@]}" --title "ClipMesh v0.2.6-alpha" --generate-notes --target "$GITHUB_SHA" --prerelease
+            gh release create "$tag" "${assets[@]}" --title "ClipMesh v0.2.7-alpha" --generate-notes --target "$GITHUB_SHA" --prerelease
           fi
