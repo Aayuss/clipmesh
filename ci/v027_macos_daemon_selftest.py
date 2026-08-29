@@ -75,6 +75,7 @@ elif system == "Linux":
     assert 'LocalTransferEngine.setUiVisible(true)' in incoming
     assert 'LocalTransferEngine.setUiVisible(false)' in incoming
     assert '\\1        if (BuildConfig.DEBUG)' not in main
+    assert main.count('override fun onCreate(savedInstanceState: Bundle?) {') == 1
     assert 'clipmesh_ci_favorite' in main
 else:
     raise AssertionError(f"unsupported platform {system}")
