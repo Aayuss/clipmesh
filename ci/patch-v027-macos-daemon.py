@@ -1,6 +1,7 @@
 from pathlib import Path
 import os
 import platform
+import runpy
 
 
 root = Path(__file__).resolve().parents[1]
@@ -226,4 +227,8 @@ elif system == "Linux":
 else:
     raise SystemExit(f"unsupported platform {system}")
 
-print(f"Applied ClipMesh v0.2.7 macOS daemon ownership repair on {system}")
+# Keep the workflow entry point stable while layering the cross-platform
+# background clipboard and file-transfer repair after all earlier patches.
+runpy.run_path(str(root / "ci/patch-v028-background-transfer.py"), run_name="__main__")
+
+print(f"Applied ClipMesh v0.2.7 daemon ownership + background/transfer repair on {system}")
