@@ -3,7 +3,7 @@ name: Build ClipMesh
 on:
   workflow_dispatch:
   push:
-    branches: [main, clipmesh-v022-work]
+    branches: [main]
     tags: ['v*']
   pull_request:
     branches: [main]
@@ -20,7 +20,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Reconstruct and patch v0.2.2
+      - name: Reconstruct and patch v0.2.3
         run: |
           set -euo pipefail
           python ci/prepare-icon-assets.py
@@ -41,17 +41,18 @@ jobs:
           python ci/patch-v021-compile-hotfix.py
           python ci/patch-v022-final.py
           python ci/patch-v022-hotfix.py
+          python ci/patch-v023-final.py
           python - <<'PY'
           from pathlib import Path
           p = Path('clipmesh/Cargo.toml')
           s = p.read_text()
-          p.write_text(s.replace('version = "0.1.0"', 'version = "0.2.2"', 1))
+          p.write_text(s.replace('version = "0.1.0"', 'version = "0.2.3"', 1))
           PY
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: clipmesh
-      - name: Validate macOS v0.2.2 sources
+      - name: Validate macOS v0.2.3 sources
         run: |
           set -euo pipefail
           grep -q 'buildClipboardPage()' ci/ClipMeshApp.swift
@@ -64,7 +65,7 @@ jobs:
           grep -q 'convenience init(title: String, handler:' ci/ClipMeshTransfer.swift
           grep -q 'TransferSelfTest' ci/ClipMeshTransfer.swift
           grep -q 'clipmesh://pair?' clipmesh/apps/desktop/src/clipboard.rs
-          grep -q 'CFBundleShortVersionString</key><string>0.2.2' clipmesh/scripts/build-macos.sh
+          grep -q 'CFBundleShortVersionString</key><string>0.2.3' clipmesh/scripts/build-macos.sh
           grep -q 'NSExtensionActivationSupportsImageWithMaxCount' clipmesh/scripts/build-macos.sh
           python ci/v022_fileshare_selftest.py
       - name: Test protocol core and transport
@@ -93,13 +94,13 @@ jobs:
           from pathlib import Path
           main = plistlib.loads(Path('dist/macos/ClipMesh.app/Contents/Info.plist').read_bytes())
           ext = plistlib.loads(Path('dist/macos/ClipMesh.app/Contents/PlugIns/ClipMeshShare.appex/Contents/Info.plist').read_bytes())
-          assert main['CFBundleShortVersionString'] == '0.2.2'
+          assert main['CFBundleShortVersionString'] == '0.2.3'
           assert ext['CFBundleIdentifier'] == 'dev.clipmesh.private.Share'
           assert ext['NSExtension']['NSExtensionPointIdentifier'] == 'com.apple.share-services'
           rule = ext['NSExtension']['NSExtensionAttributes']['NSExtensionActivationRule']
           assert rule['NSExtensionActivationSupportsFileWithMaxCount'] >= 100
           assert rule['NSExtensionActivationSupportsImageWithMaxCount'] >= 100
-          print('macOS v0.2.2 Share extension metadata validated')
+          print('macOS v0.2.3 Share extension metadata validated')
           PY
           plutil -lint dist/macos/ClipMesh.app/Contents/Info.plist
           plutil -lint dist/macos/ClipMesh.app/Contents/PlugIns/ClipMeshShare.appex/Contents/Info.plist
@@ -123,7 +124,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Reconstruct and patch v0.2.2
+      - name: Reconstruct and patch v0.2.3
         shell: pwsh
         run: |
           python ci/prepare-icon-assets.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
@@ -144,20 +145,22 @@ jobs:
           python ci/patch-v021-compile-hotfix.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/patch-v022-final.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/patch-v022-hotfix.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/patch-v023-final.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $p = 'clipmesh/Cargo.toml'
           $s = Get-Content $p -Raw
-          $s = $s -replace 'version = "0.1.0"', 'version = "0.2.2"'
+          $s = $s -replace 'version = "0.1.0"', 'version = "0.2.3"'
           Set-Content $p $s -Encoding utf8
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: clipmesh
-      - name: Validate Windows v0.2.2 sources
+      - name: Validate Windows v0.2.3 sources
         shell: pwsh
         run: |
           $ui = Get-Content 'ci/ClipMeshWindows.cs' -Raw
           $transfer = Get-Content 'ci/ClipMeshTransfer.cs' -Raw
           $clip = Get-Content 'clipmesh/apps/desktop/src/clipboard.rs' -Raw
+          $build = Get-Content 'clipmesh/scripts/build-windows.ps1' -Raw
           if (-not $ui.Contains('"Clipboard", "File transfer", "Settings"')) { throw 'Left navigation missing' }
           if (-not $ui.Contains('AllowDrop = true')) { throw 'Desktop drag/drop missing' }
           if (-not $ui.Contains('RefreshClipboardPreview()')) { throw 'Clipboard preview missing' }
@@ -166,6 +169,7 @@ jobs:
           if (-not $transfer.Contains('AddSeconds(-180)')) { throw 'Nearby TTL battery pass missing' }
           if (-not $transfer.Contains('i < 1200 && Running')) { throw 'Discovery battery interval missing' }
           if (-not $clip.Contains('clipmesh://pair?')) { throw 'Pairing-link sync exclusion missing' }
+          if (-not $build.Contains('0.2.3')) { throw 'Windows v0.2.3 package version missing' }
           python ci/v022_fileshare_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Test protocol core and transport
         working-directory: clipmesh
@@ -186,7 +190,7 @@ jobs:
           Remove-Item -Recurse -Force $roaming,$local -ErrorAction SilentlyContinue
           $process = Start-Process -FilePath '.\dist\windows\clipmesh.exe' -ArgumentList '--smoke-test' -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "Windows smoke test failed with exit code $($process.ExitCode)" }
-          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.2.2\clipmesh-bin.exe'))) { throw 'Windows v0.2.2 runtime missing' }
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.2.3\clipmesh-bin.exe'))) { throw 'Windows v0.2.3 runtime missing' }
           $hash = (Get-FileHash dist\windows\clipmesh.exe -Algorithm SHA256).Hash.ToLower()
           "$hash  clipmesh.exe" | Set-Content -Encoding ascii dist\windows\SHA256SUMS.txt
       - uses: actions/upload-artifact@v7
@@ -198,14 +202,14 @@ jobs:
             clipmesh/dist/windows/SHA256SUMS.txt
 
   android:
-    name: Android APK
+    name: Android APK + emulator runtime
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Reconstruct and patch v0.2.2
+      - name: Reconstruct and patch v0.2.3
         run: |
           set -euo pipefail
           python ci/prepare-icon-assets.py
@@ -223,17 +227,24 @@ jobs:
           python ci/patch-v021-compile-hotfix.py
           python ci/patch-v022-final.py
           python ci/patch-v022-hotfix.py
-      - name: Validate Android v0.2.2 sources
+          python ci/patch-v023-final.py
+      - name: Validate Android v0.2.3 sources
         run: |
           set -euo pipefail
           M=clipmesh/android/app/src/main/AndroidManifest.xml
           J=clipmesh/android/app/src/main/java/dev/clipmesh
-          grep -q 'versionCode = 12' clipmesh/android/app/build.gradle.kts
-          grep -q 'versionName = "0.2.2"' clipmesh/android/app/build.gradle.kts
+          grep -q 'versionCode = 13' clipmesh/android/app/build.gradle.kts
+          grep -q 'versionName = "0.2.3"' clipmesh/android/app/build.gradle.kts
           grep -q 'android:usesCleartextTraffic="true"' "$M"
-          ! grep -q 'FileTransferService' "$M"
-          ! grep -q 'SyncService' "$M"
-          ! grep -q 'FOREGROUND_SERVICE' "$M"
+          grep -q 'android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE' "$M"
+          grep -q 'android.permission.POST_NOTIFICATIONS' "$M"
+          grep -q 'android:name=".BackgroundService"' "$M"
+          grep -q 'android:foregroundServiceType="connectedDevice"' "$M"
+          grep -q 'android:name=".fileshare.TransferBootReceiver"' "$M"
+          grep -q 'android.intent.action.BOOT_COMPLETED' "$M"
+          grep -q 'START_STICKY' "$J/BackgroundService.kt"
+          grep -q 'FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE' "$J/BackgroundService.kt"
+          grep -q 'BackgroundRuntime.start(this)' "$J/BackgroundService.kt"
           grep -q 'capturePending' "$J/clipboard/ClipboardBridge.kt"
           grep -q 'clipmesh://pair?' "$J/clipboard/ClipboardBridge.kt"
           grep -q 'bottomNav(0)' "$J/MainActivity.kt"
@@ -242,6 +253,9 @@ jobs:
           grep -q 'thumbTintList' "$J/SettingsActivity.kt"
           grep -q 'ACTION_DROP' "$J/fileshare/FileShareActivity.kt"
           grep -q 'autoAcceptFavoriteFiles' "$J/fileshare/LocalTransferEngine.kt"
+          grep -q 'NotificationManager.IMPORTANCE_HIGH' "$J/fileshare/TransferNotifications.kt"
+          grep -q '"Reject"' "$J/fileshare/TransferNotifications.kt"
+          grep -q '"Accept"' "$J/fileshare/TransferNotifications.kt"
           python ci/v022_fileshare_selftest.py
       - uses: actions/setup-java@v5
         with:
@@ -264,9 +278,76 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest print "$APK" > /tmp/manifest.xml
           grep -q 'usesCleartextTraffic="true"' /tmp/manifest.xml
           grep -q 'dev.clipmesh.fileshare.FileShareActivity' /tmp/manifest.xml
+          grep -q 'dev.clipmesh.BackgroundService' /tmp/manifest.xml
+          grep -q 'foregroundServiceType="connectedDevice"' /tmp/manifest.xml
+          grep -q 'android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE' /tmp/manifest.xml
+          grep -q 'dev.clipmesh.fileshare.TransferBootReceiver' /tmp/manifest.xml
           ! grep -q 'dev.clipmesh.SyncService' /tmp/manifest.xml
           ! grep -q 'dev.clipmesh.fileshare.FileTransferService' /tmp/manifest.xml
           sha256sum "$APK" > clipmesh/dist/android/SHA256SUMS.txt
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Runtime-test Android background receiving on Android 15
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            APK=clipmesh/dist/android/ClipMesh-debug.apk
+            adb install -r "$APK"
+            adb shell pm grant dev.clipmesh android.permission.POST_NOTIFICATIONS
+
+            # Launch normally. MainActivity must start the connected-device FGS.
+            adb shell am start -W -n dev.clipmesh/.MainActivity | tee /tmp/activity-start.txt
+            grep -q 'Status: ok' /tmp/activity-start.txt
+            sleep 3
+
+            # Close the visible UI exactly like leaving the app. The service must remain.
+            adb shell input keyevent KEYCODE_BACK
+            sleep 3
+            adb shell dumpsys activity services dev.clipmesh > /tmp/services.txt
+            grep -q 'BackgroundService' /tmp/services.txt
+
+            # Verify the *actual Android LocalTransferEngine* is listening after UI close.
+            adb forward tcp:54321 tcp:53317
+            for i in $(seq 1 15); do
+              if curl --fail --silent --max-time 2 http://127.0.0.1:54321/api/localsend/v2/info > /tmp/info.json; then break; fi
+              sleep 1
+            done
+            python - <<'PY'
+            import json
+            info=json.load(open('/tmp/info.json'))
+            assert info['protocol'] == 'http'
+            assert int(info['port']) == 53317
+            assert info['fingerprint']
+            print('Android background LocalTransferEngine HTTP endpoint is live after UI close')
+            PY
+
+            # Exercise an unknown-sender prepare request against the Android implementation.
+            # It should surface the high-priority Accept/Reject notification while the UI is closed.
+            cat > /tmp/prepare.json <<'JSON'
+            {"info":{"alias":"CI Sender","fingerprint":"ci-unknown-sender","port":53317,"protocol":"http","deviceModel":"CI","deviceType":"desktop"},"files":{"proof":{"id":"proof","fileName":"proof.txt","size":5,"fileType":"text/plain"}}}
+            JSON
+            curl --silent --max-time 12 -H 'Content-Type: application/json' --data-binary @/tmp/prepare.json http://127.0.0.1:54321/api/localsend/v2/prepare-upload >/tmp/prepare.out 2>/tmp/prepare.err &
+            REQUEST_PID=$!
+            sleep 3
+            (adb shell dumpsys notification --noredact || adb shell dumpsys notification) > /tmp/notifications.txt
+            grep -q 'CI Sender wants to send you proof.txt' /tmp/notifications.txt
+            grep -q 'Incoming file requests' /tmp/notifications.txt
+            kill "$REQUEST_PID" 2>/dev/null || true
+            wait "$REQUEST_PID" 2>/dev/null || true
+
+            # Verify the listener is still alive after the request and no activity is required.
+            curl --fail --silent --max-time 3 http://127.0.0.1:54321/api/localsend/v2/info > /tmp/info-after.json
+            adb shell dumpsys activity services dev.clipmesh > /tmp/services-after.txt
+            grep -q 'BackgroundService' /tmp/services-after.txt
+            echo 'Android v0.2.3 emulator runtime smoke test: PASS'
       - uses: actions/upload-artifact@v7
         with:
           name: ClipMesh-Android
@@ -305,16 +386,16 @@ jobs:
           cp artifacts/android/ClipMesh-debug.apk release/ClipMesh-Android.apk
           cd release
           sha256sum ClipMesh-macOS.dmg ClipMesh-Windows.exe ClipMesh-Android.apk > SHA256SUMS.txt
-      - name: Publish v0.2.2-alpha
+      - name: Publish v0.2.3-alpha
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          tag="v0.2.2-alpha"
+          tag="v0.2.3-alpha"
           assets=(release/ClipMesh-macOS.dmg release/ClipMesh-Windows.exe release/ClipMesh-Android.apk release/ClipMesh-icon.png release/SHA256SUMS.txt)
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" "${assets[@]}" --clobber
           else
-            gh release create "$tag" "${assets[@]}" --title "ClipMesh v0.2.2-alpha" --generate-notes --target "$GITHUB_SHA" --prerelease
+            gh release create "$tag" "${assets[@]}" --title "ClipMesh v0.2.3-alpha" --generate-notes --target "$GITHUB_SHA" --prerelease
           fi
