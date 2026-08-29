@@ -16,7 +16,6 @@ assert listed(True, False)
 assert listed(True, True)
 assert not listed(False, False)
 assert listed(False, True)
-assert (True if True else False)  # favorited sender => receiver auto-accept path
 
 if system == "Darwin":
     app = (root / "ci/ClipMeshApp.swift").read_text(encoding="utf-8")
@@ -32,7 +31,12 @@ if system == "Darwin":
     assert '--reclaim-stale-daemon-test' in app
     assert '--clipboard-preview-self-test' in app
     assert 'enum CMClipboardSnapshot' in app
-    assert 'NSImage(pasteboard:' not in app
+    preview_start = app.index('@objc private func viewClipboard()')
+    preview_end = app.index('@objc private func quitApp', preview_start)
+    preview_handler = app[preview_start:preview_end]
+    assert 'CMClipboardSnapshot.describe(NSPasteboard.general)' in preview_handler
+    assert 'NSImage(pasteboard:' not in preview_handler
+    assert 'readObjects(forClasses:' not in preview_handler
     assert 'LocalTransferManager.shared.setUIVisible(false)' in app
     assert 'private var visibleDevices = Set<String>()' in transfer
     assert '"visible": isUIVisible' in transfer
@@ -56,6 +60,7 @@ elif system == "Linux":
     runtime = (root / "clipmesh/android/app/src/main/java/dev/clipmesh/BackgroundRuntime.kt").read_text(encoding="utf-8")
     engine = (root / "clipmesh/android/app/src/main/java/dev/clipmesh/fileshare/LocalTransferEngine.kt").read_text(encoding="utf-8")
     incoming = (root / "clipmesh/android/app/src/main/java/dev/clipmesh/fileshare/IncomingRequestUi.kt").read_text(encoding="utf-8")
+    main = (root / "clipmesh/android/app/src/main/java/dev/clipmesh/MainActivity.kt").read_text(encoding="utf-8")
     assert 'versionCode = 17' in gradle
     assert 'versionName = "0.2.7"' in gradle
     assert 'ClipMesh-ClipboardWatch' in runtime
@@ -69,6 +74,8 @@ elif system == "Linux":
     assert 'if (!serverReady.get()) return' in engine
     assert 'LocalTransferEngine.setUiVisible(true)' in incoming
     assert 'LocalTransferEngine.setUiVisible(false)' in incoming
+    assert '\\1        if (BuildConfig.DEBUG)' not in main
+    assert 'clipmesh_ci_favorite' in main
 else:
     raise AssertionError(f"unsupported platform {system}")
 
