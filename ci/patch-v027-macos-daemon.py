@@ -231,9 +231,9 @@ else:
 # background clipboard and file-transfer repair after all earlier patches.
 runpy.run_path(str(root / "ci/patch-v028-background-transfer.py"), run_name="__main__")
 
-# The initial v0.2.8 patch used a regex replacement whose first capture was
-# intentionally preserved in the patch text. Normalize that one generated
-# Android source fragment here before source validation/compilation.
+# The first v0.2.8 hook patch intentionally leaves a literal capture marker in
+# generated MainActivity. Restore the complete Kotlin onCreate declaration here
+# before source validation and compilation.
 if system == "Linux":
     main = project / "android/app/src/main/java/dev/clipmesh/MainActivity.kt"
     text = main.read_text(encoding="utf-8")
@@ -244,7 +244,8 @@ if system == "Linux":
         }
 '''
     if bad in text:
-        good = '''        super.onCreate(savedInstanceState)
+        good = '''    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         if (BuildConfig.DEBUG) {
             intent.getStringExtra("clipmesh_ci_favorite")?.takeIf { it.isNotBlank() }?.let {
                 LocalTransferEngine.setFavorite(this, it, true)
