@@ -231,4 +231,26 @@ else:
 # background clipboard and file-transfer repair after all earlier patches.
 runpy.run_path(str(root / "ci/patch-v028-background-transfer.py"), run_name="__main__")
 
+# The initial v0.2.8 patch used a regex replacement whose first capture was
+# intentionally preserved in the patch text. Normalize that one generated
+# Android source fragment here before source validation/compilation.
+if system == "Linux":
+    main = project / "android/app/src/main/java/dev/clipmesh/MainActivity.kt"
+    text = main.read_text(encoding="utf-8")
+    bad = r'''\1        if (BuildConfig.DEBUG) {
+            intent.getStringExtra("clipmesh_ci_favorite")?.takeIf { it.isNotBlank() }?.let {
+                LocalTransferEngine.setFavorite(this, it, true)
+            }
+        }
+'''
+    if bad in text:
+        good = '''        super.onCreate(savedInstanceState)
+        if (BuildConfig.DEBUG) {
+            intent.getStringExtra("clipmesh_ci_favorite")?.takeIf { it.isNotBlank() }?.let {
+                LocalTransferEngine.setFavorite(this, it, true)
+            }
+        }
+'''
+        main.write_text(text.replace(bad, good, 1), encoding="utf-8")
+
 print(f"Applied ClipMesh v0.2.7 daemon ownership + background/transfer repair on {system}")
