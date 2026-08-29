@@ -10,7 +10,7 @@ if system == "Darwin":
     app = (root / "ci/ClipMeshApp.swift").read_text(encoding="utf-8")
     build = (root / "clipmesh/scripts/build-macos.sh").read_text(encoding="utf-8")
     assert 'static func acquireInstanceLock() throws -> Int32?' in app
-    assert 'Darwin.flock(descriptor, LOCK_EX | LOCK_NB)' in app
+    assert 'Darwin.lockf(descriptor, F_TLOCK, 0)' in app
     assert 'static func reclaimStaleDaemonListener() throws' in app
     assert 'return commandMatches && executableMatches' in app
     assert 'ClipMesh left that process untouched' in app

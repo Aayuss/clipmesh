@@ -83,7 +83,7 @@ jobs:
           grep -q 'clipmesh://pair?' clipmesh/apps/desktop/src/clipboard.rs
           grep -q 'CFBundleShortVersionString</key><string>0.2.7' clipmesh/scripts/build-macos.sh
           grep -q 'static func reclaimStaleDaemonListener() throws' ci/ClipMeshApp.swift
-          grep -q 'Darwin.flock(descriptor, LOCK_EX | LOCK_NB)' ci/ClipMeshApp.swift
+          grep -q 'Darwin.lockf(descriptor, F_TLOCK, 0)' ci/ClipMeshApp.swift
           grep -q '100 Continue' ci/ClipMeshTransfer.swift
           ! grep -q 'NSAlert' ci/ClipMeshApp.swift
           ! grep -q 'NSAlert' ci/ClipMeshTransfer.swift

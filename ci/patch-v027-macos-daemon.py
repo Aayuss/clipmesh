@@ -37,7 +37,7 @@ if system == "Darwin":
                 NSLocalizedDescriptionKey: "ClipMesh could not create its single-instance lock."
             ])
         }
-        guard Darwin.flock(descriptor, LOCK_EX | LOCK_NB) == 0 else {
+        guard Darwin.lockf(descriptor, F_TLOCK, 0) == 0 else {
             Darwin.close(descriptor)
             return nil
         }
@@ -46,7 +46,7 @@ if system == "Darwin":
 
     static func releaseInstanceLock(_ descriptor: Int32) {
         guard descriptor >= 0 else { return }
-        _ = Darwin.flock(descriptor, LOCK_UN)
+        _ = Darwin.lockf(descriptor, F_ULOCK, 0)
         Darwin.close(descriptor)
     }
 
