@@ -50,8 +50,8 @@ if system == "Linux":
     manifest = (project / "android/app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
     required = [
         'android:usesCleartextTraffic="true"',
-        'dev.clipmesh.fileshare.FileShareActivity',
-        'dev.clipmesh.fileshare.TransferActionReceiver',
+        '.fileshare.FileShareActivity',
+        '.fileshare.TransferActionReceiver',
     ]
     for value in required:
         if value not in manifest: raise SystemExit(f"Android v0.2.2 manifest guard missing: {value}")

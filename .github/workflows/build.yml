@@ -40,6 +40,7 @@ jobs:
           python ci/patch-v021-final.py
           python ci/patch-v021-compile-hotfix.py
           python ci/patch-v022-final.py
+          python ci/patch-v022-hotfix.py
           python - <<'PY'
           from pathlib import Path
           p = Path('clipmesh/Cargo.toml')
@@ -142,6 +143,7 @@ jobs:
           python ci/patch-v021-final.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/patch-v021-compile-hotfix.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/patch-v022-final.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/patch-v022-hotfix.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $p = 'clipmesh/Cargo.toml'
           $s = Get-Content $p -Raw
           $s = $s -replace 'version = "0.1.0"', 'version = "0.2.2"'
@@ -220,6 +222,7 @@ jobs:
           python ci/patch-v021-final.py
           python ci/patch-v021-compile-hotfix.py
           python ci/patch-v022-final.py
+          python ci/patch-v022-hotfix.py
       - name: Validate Android v0.2.2 sources
         run: |
           set -euo pipefail
