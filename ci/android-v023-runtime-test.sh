@@ -37,11 +37,18 @@ assert info.get('visible') is True, info
 print('Android visible LocalTransferEngine endpoint is live')
 PY
 
-# Close the visible UI. The persistent connected-device foreground service must
-# continue owning clipboard sync and the file receiver, but non-favorites should
-# no longer treat this device as generally visible.
-adb shell input keyevent KEYCODE_BACK
+# Put ClipMesh definitively in the background. HOME is used instead of BACK so
+# an incidental modal/dialog cannot consume the key and leave the Activity on
+# screen. The persistent connected-device foreground service must keep clipboard
+# sync and the file receiver alive while discovery advertises visible=false.
+adb shell input keyevent KEYCODE_HOME
 sleep 3
+adb shell dumpsys activity activities > /tmp/activities.txt
+cat /tmp/activities.txt
+if grep -E 'mResumedActivity|topResumedActivity' /tmp/activities.txt | grep -q 'dev.clipmesh'; then
+  echo 'ClipMesh Activity is still resumed after HOME'
+  exit 1
+fi
 adb shell dumpsys activity services dev.clipmesh > /tmp/services.txt
 cat /tmp/services.txt
 grep -q 'BackgroundService' /tmp/services.txt
