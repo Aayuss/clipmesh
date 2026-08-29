@@ -1,0 +1,112 @@
+name: Validate ClipMesh Dev Harness
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'dev-test.sh'
+      - 'dev/**'
+      - 'ci/reconstruct.py'
+      - 'ci/patch-v031-dev-test.py'
+      - 'ci/v031_devtest_selftest.py'
+      - '.github/workflows/dev-harness.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'dev-test.sh'
+      - 'dev/**'
+      - 'ci/reconstruct.py'
+      - 'ci/patch-v031-dev-test.py'
+      - 'ci/v031_devtest_selftest.py'
+      - '.github/workflows/dev-harness.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  macos-harness:
+    name: macOS harness build
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: clipmesh
+      - name: Validate harness scripts
+        run: |
+          set -euo pipefail
+          python -m py_compile ci/reconstruct.py ci/patch-v031-dev-test.py ci/v031_devtest_selftest.py dev/uia-find-allow.py
+          bash -n dev-test.sh
+          swiftc dev/macos-pasteboard-helper.swift -o /tmp/clipmesh-pasteboard-helper
+          /tmp/clipmesh-pasteboard-helper image-info | grep -qx 'NONE'
+      - name: Reconstruct macOS dev source
+        run: |
+          set -euo pipefail
+          python ci/reconstruct.py --platform Darwin
+          python ci/v031_devtest_selftest.py
+          grep -q -- '--dev-test-transfer-fingerprint' ci/ClipMeshApp.swift
+          grep -q -- '--dev-test-send-file' ci/ClipMeshApp.swift
+          grep -q 'func devTestSend' ci/ClipMeshTransfer.swift
+      - name: Build and exercise dev CLI
+        working-directory: clipmesh
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build-macos.sh
+          ./scripts/build-macos.sh
+          APP=dist/macos/ClipMesh.app/Contents/MacOS/ClipMesh
+          test -x "$APP"
+          fp="$($APP --dev-test-transfer-fingerprint)"
+          test -n "$fp"
+          "$APP" --dev-test-favorite ci-harness-fingerprint | grep -q 'favorited ci-harness-fingerprint'
+          codesign --verify --deep --strict dist/macos/ClipMesh.app
+
+  android-harness:
+    name: Android harness compile
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+          cache-dependency-path: clipmesh/android/**/*.gradle*
+      - uses: android-actions/setup-android@v4
+      - name: Reconstruct Android dev source
+        run: |
+          set -euo pipefail
+          python ci/reconstruct.py --platform Linux
+          python ci/v031_devtest_selftest.py
+          J=clipmesh/android/app/src/main/java/dev/clipmesh
+          D=clipmesh/android/app/src/debug/java/dev/clipmesh
+          DM=clipmesh/android/app/src/debug/AndroidManifest.xml
+          test ! -e "$J/CiBackgroundCaptureReceiver.kt"
+          grep -q 'class CiBackgroundCaptureReceiver' "$D/CiBackgroundCaptureReceiver.kt"
+          grep -q 'class DevTestReceiver' "$D/DevTestReceiver.kt"
+          grep -q 'ACTION_SEND_FILE' "$D/DevTestReceiver.kt"
+          grep -q 'dev.clipmesh.action.CI_BACKGROUND_CAPTURE' "$DM"
+          grep -q 'android.permission.DUMP' "$DM"
+          grep -q 'include(":devdriver")' clipmesh/android/settings.gradle.kts
+          grep -q 'wait_image' clipmesh/android/devdriver/src/main/java/dev/clipmesh/testdriver/MainActivity.kt
+      - name: Compile ClipMesh and foreground clipboard driver
+        run: |
+          set -euo pipefail
+          sdkmanager "platforms;android-36" "build-tools;35.0.0" "platform-tools"
+          cd clipmesh/android
+          chmod +x gradlew
+          ./gradlew :app:assembleDebug :devdriver:assembleDebug --no-daemon
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          test -s devdriver/build/outputs/apk/debug/devdriver-debug.apk
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest print app/build/outputs/apk/debug/app-debug.apk > /tmp/app-manifest.xml
+          grep -q 'dev.clipmesh.CiBackgroundCaptureReceiver' /tmp/app-manifest.xml
+          grep -q 'dev.clipmesh.DevTestReceiver' /tmp/app-manifest.xml
+          grep -q 'android.permission.DUMP' /tmp/app-manifest.xml
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest application-id devdriver/build/outputs/apk/debug/devdriver-debug.apk | grep -qx 'dev.clipmesh.testdriver'
