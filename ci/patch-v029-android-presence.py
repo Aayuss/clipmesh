@@ -1,6 +1,7 @@
 from pathlib import Path
 import os
 import platform
+import runpy
 
 
 root = Path(__file__).resolve().parents[1]
@@ -129,5 +130,9 @@ object BackgroundRuntime {
         "    fun detach(activity: Activity) { if (visible.get() === activity) visible.clear() }\n",
         "Android remove request-helper hidden ownership",
     )
+
+# Keep the stable v0.2.7 entry point while layering the post-release regression
+# repair after all presence/discovery changes have been generated.
+runpy.run_path(str(root / "ci/patch-v030-clipboard-transfer.py"), run_name="__main__")
 
 print(f"Applied ClipMesh Android process-presence lifecycle repair on {system}")
