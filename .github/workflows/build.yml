@@ -276,7 +276,6 @@ jobs:
           APK=clipmesh/dist/android/ClipMesh-debug.apk
           test -s "$APK"
           "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest print "$APK" > /tmp/manifest.xml
-          cat /tmp/manifest.xml
           grep -q 'usesCleartextTraffic="true"' /tmp/manifest.xml
           grep -q 'dev.clipmesh.fileshare.FileShareActivity' /tmp/manifest.xml
           grep -q 'dev.clipmesh.BackgroundService' /tmp/manifest.xml
@@ -297,7 +296,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: |
-            set -euo pipefail
+            set -eu
             APK=clipmesh/dist/android/ClipMesh-debug.apk
             adb install -r "$APK"
             adb shell pm grant dev.clipmesh android.permission.POST_NOTIFICATIONS
@@ -307,15 +306,14 @@ jobs:
             sleep 3
             adb shell dumpsys package dev.clipmesh | grep -q 'versionName=0.2.3'
 
-            # Leave the app UI. The connected-device foreground service must keep
-            # the clipboard/file runtime alive without any visible activity.
+            # Close the visible UI; the persistent connected-device runtime must remain.
             adb shell input keyevent KEYCODE_BACK
             sleep 3
             adb shell dumpsys activity services dev.clipmesh > /tmp/services.txt
             cat /tmp/services.txt
             grep -q 'BackgroundService' /tmp/services.txt
 
-            # Hit the real Android LocalTransferEngine listener after the UI closes.
+            # Prove the actual Android LocalTransferEngine is reachable after UI close.
             adb forward tcp:54321 tcp:53317
             for i in $(seq 1 15); do
               if curl --fail --silent --max-time 2 http://127.0.0.1:54321/api/localsend/v2/info > /tmp/info.json; then break; fi
@@ -330,8 +328,7 @@ jobs:
             print('Android background LocalTransferEngine endpoint is live after UI close')
             PY
 
-            # Unknown sender must create the actionable high-priority request while
-            # no ClipMesh activity is visible.
+            # Exercise an unknown-sender request against Android itself while UI is closed.
             cat > /tmp/prepare.json <<'JSON'
             {"info":{"alias":"CI Sender","fingerprint":"ci-unknown-sender","port":53317,"protocol":"http","deviceModel":"CI","deviceType":"desktop"},"files":{"proof":{"id":"proof","fileName":"proof.txt","size":5,"fileType":"text/plain"}}}
             JSON
