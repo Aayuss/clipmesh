@@ -41,9 +41,16 @@ PY
 # The event-driven encrypted pairing listener shares the file receiver lifecycle.
 # Its startup runs the on-device P-256/HKDF/encryption self-test first.
 adb forward tcp:54322 tcp:53422
-PAIR_STATUS=$(curl --silent --max-time 3 -o /tmp/pair-invalid.json -w '%{http_code}' \
-  -H 'Content-Type: application/json' --data '{}' \
-  http://127.0.0.1:54322/api/clipmesh/v1/pair/start)
+PAIR_STATUS=000
+for i in $(seq 1 15); do
+  PAIR_STATUS=$(curl --silent --max-time 2 -o /tmp/pair-invalid.json -w '%{http_code}' \
+    -H 'Content-Type: application/json' --data '{}' \
+    http://127.0.0.1:54322/api/clipmesh/v1/pair/start || true)
+  if [ "$PAIR_STATUS" = 400 ]; then
+    break
+  fi
+  sleep 1
+done
 test "$PAIR_STATUS" = 400
 grep -q 'invalid request' /tmp/pair-invalid.json
 
