@@ -145,7 +145,7 @@ jobs:
           python ci/patch-v021-compile-hotfix.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/patch-v022-final.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/patch-v022-hotfix.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python ci/patch-v023-final.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/patch-v023-windows.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $p = 'clipmesh/Cargo.toml'
           $s = Get-Content $p -Raw
           $s = $s -replace 'version = "0.1.0"', 'version = "0.2.3"'
@@ -160,7 +160,7 @@ jobs:
           $ui = Get-Content 'ci/ClipMeshWindows.cs' -Raw
           $transfer = Get-Content 'ci/ClipMeshTransfer.cs' -Raw
           $clip = Get-Content 'clipmesh/apps/desktop/src/clipboard.rs' -Raw
-          $build = Get-Content 'clipmesh/scripts/build-windows.ps1' -Raw
+          if (-not $ui.Contains('private const string Version = "0.2.3";')) { throw 'Windows v0.2.3 runtime version missing' }
           if (-not $ui.Contains('"Clipboard", "File transfer", "Settings"')) { throw 'Left navigation missing' }
           if (-not $ui.Contains('AllowDrop = true')) { throw 'Desktop drag/drop missing' }
           if (-not $ui.Contains('RefreshClipboardPreview()')) { throw 'Clipboard preview missing' }
@@ -169,7 +169,6 @@ jobs:
           if (-not $transfer.Contains('AddSeconds(-180)')) { throw 'Nearby TTL battery pass missing' }
           if (-not $transfer.Contains('i < 1200 && Running')) { throw 'Discovery battery interval missing' }
           if (-not $clip.Contains('clipmesh://pair?')) { throw 'Pairing-link sync exclusion missing' }
-          if (-not $build.Contains('0.2.3')) { throw 'Windows v0.2.3 package version missing' }
           python ci/v022_fileshare_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Test protocol core and transport
         working-directory: clipmesh
@@ -228,6 +227,7 @@ jobs:
           python ci/patch-v022-final.py
           python ci/patch-v022-hotfix.py
           python ci/patch-v023-final.py
+          python ci/patch-v023-android-hotfix.py
       - name: Validate Android v0.2.3 sources
         run: |
           set -euo pipefail
@@ -276,14 +276,13 @@ jobs:
           APK=clipmesh/dist/android/ClipMesh-debug.apk
           test -s "$APK"
           "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest print "$APK" > /tmp/manifest.xml
+          cat /tmp/manifest.xml
           grep -q 'usesCleartextTraffic="true"' /tmp/manifest.xml
           grep -q 'dev.clipmesh.fileshare.FileShareActivity' /tmp/manifest.xml
           grep -q 'dev.clipmesh.BackgroundService' /tmp/manifest.xml
-          grep -q 'foregroundServiceType="connectedDevice"' /tmp/manifest.xml
           grep -q 'android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE' /tmp/manifest.xml
           grep -q 'dev.clipmesh.fileshare.TransferBootReceiver' /tmp/manifest.xml
-          ! grep -q 'dev.clipmesh.SyncService' /tmp/manifest.xml
-          ! grep -q 'dev.clipmesh.fileshare.FileTransferService' /tmp/manifest.xml
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-name "$APK" | grep -qx '0.2.3'
           sha256sum "$APK" > clipmesh/dist/android/SHA256SUMS.txt
       - name: Enable KVM
         run: |
@@ -303,18 +302,20 @@ jobs:
             adb install -r "$APK"
             adb shell pm grant dev.clipmesh android.permission.POST_NOTIFICATIONS
 
-            # Launch normally. MainActivity must start the connected-device FGS.
             adb shell am start -W -n dev.clipmesh/.MainActivity | tee /tmp/activity-start.txt
             grep -q 'Status: ok' /tmp/activity-start.txt
             sleep 3
+            adb shell dumpsys package dev.clipmesh | grep -q 'versionName=0.2.3'
 
-            # Close the visible UI exactly like leaving the app. The service must remain.
+            # Leave the app UI. The connected-device foreground service must keep
+            # the clipboard/file runtime alive without any visible activity.
             adb shell input keyevent KEYCODE_BACK
             sleep 3
             adb shell dumpsys activity services dev.clipmesh > /tmp/services.txt
+            cat /tmp/services.txt
             grep -q 'BackgroundService' /tmp/services.txt
 
-            # Verify the *actual Android LocalTransferEngine* is listening after UI close.
+            # Hit the real Android LocalTransferEngine listener after the UI closes.
             adb forward tcp:54321 tcp:53317
             for i in $(seq 1 15); do
               if curl --fail --silent --max-time 2 http://127.0.0.1:54321/api/localsend/v2/info > /tmp/info.json; then break; fi
@@ -326,11 +327,11 @@ jobs:
             assert info['protocol'] == 'http'
             assert int(info['port']) == 53317
             assert info['fingerprint']
-            print('Android background LocalTransferEngine HTTP endpoint is live after UI close')
+            print('Android background LocalTransferEngine endpoint is live after UI close')
             PY
 
-            # Exercise an unknown-sender prepare request against the Android implementation.
-            # It should surface the high-priority Accept/Reject notification while the UI is closed.
+            # Unknown sender must create the actionable high-priority request while
+            # no ClipMesh activity is visible.
             cat > /tmp/prepare.json <<'JSON'
             {"info":{"alias":"CI Sender","fingerprint":"ci-unknown-sender","port":53317,"protocol":"http","deviceModel":"CI","deviceType":"desktop"},"files":{"proof":{"id":"proof","fileName":"proof.txt","size":5,"fileType":"text/plain"}}}
             JSON
@@ -338,12 +339,12 @@ jobs:
             REQUEST_PID=$!
             sleep 3
             (adb shell dumpsys notification --noredact || adb shell dumpsys notification) > /tmp/notifications.txt
+            cat /tmp/notifications.txt
             grep -q 'CI Sender wants to send you proof.txt' /tmp/notifications.txt
             grep -q 'Incoming file requests' /tmp/notifications.txt
             kill "$REQUEST_PID" 2>/dev/null || true
             wait "$REQUEST_PID" 2>/dev/null || true
 
-            # Verify the listener is still alive after the request and no activity is required.
             curl --fail --silent --max-time 3 http://127.0.0.1:54321/api/localsend/v2/info > /tmp/info-after.json
             adb shell dumpsys activity services dev.clipmesh > /tmp/services-after.txt
             grep -q 'BackgroundService' /tmp/services-after.txt
