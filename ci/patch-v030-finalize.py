@@ -56,6 +56,9 @@ if system == "Linux":
     # Debug-only, shell-protected trigger for the emulator. Requiring the platform
     # DUMP permission means ordinary third-party apps cannot invoke this exported
     # receiver. Production logic still enters through Accessibility/Shizuku.
+    # A clean emulator has never paired, so seed a deterministic debug-only space
+    # before restarting BackgroundRuntime; otherwise the runtime correctly exits
+    # before constructing ClipboardBridge and the outgoing path cannot be tested.
     (java / "CiBackgroundCaptureReceiver.kt").write_text(r'''package dev.clipmesh
 
 import android.content.BroadcastReceiver
@@ -67,17 +70,31 @@ class CiBackgroundCaptureReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         if (!BuildConfig.DEBUG || intent?.action != ACTION) return
         val text = intent.getStringExtra(EXTRA_TEXT)?.takeIf { it.isNotBlank() } ?: return
-        context.getSharedPreferences("clipmesh_ci", Context.MODE_PRIVATE).edit()
+        val app = context.applicationContext
+        app.getSharedPreferences("clipmesh_ci", Context.MODE_PRIVATE).edit()
             .remove("last_outgoing_at")
             .remove("last_outgoing_representation_count")
+            .putLong("receiver_seen_at", System.currentTimeMillis())
             .commit()
-        BackgroundRuntime.start(context)
+
+        val settings = SettingsStore(app)
+        if (settings.spaceId == null || SecretStore(app).loadSpaceKey() == null) {
+            settings.spaceId = CI_SPACE_ID
+            SecretStore(app).saveSpaceKey(ByteArray(32) { index -> (index + 1).toByte() })
+        }
+        settings.backgroundSync = true
+
+        // Rebuild the singleton after the debug pairing state is present. This
+        // mirrors the normal successful-pairing flow and guarantees ClipboardBridge
+        // and NetworkEngine both exist before the hidden-UI capture is injected.
+        BackgroundRuntime.restart(app)
         BackgroundRuntime.captureAccessibility(ClipData.newPlainText("ClipMesh CI", text))
     }
 
     companion object {
         const val ACTION = "dev.clipmesh.action.CI_BACKGROUND_CAPTURE"
         const val EXTRA_TEXT = "text"
+        private const val CI_SPACE_ID = "00000000-0000-4000-8000-000000000028"
     }
 }
 ''', encoding="utf-8")
@@ -119,8 +136,14 @@ class CiBackgroundCaptureReceiver : BroadcastReceiver() {
     ):
         if required not in final_manifest:
             raise SystemExit(f"Android v0.2.8 CI receiver manifest guard missing: {required}")
-    if "BackgroundRuntime.captureAccessibility" not in receiver_text:
-        raise SystemExit("Android v0.2.8 CI trigger does not exercise BackgroundRuntime capture")
+    for required in (
+        "BackgroundRuntime.restart(app)",
+        "BackgroundRuntime.captureAccessibility",
+        "saveSpaceKey(ByteArray(32)",
+        'putLong("receiver_seen_at"',
+    ):
+        if required not in receiver_text:
+            raise SystemExit(f"Android v0.2.8 CI trigger guard missing: {required}")
 
 elif system == "Darwin":
     build = project / "scripts/build-macos.sh"
