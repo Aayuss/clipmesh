@@ -1,4 +1,4 @@
-# ClipMesh v0.2.8
+# ClipMesh v0.2.9
 
 ClipMesh provides encrypted clipboard sync and direct nearby file transfer across macOS, Windows, and Android.
 
@@ -6,12 +6,18 @@ ClipMesh provides encrypted clipboard sync and direct nearby file transfer acros
 
 Download the current installers directly - there is no need to browse the Releases page:
 
-- [Download ClipMesh for macOS](https://github.com/Aayuss/clipmesh/releases/download/v0.2.8-alpha/ClipMesh-macOS.dmg)
-- [Download ClipMesh for Windows](https://github.com/Aayuss/clipmesh/releases/download/v0.2.8-alpha/ClipMesh-Windows.exe)
-- [Download ClipMesh for Android](https://github.com/Aayuss/clipmesh/releases/download/v0.2.8-alpha/ClipMesh-Android.apk)
-- [Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.8-alpha/SHA256SUMS.txt)
+- [Download ClipMesh for macOS](https://github.com/Aayuss/clipmesh/releases/download/v0.2.9-alpha/ClipMesh-macOS.dmg)
+- [Download ClipMesh for Windows](https://github.com/Aayuss/clipmesh/releases/download/v0.2.9-alpha/ClipMesh-Windows.exe)
+- [Download ClipMesh for Android](https://github.com/Aayuss/clipmesh/releases/download/v0.2.9-alpha/ClipMesh-Android.apk)
+- [Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.9-alpha/SHA256SUMS.txt)
 
-These links become live after the `Build ClipMesh` GitHub Action completes and publishes `v0.2.8-alpha`.
+These links become live after the `Build ClipMesh` GitHub Action completes and publishes `v0.2.9-alpha`.
+
+## What changed in v0.2.9
+
+- Clipboard/network reinitialization no longer stops and immediately restarts the independent Android LAN file receiver. This removes the server cleanup race that could make File Transfer requests disappear after a background clipboard lifecycle transition.
+- Android 15 CI now proves that the hidden-UI file receiver remains reachable after the production clipboard runtime is rebuilt, before exercising pairing, Accept/Reject notifications, and a complete trusted upload.
+- `dev-latest` is refreshed from the same green cross-platform build as the immutable `v0.2.9-alpha` release.
 
 ## What changed in v0.2.8
 

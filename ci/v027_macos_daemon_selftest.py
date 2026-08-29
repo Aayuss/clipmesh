@@ -47,11 +47,11 @@ if system == "Darwin":
     assert 'guard isRunning && isServerReady else' in transfer
     assert 'listener.stateUpdateHandler' in transfer
     assert '.filter { visibleDevices.contains($0.fingerprint) || favorites.contains($0.fingerprint) }' not in transfer
-    assert 'CFBundleShortVersionString</key><string>0.2.8' in build
+    assert 'CFBundleShortVersionString</key><string>0.2.9' in build
 elif system == "Windows":
     ui = (root / "ci/ClipMeshWindows.cs").read_text(encoding="utf-8")
     transfer = (root / "ci/ClipMeshTransfer.cs").read_text(encoding="utf-8")
-    assert 'private const string Version = "0.2.8";' in ui
+    assert 'private const string Version = "0.2.9";' in ui
     assert 'LocalTransferManagerC.Shared.SetUiVisible(false);' in ui
     assert 'private readonly HashSet<string> visibleDevices' in transfer
     assert '{"visible", uiVisible}' in transfer
@@ -67,14 +67,15 @@ elif system == "Linux":
     main = (root / "clipmesh/android/app/src/main/java/dev/clipmesh/MainActivity.kt").read_text(encoding="utf-8")
     access = (root / "clipmesh/android/app/src/main/java/dev/clipmesh/exclusion/ExclusionAccessibilityService.kt").read_text(encoding="utf-8")
     ci_receiver = (root / "clipmesh/android/app/src/main/java/dev/clipmesh/CiBackgroundCaptureReceiver.kt").read_text(encoding="utf-8")
-    assert 'versionCode = 18' in gradle
-    assert 'versionName = "0.2.8"' in gradle
+    assert 'versionCode = 19' in gradle
+    assert 'versionName = "0.2.9"' in gradle
     assert 'ClipMesh-ClipboardWatch' in runtime
     assert '650L' in runtime
     assert 'shizuku.hasPermission()' in runtime
     assert 'bridge.captureNowForForeground()' in runtime
     assert 'fun captureAccessibility' in runtime
     assert 'last_outgoing_at' in runtime
+    assert 'private fun stopClipboardRuntime()' in runtime
     assert 'private object ClipMeshUiVisibility' in runtime
     assert 'Application.ActivityLifecycleCallbacks' in runtime
     assert 'IdentityHashMap<android.app.Activity, Boolean>()' in runtime
@@ -100,4 +101,4 @@ elif system == "Linux":
 else:
     raise AssertionError(f"unsupported platform {system}")
 
-print(f"ClipMesh v0.2.8 final background/transfer regression self-test passed on {system}")
+print(f"ClipMesh v0.2.9 final background/transfer regression self-test passed on {system}")

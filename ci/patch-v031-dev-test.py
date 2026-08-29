@@ -30,7 +30,7 @@ if system == "Linux":
     # Keep all shell-controlled testing hooks out of the normal source set.
     ci_main = main_java / "CiBackgroundCaptureReceiver.kt"
     if not ci_main.is_file():
-        raise SystemExit("v0.2.8 CI receiver is missing before debug-source relocation")
+        raise SystemExit("v0.2.9 CI receiver is missing before debug-source relocation")
     debug_java.mkdir(parents=True, exist_ok=True)
     shutil.move(str(ci_main), str(debug_java / "CiBackgroundCaptureReceiver.kt"))
 

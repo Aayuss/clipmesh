@@ -50,7 +50,7 @@ if system == "Darwin":
     assert 'guard isRunning && isServerReady else' in transfer
     assert 'listener.stateUpdateHandler' in transfer
     assert '.filter { visibleDevices.contains($0.fingerprint) || favorites.contains($0.fingerprint) }' not in transfer
-    assert 'CFBundleShortVersionString</key><string>0.2.8' in build
+    assert 'CFBundleShortVersionString</key><string>0.2.9' in build
 elif system == "Linux":
     gradle = (root / "clipmesh/android/app/build.gradle.kts").read_text(encoding="utf-8")
     runtime = (root / "clipmesh/android/app/src/main/java/dev/clipmesh/BackgroundRuntime.kt").read_text(encoding="utf-8")
@@ -66,14 +66,15 @@ elif system == "Linux":
     dev_receiver = dev_path.read_text(encoding="utf-8")
     driver = (root / "clipmesh/android/devdriver/src/main/java/dev/clipmesh/testdriver/MainActivity.kt").read_text(encoding="utf-8")
     settings = (root / "clipmesh/android/settings.gradle.kts").read_text(encoding="utf-8")
-    assert 'versionCode = 18' in gradle
-    assert 'versionName = "0.2.8"' in gradle
+    assert 'versionCode = 19' in gradle
+    assert 'versionName = "0.2.9"' in gradle
     assert 'ClipMesh-ClipboardWatch' in runtime
     assert '650L' in runtime
     assert 'shizuku.hasPermission()' in runtime
     assert 'bridge.captureNowForForeground()' in runtime
     assert 'fun captureAccessibility' in runtime
     assert 'last_outgoing_at' in runtime
+    assert 'private fun stopClipboardRuntime()' in runtime
     assert 'private object ClipMeshUiVisibility' in runtime
     assert 'Application.ActivityLifecycleCallbacks' in runtime
     assert 'BackgroundRuntime.captureAccessibility(clip)' in access
@@ -99,9 +100,9 @@ elif system == "Linux":
 elif system == "Windows":
     ui = (root / "ci/ClipMeshWindows.cs").read_text(encoding="utf-8")
     transfer = (root / "ci/ClipMeshTransfer.cs").read_text(encoding="utf-8")
-    assert 'private const string Version = "0.2.8";' in ui
+    assert 'private const string Version = "0.2.9";' in ui
     assert '/api/clipmesh/v1/register' in transfer
 else:
     raise AssertionError(f"unsupported platform {system}")
 
-print(f"ClipMesh v0.2.8 physical development harness self-test passed on {system}")
+print(f"ClipMesh v0.2.9 physical development harness self-test passed on {system}")

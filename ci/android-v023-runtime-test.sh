@@ -102,6 +102,27 @@ if grep -E 'mResumedActivity|topResumedActivity' /tmp/activities-after-capture.t
 fi
 echo 'Android hidden-UI outgoing clipboard capture reached the network callback'
 
+# Clipboard transport may be reinitialized after pairing/Shizuku lifecycle
+# changes. Prove that this does not tear down or race the independent file
+# receiver, and that the process-wide hidden state remains accurate.
+RECEIVER_RESTART_OK=0
+for i in $(seq 1 20); do
+  if curl --fail --silent --max-time 2 http://127.0.0.1:54321/api/clipmesh/v1/info > /tmp/info-after-clipboard-restart.json; then
+    RECEIVER_RESTART_OK=1
+    break
+  fi
+  sleep 0.25
+done
+test "$RECEIVER_RESTART_OK" = 1
+python - <<'PY'
+import json
+info = json.load(open('/tmp/info-after-clipboard-restart.json'))
+assert info.get('visible') is False, info
+print('Android file receiver survived clipboard runtime restart with UI hidden')
+PY
+adb shell dumpsys activity services dev.clipmesh > /tmp/services-after-clipboard-restart.txt
+grep -q 'BackgroundService' /tmp/services-after-clipboard-restart.txt
+
 # The event-driven encrypted pairing listener shares the file receiver lifecycle.
 # Its startup runs the on-device P-256/HKDF/encryption self-test first.
 adb forward tcp:54322 tcp:53422
@@ -129,10 +150,16 @@ REQUEST_PID=$!
 sleep 3
 (adb shell dumpsys notification --noredact || adb shell dumpsys notification) > /tmp/notifications.txt
 cat /tmp/notifications.txt
-grep -q 'CI Sender wants to send you proof.txt' /tmp/notifications.txt
-grep -q 'dev.clipmesh' /tmp/notifications.txt
-grep -q 'Accept' /tmp/notifications.txt
-grep -q 'Reject' /tmp/notifications.txt
+if ! grep -q 'CI Sender wants to send you proof.txt' /tmp/notifications.txt || \
+   ! grep -q 'dev.clipmesh' /tmp/notifications.txt || \
+   ! grep -q 'Accept' /tmp/notifications.txt || \
+   ! grep -q 'Reject' /tmp/notifications.txt; then
+  echo 'Incoming-transfer notification was not published with both actions'
+  cat /tmp/prepare-unknown.out 2>/dev/null || true
+  cat /tmp/prepare-unknown.err 2>/dev/null || true
+  adb shell logcat -d -v brief | grep -E 'AndroidRuntime|FATAL EXCEPTION|dev\.clipmesh|LocalTransferEngine|TransferNotifications' | tail -n 250 || true
+  exit 1
+fi
 kill "$REQUEST_PID" 2>/dev/null || true
 wait "$REQUEST_PID" 2>/dev/null || true
 

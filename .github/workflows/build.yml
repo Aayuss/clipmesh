@@ -20,7 +20,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Reconstruct and patch v0.2.8
+      - name: Reconstruct and patch v0.2.9
         run: |
           set -euo pipefail
           python ci/prepare-icon-assets.py
@@ -51,13 +51,13 @@ jobs:
           from pathlib import Path
           p = Path('clipmesh/Cargo.toml')
           s = p.read_text()
-          p.write_text(s.replace('version = "0.1.0"', 'version = "0.2.8"', 1))
+          p.write_text(s.replace('version = "0.1.0"', 'version = "0.2.9"', 1))
           PY
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: clipmesh
-      - name: Validate macOS v0.2.8 sources
+      - name: Validate macOS v0.2.9 sources
         run: |
           set -euo pipefail
           grep -q 'buildClipboardPage()' ci/ClipMeshApp.swift
@@ -82,7 +82,7 @@ jobs:
           grep -q 'convenience init(title: String, handler:' ci/ClipMeshTransfer.swift
           grep -q 'TransferSelfTest' ci/ClipMeshTransfer.swift
           grep -q 'clipmesh://pair?' clipmesh/apps/desktop/src/clipboard.rs
-          grep -q 'CFBundleShortVersionString</key><string>0.2.8' clipmesh/scripts/build-macos.sh
+          grep -q 'CFBundleShortVersionString</key><string>0.2.9' clipmesh/scripts/build-macos.sh
           grep -q 'static func reclaimStaleDaemonListener() throws' ci/ClipMeshApp.swift
           grep -q 'Darwin.lockf(descriptor, F_TLOCK, 0)' ci/ClipMeshApp.swift
           grep -q '100 Continue' ci/ClipMeshTransfer.swift
@@ -136,13 +136,13 @@ jobs:
           from pathlib import Path
           main = plistlib.loads(Path('dist/macos/ClipMesh.app/Contents/Info.plist').read_bytes())
           ext = plistlib.loads(Path('dist/macos/ClipMesh.app/Contents/PlugIns/ClipMeshShare.appex/Contents/Info.plist').read_bytes())
-          assert main['CFBundleShortVersionString'] == '0.2.8'
+          assert main['CFBundleShortVersionString'] == '0.2.9'
           assert ext['CFBundleIdentifier'] == 'dev.clipmesh.private.Share'
           assert ext['NSExtension']['NSExtensionPointIdentifier'] == 'com.apple.share-services'
           rule = ext['NSExtension']['NSExtensionAttributes']['NSExtensionActivationRule']
           assert rule['NSExtensionActivationSupportsFileWithMaxCount'] >= 100
           assert rule['NSExtensionActivationSupportsImageWithMaxCount'] >= 100
-          print('macOS v0.2.8 Share extension metadata validated')
+          print('macOS v0.2.9 Share extension metadata validated')
           PY
           plutil -lint dist/macos/ClipMesh.app/Contents/Info.plist
           plutil -lint dist/macos/ClipMesh.app/Contents/PlugIns/ClipMeshShare.appex/Contents/Info.plist
@@ -166,7 +166,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Reconstruct and patch v0.2.8
+      - name: Reconstruct and patch v0.2.9
         shell: pwsh
         run: |
           python ci/prepare-icon-assets.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
@@ -195,19 +195,19 @@ jobs:
           python ci/patch-v030-finalize.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $p = 'clipmesh/Cargo.toml'
           $s = Get-Content $p -Raw
-          $s = $s -replace 'version = "0.1.0"', 'version = "0.2.8"'
+          $s = $s -replace 'version = "0.1.0"', 'version = "0.2.9"'
           Set-Content $p $s -Encoding utf8
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: clipmesh
-      - name: Validate Windows v0.2.8 sources
+      - name: Validate Windows v0.2.9 sources
         shell: pwsh
         run: |
           $ui = Get-Content 'ci/ClipMeshWindows.cs' -Raw
           $transfer = Get-Content 'ci/ClipMeshTransfer.cs' -Raw
           $clip = Get-Content 'clipmesh/apps/desktop/src/clipboard.rs' -Raw
-          if (-not $ui.Contains('private const string Version = "0.2.8";')) { throw 'Windows v0.2.8 runtime version missing' }
+          if (-not $ui.Contains('private const string Version = "0.2.9";')) { throw 'Windows v0.2.9 runtime version missing' }
           if (-not $transfer.Contains('100 Continue')) { throw 'Windows Expect handshake missing' }
           if ($ui.Contains('MessageBox.Show') -or $transfer.Contains('MessageBox.Show')) { throw 'Native Windows dialogs remain' }
           if (-not $ui.Contains('"Clipboard", "File transfer", "Settings"')) { throw 'Left navigation missing' }
@@ -250,7 +250,7 @@ jobs:
           Remove-Item -Recurse -Force $roaming,$local -ErrorAction SilentlyContinue
           $process = Start-Process -FilePath '.\dist\windows\clipmesh.exe' -ArgumentList '--smoke-test' -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "Windows smoke test failed with exit code $($process.ExitCode)" }
-          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.2.8\clipmesh-bin.exe'))) { throw 'Windows v0.2.8 runtime missing' }
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.2.9\clipmesh-bin.exe'))) { throw 'Windows v0.2.9 runtime missing' }
           $hash = (Get-FileHash dist\windows\clipmesh.exe -Algorithm SHA256).Hash.ToLower()
           "$hash  clipmesh.exe" | Set-Content -Encoding ascii dist\windows\SHA256SUMS.txt
       - uses: actions/upload-artifact@v7
@@ -269,7 +269,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Reconstruct and patch v0.2.8
+      - name: Reconstruct and patch v0.2.9
         run: |
           set -euo pipefail
           python ci/prepare-icon-assets.py
@@ -294,18 +294,19 @@ jobs:
           python ci/patch-v026-regressions.py
           python ci/patch-v027-macos-daemon.py
           python ci/patch-v030-finalize.py
-      - name: Validate Android v0.2.8 sources
+      - name: Validate Android v0.2.9 sources
         run: |
           set -euo pipefail
           M=clipmesh/android/app/src/main/AndroidManifest.xml
           J=clipmesh/android/app/src/main/java/dev/clipmesh
-          grep -q 'versionCode = 18' clipmesh/android/app/build.gradle.kts
-          grep -q 'versionName = "0.2.8"' clipmesh/android/app/build.gradle.kts
+          grep -q 'versionCode = 19' clipmesh/android/app/build.gradle.kts
+          grep -q 'versionName = "0.2.9"' clipmesh/android/app/build.gradle.kts
           grep -q '100 Continue' "$J/fileshare/LocalTransferEngine.kt"
           grep -q 'clipboard?.primaryClip' "$J/exclusion/ExclusionAccessibilityService.kt"
           grep -q 'BackgroundRuntime.captureAccessibility(clip)' "$J/exclusion/ExclusionAccessibilityService.kt"
           grep -q 'lastRemoteAppliedAt' "$J/clipboard/ClipboardBridge.kt"
           grep -q 'fun captureAccessibility' "$J/BackgroundRuntime.kt"
+          grep -q 'private fun stopClipboardRuntime' "$J/BackgroundRuntime.kt"
           grep -q 'last_outgoing_at' "$J/BackgroundRuntime.kt"
           grep -q 'class CiBackgroundCaptureReceiver' "$J/CiBackgroundCaptureReceiver.kt"
           grep -q 'dev.clipmesh.action.CI_BACKGROUND_CAPTURE' "$M"
@@ -364,11 +365,14 @@ jobs:
           cd clipmesh
           chmod +x android/gradlew scripts/build-android-debug.sh
           ./scripts/build-android-debug.sh
+          ./android/gradlew :app:assembleRelease --no-daemon
+          test -s android/app/build/outputs/apk/release/app-release-unsigned.apk
       - name: Validate packaged Android APK
         run: |
           set -euo pipefail
           APK=clipmesh/dist/android/ClipMesh-debug.apk
           test -s "$APK"
+          test -s clipmesh/android/app/build/outputs/apk/release/app-release-unsigned.apk
           "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest print "$APK" > /tmp/manifest.xml
           grep -q 'usesCleartextTraffic="true"' /tmp/manifest.xml
           grep -q 'dev.clipmesh.fileshare.FileShareActivity' /tmp/manifest.xml
@@ -377,7 +381,7 @@ jobs:
           grep -q 'android.permission.DUMP' /tmp/manifest.xml
           grep -q 'android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE' /tmp/manifest.xml
           grep -q 'dev.clipmesh.fileshare.TransferBootReceiver' /tmp/manifest.xml
-          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-name "$APK" | grep -qx '0.2.8'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-name "$APK" | grep -qx '0.2.9'
           sha256sum "$APK" > clipmesh/dist/android/SHA256SUMS.txt
       - name: Enable KVM
         run: |
@@ -430,16 +434,25 @@ jobs:
           cp artifacts/android/ClipMesh-debug.apk release/ClipMesh-Android.apk
           cd release
           sha256sum ClipMesh-macOS.dmg ClipMesh-Windows.exe ClipMesh-Android.apk > SHA256SUMS.txt
-      - name: Publish v0.2.8-alpha
+      - name: Publish v0.2.9-alpha and dev-latest
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          tag="v0.2.8-alpha"
+          tag="v0.2.9-alpha"
+          dev_tag="dev-latest"
           assets=(release/ClipMesh-macOS.dmg release/ClipMesh-Windows.exe release/ClipMesh-Android.apk release/ClipMesh-icon.png release/SHA256SUMS.txt)
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "$tag already exists. Leaving its tag and assets immutable; bump the version for another release."
-            exit 0
+          else
+            gh release create "$tag" "${assets[@]}" --title "ClipMesh v0.2.9-alpha" --generate-notes --target "$GITHUB_SHA" --prerelease
           fi
-          gh release create "$tag" "${assets[@]}" --title "ClipMesh v0.2.8-alpha" --generate-notes --target "$GITHUB_SHA" --prerelease
+
+          if gh release view "$dev_tag" >/dev/null 2>&1; then
+            gh api "repos/$GH_REPO/git/refs/tags/$dev_tag" -X PATCH -f sha="$GITHUB_SHA" -F force=true >/dev/null
+            gh release upload "$dev_tag" "${assets[@]}" --clobber
+            gh release edit "$dev_tag" --title "ClipMesh dev-latest" --prerelease --latest=false
+          else
+            gh release create "$dev_tag" "${assets[@]}" --title "ClipMesh dev-latest" --notes "Latest green development build from main." --target "$GITHUB_SHA" --prerelease --latest=false
+          fi
