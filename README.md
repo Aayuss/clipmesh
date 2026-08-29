@@ -1,4 +1,4 @@
-# ClipMesh v0.2.4
+# ClipMesh v0.2.5
 
 ClipMesh provides encrypted clipboard sync and direct nearby file transfer across macOS, Windows, and Android.
 
@@ -6,12 +6,20 @@ ClipMesh provides encrypted clipboard sync and direct nearby file transfer acros
 
 Download the current installers directly—there is no need to browse the Releases page:
 
-- [Download ClipMesh for macOS](https://github.com/Aayuss/clipmesh/releases/download/v0.2.4-alpha/ClipMesh-macOS.dmg)
-- [Download ClipMesh for Windows](https://github.com/Aayuss/clipmesh/releases/download/v0.2.4-alpha/ClipMesh-Windows.exe)
-- [Download ClipMesh for Android](https://github.com/Aayuss/clipmesh/releases/download/v0.2.4-alpha/ClipMesh-Android.apk)
-- [Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.4-alpha/SHA256SUMS.txt)
+- [Download ClipMesh for macOS](https://github.com/Aayuss/clipmesh/releases/download/v0.2.5-alpha/ClipMesh-macOS.dmg)
+- [Download ClipMesh for Windows](https://github.com/Aayuss/clipmesh/releases/download/v0.2.5-alpha/ClipMesh-Windows.exe)
+- [Download ClipMesh for Android](https://github.com/Aayuss/clipmesh/releases/download/v0.2.5-alpha/ClipMesh-Android.apk)
+- [Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.5-alpha/SHA256SUMS.txt)
 
-These links become live after the `Build ClipMesh` GitHub Action completes and publishes `v0.2.4-alpha`.
+These links become live after the `Build ClipMesh` GitHub Action completes and publishes `v0.2.5-alpha`.
+
+## What changed in v0.2.5
+
+- Clipboard shows unpaired ClipMesh devices on the same LAN. Select **Pair** instead of copying a long pairing URI between devices.
+- The receiver explicitly accepts the request, then types the six-digit code displayed by the sender.
+- Pairing uses ephemeral P-256 ECDH, transcript-bound HKDF-SHA256 keys, a short authentication string, encrypted credential delivery and HMAC-SHA256 authentication. The private clipboard-space key is never broadcast or sent in plaintext.
+- Pairing sessions expire after two minutes. A wrong code rejects the session, altered ciphertext is refused, and cryptographic work only runs during an active attempt.
+- Background discovery remains event-driven. Each platform announces only every two minutes while idle, listens on blocking sockets without polling, and sends an immediate discovery burst when the app becomes visible or the user taps Refresh.
 
 ## What changed in v0.2.4
 
@@ -30,9 +38,9 @@ These links become live after the `Build ClipMesh` GitHub Action completes and p
 
 ## Clipboard pairing
 
-Use **Pair new device** to open the pairing controls. The existing pairing code contains the private-space encryption key and ClipMesh deliberately does not send it over the unencrypted file-transfer channel.
+Use the nearby-device list for normal pairing. The six-digit code authenticates the ephemeral encrypted connection and must be entered on the receiving device before ClipMesh releases the encrypted clipboard-space credential.
 
-A no-copy nearby pairing flow needs an authenticated key exchange (not a plain LAN popup carrying the current secret). That security-sensitive protocol is not represented as complete in v0.2.4.
+The manual pairing URI remains available as a fallback. It contains the private-space key and should still be treated like a password.
 
 ## Android background receiving
 

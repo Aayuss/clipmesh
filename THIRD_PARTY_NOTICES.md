@@ -10,4 +10,4 @@ https://github.com/localsend/localsend
 
 LocalSend is licensed under the Apache License, Version 2.0.
 
-ClipMesh does not embed the LocalSend application. Since ClipMesh v0.2.4, it uses a separate port and ClipMesh-only endpoint namespace and is deliberately not interoperable with LocalSend.
+ClipMesh does not embed the LocalSend application. Since ClipMesh v0.2.4, it uses a separate port and ClipMesh-only endpoint namespace and is deliberately not interoperable with LocalSend. ClipMesh v0.2.5 adds its own encrypted clipboard-pairing protocol and does not reuse LocalSend identities, credentials, or pairing data.

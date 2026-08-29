@@ -8,7 +8,7 @@ adb shell pm grant dev.clipmesh android.permission.POST_NOTIFICATIONS
 adb shell am start -W -n dev.clipmesh/.MainActivity | tee /tmp/activity-start.txt
 grep -q 'Status: ok' /tmp/activity-start.txt
 sleep 3
-adb shell dumpsys package dev.clipmesh | grep -q 'versionName=0.2.4'
+adb shell dumpsys package dev.clipmesh | grep -q 'versionName=0.2.5'
 
 # Close the visible UI. The persistent connected-device foreground service must
 # continue owning the clipboard runtime and the LocalTransferEngine listener.
@@ -38,6 +38,15 @@ assert info['fingerprint']
 print('Android background LocalTransferEngine endpoint is live after UI close')
 PY
 
+# The event-driven encrypted pairing listener shares the file receiver lifecycle.
+# Its startup runs the on-device P-256/HKDF/encryption self-test first.
+adb forward tcp:54322 tcp:53422
+PAIR_STATUS=$(curl --silent --max-time 3 -o /tmp/pair-invalid.json -w '%{http_code}' \
+  -H 'Content-Type: application/json' --data '{}' \
+  http://127.0.0.1:54322/api/clipmesh/v1/pair/start)
+test "$PAIR_STATUS" = 400
+grep -q 'invalid request' /tmp/pair-invalid.json
+
 # Exercise an unknown-sender request against the Android implementation while
 # there is no visible ClipMesh activity. prepare-upload intentionally waits for
 # a decision, so run it in the background while inspecting the system notification.
@@ -61,4 +70,4 @@ curl --fail --silent --max-time 3 http://127.0.0.1:54321/api/clipmesh/v1/info > 
 adb shell dumpsys activity services dev.clipmesh > /tmp/services-after.txt
 grep -q 'BackgroundService' /tmp/services-after.txt
 
-echo 'Android v0.2.4 emulator runtime smoke test: PASS'
+echo 'Android v0.2.5 emulator runtime smoke test: PASS'
