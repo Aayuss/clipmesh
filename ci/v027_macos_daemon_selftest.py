@@ -67,13 +67,20 @@ elif system == "Linux":
     assert '650L' in runtime
     assert 'shizuku.hasPermission()' in runtime
     assert 'bridge.captureNowForForeground()' in runtime
+    assert 'private object ClipMeshUiVisibility' in runtime
+    assert 'Application.ActivityLifecycleCallbacks' in runtime
+    assert 'ClipMeshUiVisibility.install(app)' in runtime
+    assert 'override fun onActivityStarted' in runtime
+    assert 'override fun onActivityStopped' in runtime
+    assert 'LocalTransferEngine.setUiVisible(true)' in runtime
+    assert 'LocalTransferEngine.setUiVisible(false)' in runtime
+    assert '350L' in runtime
+    assert 'LocalTransferEngine.setUiVisible(' not in incoming
     assert 'val visible: Boolean = true' in engine
     assert 'put("visible", uiVisible)' in engine
     assert '/api/clipmesh/v1/register' in engine
     assert 'serverReady.set(true)' in engine
     assert 'if (!serverReady.get()) return' in engine
-    assert 'LocalTransferEngine.setUiVisible(true)' in incoming
-    assert 'LocalTransferEngine.setUiVisible(false)' in incoming
     assert '\\1        if (BuildConfig.DEBUG)' not in main
     assert main.count('override fun onCreate(savedInstanceState: Bundle?) {') == 1
     assert 'clipmesh_ci_favorite' in main
