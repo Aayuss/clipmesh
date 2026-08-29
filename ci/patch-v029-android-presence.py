@@ -82,11 +82,8 @@ object BackgroundRuntime {
     )
     replace(
         runtime,
-        """        val app = context.applicationContext
-        LocalTransferEngine.start(app)
-""",
-        """        val app = context.applicationContext
-        LocalTransferEngine.start(app)
+        "        if (SettingsStore(app).receiveFilesInBackground) LocalTransferEngine.start(app) else LocalTransferEngine.stop()\n",
+        """        if (SettingsStore(app).receiveFilesInBackground) LocalTransferEngine.start(app) else LocalTransferEngine.stop()
         ClipMeshUiVisibility.install(app)
 """,
         "Android UI visibility tracker install",
