@@ -2,13 +2,15 @@
 set -euo pipefail
 
 APK=clipmesh/dist/android/ClipMesh-debug.apk
+EXPECTED_VERSION=$("$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-name "$APK")
+test -n "$EXPECTED_VERSION"
 adb install -r "$APK"
 adb shell pm grant dev.clipmesh android.permission.POST_NOTIFICATIONS
 
 adb shell am start -W -n dev.clipmesh/.MainActivity | tee /tmp/activity-start.txt
 grep -q 'Status: ok' /tmp/activity-start.txt
 sleep 3
-adb shell dumpsys package dev.clipmesh | grep -q 'versionName=0.2.6'
+adb shell dumpsys package dev.clipmesh | grep -Fq "versionName=$EXPECTED_VERSION"
 
 # Close the visible UI. The persistent connected-device foreground service must
 # continue owning the clipboard runtime and the LocalTransferEngine listener.
@@ -77,4 +79,4 @@ curl --fail --silent --max-time 3 http://127.0.0.1:54321/api/clipmesh/v1/info > 
 adb shell dumpsys activity services dev.clipmesh > /tmp/services-after.txt
 grep -q 'BackgroundService' /tmp/services-after.txt
 
-echo 'Android v0.2.6 emulator runtime smoke test: PASS'
+echo "Android $EXPECTED_VERSION emulator runtime smoke test: PASS"
