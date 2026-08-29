@@ -273,6 +273,14 @@ final class LocalTransferManager {
             headers[String(line[..<colon]).lowercased()] = String(line[line.index(after: colon)...]).trimmingCharacters(in: .whitespaces)
         }
         let length = Int(headers["content-length"] ?? "0") ?? 0
+        // URLSession and several Android/Windows HTTP stacks may wait for the
+        // RFC 9110 interim response before streaming an upload body. Without
+        // this, both peers can wait until their socket timeout expires.
+        if headers["expect"]?.lowercased().contains("100-continue") == true {
+            connection.send(content: Data("HTTP/1.1 100 Continue\r\n\r\n".utf8), completion: .contentProcessed { error in
+                if error != nil { connection.cancel() }
+            })
+        }
         guard let components = URLComponents(string: "http://clipmesh\(target)") else { return respond(connection, code: 400, body: "Bad target") }
         switch (method, components.path) {
         case ("GET", "/api/localsend/v2/info"):
@@ -448,14 +456,18 @@ final class LocalTransferManager {
         var request = URLRequest(url: URL(string: "http://\(device.address):\(device.port)\(path)")!)
         request.httpMethod = "POST"; request.timeoutInterval = 75
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
+        request.setValue(String(body.count), forHTTPHeaderField: "Content-Length")
         let sem = DispatchSemaphore(value: 0)
         var output: Result<(Int, Data), Error>!
-        URLSession.shared.uploadTask(with: request, from: body) { data, response, error in
+        URLSession.shared.dataTask(with: request) { data, response, error in
             if let error { output = .failure(error) }
             else { output = .success(((response as? HTTPURLResponse)?.statusCode ?? 0, data ?? Data())) }
             sem.signal()
         }.resume()
-        _ = sem.wait(timeout: .now() + 80)
+        guard sem.wait(timeout: .now() + 80) == .success, let output else {
+            throw NSError(domain: "ClipMesh", code: -1001, userInfo: [NSLocalizedDescriptionKey: "Timed out waiting for \(device.alias). Make sure ClipMesh is allowed through the firewall and both devices are on the same Wi-Fi."])
+        }
         return try output.get()
     }
 
@@ -471,7 +483,9 @@ final class LocalTransferManager {
             if let error { output = .failure(error) } else { output = .success((response as? HTTPURLResponse)?.statusCode ?? 0) }
             sem.signal()
         }.resume()
-        _ = sem.wait(timeout: .now() + 190)
+        guard sem.wait(timeout: .now() + 190) == .success, let output else {
+            throw NSError(domain: "ClipMesh", code: -1001, userInfo: [NSLocalizedDescriptionKey: "Timed out while sending \(file.lastPathComponent)."])
+        }
         let status = try output.get()
         if !(200...299).contains(status) { throw NSError(domain: "ClipMesh", code: status, userInfo: [NSLocalizedDescriptionKey: "The receiver rejected \(file.lastPathComponent) (\(status))."]) }
     }

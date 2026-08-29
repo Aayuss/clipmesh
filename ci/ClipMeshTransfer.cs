@@ -234,6 +234,7 @@ internal sealed class LocalTransferManagerC : IDisposable
             int colon = line.IndexOf(':'); if (colon > 0) headers[line.Substring(0, colon).Trim()] = line.Substring(colon + 1).Trim();
         }
         long length = 0; string len; if (headers.TryGetValue("Content-Length", out len)) Int64.TryParse(len, out length);
+        string expect; if (headers.TryGetValue("Expect", out expect) && expect.IndexOf("100-continue", StringComparison.OrdinalIgnoreCase) >= 0) { byte[] interim=Encoding.ASCII.GetBytes("HTTP/1.1 100 Continue\r\n\r\n"); stream.Write(interim,0,interim.Length); stream.Flush(); }
         Uri target; if (!Uri.TryCreate("http://clipmesh" + rawTarget, UriKind.Absolute, out target)) { Respond(stream, 400, "Invalid target", "text/plain"); return; }
         string remote = ((IPEndPoint)client.Client.RemoteEndPoint).Address.ToString();
         if (method == "GET" && target.AbsolutePath == "/api/localsend/v2/info")

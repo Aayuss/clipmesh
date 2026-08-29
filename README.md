@@ -1,4 +1,4 @@
-# ClipMesh v0.2.5
+# ClipMesh v0.2.6
 
 ClipMesh provides encrypted clipboard sync and direct nearby file transfer across macOS, Windows, and Android.
 
@@ -6,12 +6,22 @@ ClipMesh provides encrypted clipboard sync and direct nearby file transfer acros
 
 Download the current installers directly—there is no need to browse the Releases page:
 
-- [Download ClipMesh for macOS](https://github.com/Aayuss/clipmesh/releases/download/v0.2.5-alpha/ClipMesh-macOS.dmg)
-- [Download ClipMesh for Windows](https://github.com/Aayuss/clipmesh/releases/download/v0.2.5-alpha/ClipMesh-Windows.exe)
-- [Download ClipMesh for Android](https://github.com/Aayuss/clipmesh/releases/download/v0.2.5-alpha/ClipMesh-Android.apk)
-- [Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.5-alpha/SHA256SUMS.txt)
+- [Download ClipMesh for macOS](https://github.com/Aayuss/clipmesh/releases/download/v0.2.6-alpha/ClipMesh-macOS.dmg)
+- [Download ClipMesh for Windows](https://github.com/Aayuss/clipmesh/releases/download/v0.2.6-alpha/ClipMesh-Windows.exe)
+- [Download ClipMesh for Android](https://github.com/Aayuss/clipmesh/releases/download/v0.2.6-alpha/ClipMesh-Android.apk)
+- [Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.6-alpha/SHA256SUMS.txt)
 
-These links become live after the `Build ClipMesh` GitHub Action completes and publishes `v0.2.5-alpha`.
+These links become live after the `Build ClipMesh` GitHub Action completes and publishes `v0.2.6-alpha`.
+
+## What changed in v0.2.6
+
+- Fixed the cross-platform file-transfer deadlock by completing the HTTP `100 Continue` handshake before reading upload bodies. The sender still uses a two-phase request/accept/upload session with per-file tokens, following the reliable state separation used by LocalSend.
+- Android background clipboard capture is event-driven again. Accessibility passes the clipboard object immediately to ClipMesh, so copied Samsung screenshots and gallery/image content URIs can be read while their permission grant is valid.
+- Remote clipboard retry/reconnect delivery is deduplicated before Android writes to the system clipboard, preventing repeated system “Copied” overlays and echo loops.
+- Already-paired devices are hidden from the nearby clipboard and file recipient lists.
+- Each paired device has its own Remove action. Removal is enforced by a persistent deny list and authenticated connections from that device are rejected until it is explicitly paired again.
+- Android uses a calmer muted gold, custom ClipMesh pairing/file dialogs, and visible press animation plus haptic feedback on app buttons.
+- Clipboard/file background work remains socket- and event-driven; no periodic clipboard polling was added.
 
 ## What changed in v0.2.5
 
