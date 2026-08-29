@@ -34,9 +34,6 @@ jobs:
         with:
           python-version: '3.12'
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: clipmesh
       - name: Validate harness scripts
         run: |
           set -euo pipefail
@@ -52,6 +49,9 @@ jobs:
           grep -q -- '--dev-test-transfer-fingerprint' ci/ClipMeshApp.swift
           grep -q -- '--dev-test-send-file' ci/ClipMeshApp.swift
           grep -q 'func devTestSend' ci/ClipMeshTransfer.swift
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: clipmesh
       - name: Build and exercise dev CLI
         working-directory: clipmesh
         run: |
