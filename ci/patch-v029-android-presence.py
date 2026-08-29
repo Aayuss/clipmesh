@@ -24,28 +24,42 @@ if system == "Linux":
     # UI visibility must represent the whole ClipMesh process, not the lifetime of
     # the incoming-request helper. Android can keep an Activity instance alive
     # after BACK while it is already stopped, which left `visible=true` forever.
-    # Track all ClipMesh activities instead. A short delayed hide absorbs normal
-    # transitions between Main / File Transfer / Settings without broadcasting a
-    # false background state between the two activities.
+    # Track every started ClipMesh Activity by identity. The current Activity is
+    # seeded when BackgroundRuntime is first entered from onResume, covering the
+    # case where lifecycle callbacks were installed after that Activity's onStart.
+    # A short delayed hide absorbs normal Main/File/Settings transitions.
     replace(
         runtime,
         "object BackgroundRuntime {\n",
         r'''private object ClipMeshUiVisibility : android.app.Application.ActivityLifecycleCallbacks {
     @Volatile private var installed = false
-    private var startedActivities = 0
+    private val startedActivities = java.util.Collections.newSetFromMap(
+        java.util.IdentityHashMap<android.app.Activity, Boolean>()
+    )
     private var hideGeneration = 0L
 
-    @Synchronized
     fun install(context: Context) {
-        if (installed) return
         val application = context.applicationContext as? android.app.Application ?: return
-        installed = true
-        application.registerActivityLifecycleCallbacks(this)
+        var register = false
+        var foreground = false
+        synchronized(this) {
+            if (!installed) {
+                installed = true
+                register = true
+            }
+            if (context is android.app.Activity) {
+                startedActivities.add(context)
+                hideGeneration += 1
+                foreground = true
+            }
+        }
+        if (register) application.registerActivityLifecycleCallbacks(this)
+        if (foreground) LocalTransferEngine.setUiVisible(true)
     }
 
     override fun onActivityStarted(activity: android.app.Activity) {
         synchronized(this) {
-            startedActivities += 1
+            startedActivities.add(activity)
             hideGeneration += 1
         }
         LocalTransferEngine.setUiVisible(true)
@@ -55,15 +69,15 @@ if system == "Linux":
         var generation = 0L
         var shouldScheduleHide = false
         synchronized(this) {
-            if (startedActivities > 0) startedActivities -= 1
+            startedActivities.remove(activity)
             hideGeneration += 1
             generation = hideGeneration
-            shouldScheduleHide = startedActivities == 0
+            shouldScheduleHide = startedActivities.isEmpty()
         }
         if (!shouldScheduleHide) return
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
             val stillHidden = synchronized(this) {
-                startedActivities == 0 && hideGeneration == generation
+                startedActivities.isEmpty() && hideGeneration == generation
             }
             if (stillHidden) LocalTransferEngine.setUiVisible(false)
         }, 350L)
@@ -73,7 +87,9 @@ if system == "Linux":
     override fun onActivityResumed(activity: android.app.Activity) = Unit
     override fun onActivityPaused(activity: android.app.Activity) = Unit
     override fun onActivitySaveInstanceState(activity: android.app.Activity, state: android.os.Bundle) = Unit
-    override fun onActivityDestroyed(activity: android.app.Activity) = Unit
+    override fun onActivityDestroyed(activity: android.app.Activity) {
+        synchronized(this) { startedActivities.remove(activity) }
+    }
 }
 
 object BackgroundRuntime {
@@ -84,7 +100,7 @@ object BackgroundRuntime {
         runtime,
         "        if (SettingsStore(app).receiveFilesInBackground) LocalTransferEngine.start(app) else LocalTransferEngine.stop()\n",
         """        if (SettingsStore(app).receiveFilesInBackground) LocalTransferEngine.start(app) else LocalTransferEngine.stop()
-        ClipMeshUiVisibility.install(app)
+        ClipMeshUiVisibility.install(context)
 """,
         "Android UI visibility tracker install",
     )
