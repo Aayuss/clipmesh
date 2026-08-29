@@ -1,17 +1,27 @@
-# ClipMesh v0.2.7
+# ClipMesh v0.2.8
 
 ClipMesh provides encrypted clipboard sync and direct nearby file transfer across macOS, Windows, and Android.
 
 ## Download
 
-Download the current installers directly—there is no need to browse the Releases page:
+Download the current installers directly - there is no need to browse the Releases page:
 
-- [Download ClipMesh for macOS](https://github.com/Aayuss/clipmesh/releases/download/v0.2.7-alpha/ClipMesh-macOS.dmg)
-- [Download ClipMesh for Windows](https://github.com/Aayuss/clipmesh/releases/download/v0.2.7-alpha/ClipMesh-Windows.exe)
-- [Download ClipMesh for Android](https://github.com/Aayuss/clipmesh/releases/download/v0.2.7-alpha/ClipMesh-Android.apk)
-- [Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.7-alpha/SHA256SUMS.txt)
+- [Download ClipMesh for macOS](https://github.com/Aayuss/clipmesh/releases/download/v0.2.8-alpha/ClipMesh-macOS.dmg)
+- [Download ClipMesh for Windows](https://github.com/Aayuss/clipmesh/releases/download/v0.2.8-alpha/ClipMesh-Windows.exe)
+- [Download ClipMesh for Android](https://github.com/Aayuss/clipmesh/releases/download/v0.2.8-alpha/ClipMesh-Android.apk)
+- [Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.8-alpha/SHA256SUMS.txt)
 
-These links become live after the `Build ClipMesh` GitHub Action completes and publishes `v0.2.7-alpha`.
+These links become live after the `Build ClipMesh` GitHub Action completes and publishes `v0.2.8-alpha`.
+
+## What changed in v0.2.8
+
+- Restored Android -> desktop clipboard sending when ClipMesh is not open. Accessibility clipboard events now feed the process-level `BackgroundRuntime`/`ClipboardBridge` directly instead of relying on an Activity-era callback handoff that could be missed during lifecycle transitions.
+- The Shizuku screen-on clipboard watcher remains the privileged fallback for Android 10+ background clipboard restrictions, so text and image capture do not depend on opening the ClipMesh Activity.
+- File Transfer now lists every live ClipMesh LAN receiver on Android, macOS, and Windows. A device is no longer hidden merely because its ClipMesh window is in the background or because it is not a favorite.
+- Receiver readiness and expiry remain the availability gates, so a device is not advertised before its transfer server is listening and stale devices still age out.
+- Android 15 CI now explicitly hides all ClipMesh Activities, injects a protected debug clipboard event through the same process-level capture path, and verifies that an outgoing clipboard payload reaches the real network callback without reopening the UI.
+- The same Android runtime test continues to verify background file receiving, Accept/Reject notifications, trusted automatic receiving, and persistence of transferred bytes.
+- Releases are versioned as immutable artifacts. Once `v0.2.8-alpha` exists, later commits will not silently replace its binaries; another release requires a version bump.
 
 ## What changed in v0.2.7
 
@@ -28,7 +38,7 @@ These links become live after the `Build ClipMesh` GitHub Action completes and p
 - Already-paired devices are hidden from the nearby clipboard and file recipient lists.
 - Each paired device has its own Remove action. Removal is enforced by a persistent deny list and authenticated connections from that device are rejected until it is explicitly paired again.
 - Android uses a calmer muted gold, custom ClipMesh pairing/file dialogs, and visible press animation plus haptic feedback on app buttons.
-- Clipboard/file background work remains socket- and event-driven; no periodic clipboard polling was added.
+- Clipboard/file background work remains socket- and event-driven; no periodic network polling was added.
 
 ## What changed in v0.2.5
 
@@ -50,7 +60,7 @@ These links become live after the `Build ClipMesh` GitHub Action completes and p
 - Nearby file discovery starts from every main app section instead of waiting for File Transfer to open.
 - Every Android bottom-tab change uses the same fade transition.
 - Android has a **Receive files when the app is not opened** switch. When enabled, its foreground service keeps the device discoverable; when disabled, receiving is limited to a visible ClipMesh activity.
-- Favorited Android senders can still save automatically. Other senders receive Accept/Reject controls in a blurred bottom sheet while ClipMesh is visible, or in a notification while it is in the background.
+- Favorited Android senders can still save automatically. Other senders receive Accept/Reject controls in a blurred bottom sheet while ClipMesh is visible, or in a notification while ClipMesh is in the background.
 - macOS packages and refreshes the Finder Share extension. Windows registers **Share with ClipMesh** for files and folders. Shared files open preselected in the recipient chooser.
 
 ## Clipboard pairing
@@ -58,6 +68,12 @@ These links become live after the `Build ClipMesh` GitHub Action completes and p
 Use the nearby-device list for normal pairing. The six-digit code authenticates the ephemeral encrypted connection and must be entered on the receiving device before ClipMesh releases the encrypted clipboard-space credential.
 
 The manual pairing URI remains available as a fallback. It contains the private-space key and should still be treated like a password.
+
+## Android background clipboard sync
+
+Android 10+ restricts ordinary background clipboard reads. ClipMesh uses the optional Accessibility service as the event-driven clipboard signal and Shizuku for privileged background clipboard access where required by Android/OEM behavior.
+
+With **Background sync** enabled, copying text or an image on Android should not require opening ClipMesh. Samsung/OEM battery controls can still stop applications placed in Restricted or deep-sleep modes, so ClipMesh should be allowed to run in the background.
 
 ## Android background receiving
 
@@ -67,7 +83,7 @@ Unknown senders use a separate high-priority Accept/Reject notification when Cli
 
 ## macOS Finder Share
 
-ClipMesh includes a `com.apple.share-services` extension and refreshes its registration when the app opens. macOS controls whether it is shown directly under Finder → right-click → Share. If it is hidden, enable ClipMesh in System Settings → General → Login Items & Extensions → Sharing.
+ClipMesh includes a `com.apple.share-services` extension and refreshes its registration when the app opens. macOS controls whether it is shown directly under Finder -> right-click -> Share. If it is hidden, enable ClipMesh in System Settings -> General -> Login Items & Extensions -> Sharing.
 
 The GitHub DMG is ad-hoc signed rather than Developer-ID notarized, so macOS may require a one-time approval under Privacy & Security.
 

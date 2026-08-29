@@ -60,6 +60,33 @@ assert info.get('visible') is False, info
 print('Android receiver remains live with UI hidden and advertises visible=false')
 PY
 
+# Regression for the Android -> desktop bug: while every ClipMesh Activity is
+# hidden, inject a DEBUG-only clipboard event through the same process-level
+# BackgroundRuntime/ClipboardBridge path used by Accessibility. The outgoing
+# callback records a debug marker immediately before the real network send.
+CI_TEXT="clipmesh-ci-background-outgoing-$(date +%s%N)"
+adb shell am broadcast \
+  -a dev.clipmesh.action.CI_BACKGROUND_CAPTURE \
+  --es text "$CI_TEXT" | tee /tmp/background-capture-broadcast.txt
+OUTGOING_OK=0
+for i in $(seq 1 30); do
+  adb shell run-as dev.clipmesh cat shared_prefs/clipmesh_ci.xml > /tmp/clipmesh-ci-prefs.xml 2>/dev/null || true
+  if grep -q 'last_outgoing_at' /tmp/clipmesh-ci-prefs.xml && \
+     grep -Eq 'last_outgoing_representation_count[^>]*value="[1-9][0-9]*"' /tmp/clipmesh-ci-prefs.xml; then
+    OUTGOING_OK=1
+    break
+  fi
+  sleep 0.2
+done
+cat /tmp/clipmesh-ci-prefs.xml || true
+test "$OUTGOING_OK" = 1
+adb shell dumpsys activity activities > /tmp/activities-after-capture.txt
+if grep -E 'mResumedActivity|topResumedActivity' /tmp/activities-after-capture.txt | grep -q 'dev.clipmesh'; then
+  echo 'Background clipboard probe incorrectly opened ClipMesh UI'
+  exit 1
+fi
+echo 'Android hidden-UI outgoing clipboard capture reached the network callback'
+
 # The event-driven encrypted pairing listener shares the file receiver lifecycle.
 # Its startup runs the on-device P-256/HKDF/encryption self-test first.
 adb forward tcp:54322 tcp:53422
@@ -124,8 +151,8 @@ adb shell cat /sdcard/Download/ClipMesh/ci-proof.txt | tr -d '\r' | grep -qx 'he
 
 echo 'Android background favorite transfer persisted successfully'
 
-# After both an unknown request and a full trusted upload, the service/listener
-# must still be alive.
+# After outgoing capture, an unknown request, and a full trusted upload, the
+# service/listener must still be alive.
 curl --fail --silent --max-time 3 http://127.0.0.1:54321/api/clipmesh/v1/info > /tmp/info-after.json
 adb shell dumpsys activity services dev.clipmesh > /tmp/services-after.txt
 grep -q 'BackgroundService' /tmp/services-after.txt
