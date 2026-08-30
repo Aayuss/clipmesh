@@ -1,4 +1,4 @@
-# ClipMesh v0.2.10
+# ClipMesh v0.2.11
 
 ClipMesh provides encrypted clipboard sync and direct nearby file transfer across macOS, Windows, and Android.
 
@@ -6,14 +6,21 @@ ClipMesh provides encrypted clipboard sync and direct nearby file transfer acros
 
 Download the current installers directly - there is no need to browse the Releases page:
 
-- [Download ClipMesh for macOS](https://github.com/Aayuss/clipmesh/releases/download/v0.2.10-alpha/ClipMesh-macOS.dmg)
-- [Download ClipMesh for Windows](https://github.com/Aayuss/clipmesh/releases/download/v0.2.10-alpha/ClipMesh-Windows.exe)
-- [Download ClipMesh for Android](https://github.com/Aayuss/clipmesh/releases/download/v0.2.10-alpha/ClipMesh-Android.apk)
-- [Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.10-alpha/SHA256SUMS.txt)
+- [Download ClipMesh for macOS](https://github.com/Aayuss/clipmesh/releases/download/v0.2.11-alpha/ClipMesh-macOS.dmg)
+- [Download ClipMesh for Windows](https://github.com/Aayuss/clipmesh/releases/download/v0.2.11-alpha/ClipMesh-Windows.exe)
+- [Download ClipMesh for Android](https://github.com/Aayuss/clipmesh/releases/download/v0.2.11-alpha/ClipMesh-Android.apk)
+- [Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.11-alpha/SHA256SUMS.txt)
 
-These links become live after the `Build ClipMesh` GitHub Action completes and publishes `v0.2.10-alpha`.
+These links become live after the `Build ClipMesh` GitHub Action completes and publishes `v0.2.11-alpha`.
 
 Release signing setup and the audited v0.2.9 Android migration are documented in [RELEASE_SIGNING.md](RELEASE_SIGNING.md). Official Android publication now fails closed unless the permanent keystore and expected certificate fingerprint are configured; pull-request and local development builds continue to use separate debug/development identities.
+
+## What changed in v0.2.11
+
+- Fixes macOS file receiving for IPv4-only LAN peers, including Android devices: the transfer listener now explicitly binds IPv4 rather than relying on a Network.framework listener that could accept only IPv6.
+- Adds the macOS local-network usage description required for ClipMesh LAN discovery and direct transfers.
+- Makes the physical development harness self-contained: Java 17 and Cargo are discovered automatically, ADB selects a single canonical transport, and every reconstruction happens in an isolated copy.
+- Increments the Android release to `versionName 0.2.11` and `versionCode 21` while retaining the established permanent release-signing identity.
 
 ## What changed in v0.2.10
 

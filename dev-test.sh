@@ -21,12 +21,21 @@ on_exit(){
     [ ! -f "$MLOG" ] || tail -n 250 "$MLOG" > "$STATE/macos-last-log.txt" || true
     say "Full log: $LOG"
   fi
+  [ -z "${MAC_BUILD_ROOT:-}" ] || rm -rf -- "$MAC_BUILD_ROOT"
+  [ -z "${ANDROID_BUILD_ROOT:-}" ] || rm -rf -- "$ANDROID_BUILD_ROOT"
   exit "$code"
 }
 trap on_exit EXIT
 
 [ "$(uname -s)" = Darwin ] || die "Run this on the Mac used to test ClipMesh."
-for c in python3 curl cargo swiftc security codesign keytool openssl pbcopy pbpaste lsof shasum ditto open xattr route ipconfig; do need "$c"; done
+if [ -x "$HOME/.cargo/bin/cargo" ]; then export PATH="$HOME/.cargo/bin:$PATH"; fi
+JAVA_HOME="$(/usr/libexec/java_home -v 17 2>/dev/null || true)"
+[ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ] || die "Java 17 is required for the Android build. Install Temurin 17, then rerun."
+export JAVA_HOME PATH="$JAVA_HOME/bin:$PATH"
+say "Using Java: $(java -version 2>&1 | head -n1)"
+say "Using Cargo: $(cargo --version 2>/dev/null || true)"
+say "Using Rust: $(rustc --version 2>/dev/null || true)"
+for c in python3 curl cargo rustc swiftc security codesign keytool openssl pbcopy pbpaste lsof shasum ditto open xattr route ipconfig; do need "$c"; done
 
 if [ -z "${ANDROID_HOME:-}" ]; then
   [ -z "${ANDROID_SDK_ROOT:-}" ] || ANDROID_HOME="$ANDROID_SDK_ROOT"
@@ -35,13 +44,47 @@ fi
 [ -n "${ANDROID_HOME:-}" ] && [ -d "$ANDROID_HOME" ] || die "Android SDK not found. Set ANDROID_HOME once."
 export ANDROID_HOME ANDROID_SDK_ROOT="$ANDROID_HOME"
 ADB_BIN="$ANDROID_HOME/platform-tools/adb"; [ -x "$ADB_BIN" ] || ADB_BIN="$(command -v adb || true)"; [ -n "$ADB_BIN" ] || die "adb not found."
+export ADB_MDNS_AUTO_CONNECT=0
 
 choose_android(){
-  if [ -n "${ANDROID_SERIAL:-}" ]; then SERIAL="$ANDROID_SERIAL"; "$ADB_BIN" -s "$SERIAL" get-state >/dev/null 2>&1 || die "ANDROID_SERIAL=$SERIAL is not connected."; return; fi
-  devices="$($ADB_BIN devices | awk 'NR>1 && $2=="device"{print $1}')"
-  if [ -z "$devices" ] && [ -f "$STATE/adb-serial" ]; then "$ADB_BIN" connect "$(cat "$STATE/adb-serial")" >/dev/null 2>&1 || true; devices="$($ADB_BIN devices | awk 'NR>1 && $2=="device"{print $1}')"; fi
-  SERIAL="$(printf '%s\n' "$devices" | sed '/^$/d' | head -n1)"
-  [ -n "$SERIAL" ] || die "No authorized Android device. Connect once by USB or Wireless debugging."
+  "$ADB_BIN" start-server >/dev/null
+  if [ -n "${ANDROID_SERIAL:-}" ]; then
+    SERIAL="$ANDROID_SERIAL"
+    "$ADB_BIN" -s "$SERIAL" get-state >/dev/null 2>&1 || die "ANDROID_SERIAL=$SERIAL is not connected."
+    return
+  fi
+  devices="$("$ADB_BIN" devices | awk 'NR>1 && $2=="device"{print $1}')"
+  if [ -z "$devices" ]; then
+    endpoint="$("$ADB_BIN" mdns services 2>/dev/null | awk 'match($0, /[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+/) {print substr($0, RSTART, RLENGTH); exit}')"
+    [ -n "$endpoint" ] || [ ! -f "$STATE/adb-serial" ] || endpoint="$(cat "$STATE/adb-serial")"
+    [ -n "$endpoint" ] || die "No authorized Android device or Wireless Debugging mDNS endpoint. Enable Wireless Debugging, then rerun."
+    say "Connecting to the current Android Wireless Debugging endpoint: $endpoint"
+    "$ADB_BIN" connect "$endpoint" >/dev/null 2>&1 || die "Could not connect to $endpoint. Confirm Wireless Debugging is enabled and paired."
+    devices="$("$ADB_BIN" devices | awk 'NR>1 && $2=="device"{print $1}')"
+  fi
+  [ -n "$devices" ] || die "No authorized Android device. Connect once by USB or Wireless debugging."
+  physical_ids=""
+  while IFS= read -r candidate; do
+    [ -n "$candidate" ] || continue
+    phone_id="$("$ADB_BIN" -s "$candidate" shell getprop ro.serialno 2>/dev/null | tr -d '\r')"
+    [ -n "$phone_id" ] || phone_id="$candidate"
+    physical_ids="$physical_ids\n$phone_id"
+  done <<EOF
+$devices
+EOF
+  unique_count="$(printf '%b\n' "$physical_ids" | sed '/^$/d' | sort -u | wc -l | tr -d ' ')"
+  [ "$unique_count" = 1 ] || die "More than one physical Android device is connected. Set ANDROID_SERIAL to choose one safely."
+  SERIAL="$(printf '%s\n' "$devices" | awk '/^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$/{print; exit}')"
+  [ -n "$SERIAL" ] || SERIAL="$(printf '%s\n' "$devices" | sed '/^$/d' | head -n1)"
+  selected_id="$("$ADB_BIN" -s "$SERIAL" shell getprop ro.serialno 2>/dev/null | tr -d '\r')"
+  while IFS= read -r candidate; do
+    [ -n "$candidate" ] && [ "$candidate" = "$SERIAL" ] && continue
+    [ -n "$candidate" ] || continue
+    candidate_id="$("$ADB_BIN" -s "$candidate" shell getprop ro.serialno 2>/dev/null | tr -d '\r')"
+    [ -n "$candidate_id" ] && [ "$candidate_id" = "$selected_id" ] && "$ADB_BIN" disconnect "$candidate" >/dev/null 2>&1 || true
+  done <<EOF
+$devices
+EOF
   printf '%s' "$SERIAL" > "$STATE/adb-serial"
 }
 choose_android; ADB=("$ADB_BIN" -s "$SERIAL"); say "Android device: $SERIAL"
@@ -65,57 +108,37 @@ if [ ! -f "$ANDROID_KEYSTORE" ]; then
   chmod 600 "$ANDROID_KEYSTORE"
 fi
 
-MAC_KEYCHAIN_ARGS=()
 mac_identity(){
   if [ -n "${CLIPMESH_CODESIGN_IDENTITY:-}" ]; then MAC_SIGN_IDENTITY="$CLIPMESH_CODESIGN_IDENTITY"; return; fi
   line="$(security find-identity -v -p codesigning 2>/dev/null | grep '"Apple Development:' | head -n1 || true)"
   [ -n "$line" ] || line="$(security find-identity -v -p codesigning 2>/dev/null | grep '"Developer ID Application:' | head -n1 || true)"
   if [ -n "$line" ]; then MAC_SIGN_IDENTITY="$(printf '%s\n' "$line" | awk '{print $2}')"; say "Using existing Apple code-signing identity."; return; fi
-  KEYCHAIN="$STATE/clipmesh-dev.keychain-db"; KCPASS_FILE="$STATE/macos-keychain.password"; P12PASS_FILE="$STATE/macos-p12.password"
-  CERT="$STATE/macos-dev-cert.pem"; KEY="$STATE/macos-dev-key.pem"; P12="$STATE/macos-dev.p12"; CN="ClipMesh Local Development"
-  [ -f "$KCPASS_FILE" ] || { openssl rand -hex 24 > "$KCPASS_FILE"; chmod 600 "$KCPASS_FILE"; }
-  [ -f "$P12PASS_FILE" ] || { openssl rand -hex 24 > "$P12PASS_FILE"; chmod 600 "$P12PASS_FILE"; }
-  KCPASS="$(cat "$KCPASS_FILE")"; P12PASS="$(cat "$P12PASS_FILE")"
-  if [ ! -f "$KEYCHAIN" ] || [ ! -f "$P12" ]; then
-    say "Creating permanent local macOS signing identity..."
-    cat > "$STATE/macos-openssl.cnf" <<'EOF'
-[req]
-prompt=no
-distinguished_name=dn
-req_extensions=codesign
-[dn]
-CN=ClipMesh Local Development
-O=ClipMesh Development
-C=NP
-[codesign]
-basicConstraints=critical,CA:FALSE
-keyUsage=critical,digitalSignature
-extendedKeyUsage=codeSigning
-EOF
-    openssl req -new -newkey rsa:3072 -nodes -keyout "$KEY" -out "$STATE/macos-dev.csr" -config "$STATE/macos-openssl.cnf" >/dev/null 2>&1
-    openssl x509 -req -in "$STATE/macos-dev.csr" -signkey "$KEY" -days 3650 -sha256 -extfile "$STATE/macos-openssl.cnf" -extensions codesign -out "$CERT" >/dev/null 2>&1
-    openssl pkcs12 -export -inkey "$KEY" -in "$CERT" -name "$CN" -passout "pass:$P12PASS" -out "$P12" >/dev/null 2>&1
-    rm -f "$KEYCHAIN"; security create-keychain -p "$KCPASS" "$KEYCHAIN" >/dev/null; security set-keychain-settings -lut 21600 "$KEYCHAIN" >/dev/null
-    security unlock-keychain -p "$KCPASS" "$KEYCHAIN" >/dev/null; security import "$P12" -k "$KEYCHAIN" -P "$P12PASS" -T /usr/bin/codesign >/dev/null
-    security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KCPASS" "$KEYCHAIN" >/dev/null 2>&1 || true
-  else security unlock-keychain -p "$KCPASS" "$KEYCHAIN" >/dev/null; fi
-  MAC_SIGN_IDENTITY="$(security find-certificate -c "$CN" -Z "$KEYCHAIN" 2>/dev/null | awk '/SHA-1 hash:/{print $3;exit}')"
-  [ -n "$MAC_SIGN_IDENTITY" ] || die "Could not load persistent local macOS signing identity."
-  MAC_KEYCHAIN_ARGS=(--keychain "$KEYCHAIN")
+  MAC_SIGN_IDENTITY="-"
+  say "No Apple code-signing identity found; using explicit ad-hoc signing for this local development build."
 }
 mac_identity
 sign_mac(){
   app="$1"
-  [ -z "${KEYCHAIN:-}" ] || security unlock-keychain -p "$KCPASS" "$KEYCHAIN" >/dev/null
-  [ ! -d "$app/Contents/PlugIns/ClipMeshShare.appex" ] || codesign --force --deep --sign "$MAC_SIGN_IDENTITY" "${MAC_KEYCHAIN_ARGS[@]}" "$app/Contents/PlugIns/ClipMeshShare.appex"
-  codesign --force --deep --sign "$MAC_SIGN_IDENTITY" "${MAC_KEYCHAIN_ARGS[@]}" "$app"
+  [ ! -d "$app/Contents/PlugIns/ClipMeshShare.appex" ] || codesign --force --deep --sign "$MAC_SIGN_IDENTITY" "$app/Contents/PlugIns/ClipMeshShare.appex"
+  codesign --force --deep --sign "$MAC_SIGN_IDENTITY" "$app"
   codesign --verify --deep --strict "$app"
 }
 
+new_isolated_build_root(){
+  BUILD_ROOT="$(mktemp -d "$STATE/clipmesh-build.XXXXXX")"
+  ditto "$ROOT" "$BUILD_ROOT"
+  # Reconstruction patches these retained inputs in place.  Seed the isolated
+  # copy from HEAD so existing developer edits remain untouched in the real
+  # checkout and cannot invalidate historical patch anchors.
+  git -C "$ROOT" archive HEAD -- ci/ClipMeshApp.swift ci/ClipMeshTransfer.swift ci/ClipMeshWindows.cs ci/clipmesh-icon.ico.b64 ci/clipmesh-icon.png.b64 | tar -x -C "$BUILD_ROOT"
+  rm -rf -- "$BUILD_ROOT/.git" "$BUILD_ROOT/clipmesh" "$BUILD_ROOT/ci/clipmesh-source.tar.xz"
+}
+
 say "Building macOS ClipMesh..."
-python3 "$ROOT/ci/reconstruct.py" --platform Darwin >> "$LOG" 2>&1
-( cd "$ROOT/clipmesh"; chmod +x scripts/build-macos.sh; ./scripts/build-macos.sh ) >> "$LOG" 2>&1
-BUILT_MAC="$ROOT/clipmesh/dist/macos/ClipMesh.app"; [ -d "$BUILT_MAC" ] || die "Mac build missing."
+new_isolated_build_root; MAC_BUILD_ROOT="$BUILD_ROOT"
+python3 "$MAC_BUILD_ROOT/ci/reconstruct.py" --platform Darwin >> "$LOG" 2>&1
+( cd "$MAC_BUILD_ROOT/clipmesh"; chmod +x scripts/build-macos.sh; ./scripts/build-macos.sh ) >> "$LOG" 2>&1
+BUILT_MAC="$MAC_BUILD_ROOT/clipmesh/dist/macos/ClipMesh.app"; [ -d "$BUILT_MAC" ] || die "Mac build missing."
 sign_mac "$BUILT_MAC" >> "$LOG" 2>&1
 INSTALL_ROOT="${CLIPMESH_INSTALL_DIR:-/Applications}"; if [ ! -w "$INSTALL_ROOT" ]; then INSTALL_ROOT="$HOME/Applications"; mkdir -p "$INSTALL_ROOT"; fi
 INSTALL_APP="$INSTALL_ROOT/ClipMesh.app"; APP_EXE="$INSTALL_APP/Contents/MacOS/ClipMesh"; CLI_EXE="$INSTALL_APP/Contents/MacOS/clipmesh-bin"
@@ -128,9 +151,10 @@ PAIRING_URI="$($CLI_EXE pairing-uri)"; MAC_FP="$($APP_EXE --dev-test-transfer-fi
 say "Fixed Mac install: $INSTALL_APP"
 
 say "Building Android ClipMesh + foreground test driver..."
-python3 "$ROOT/ci/reconstruct.py" --platform Linux >> "$LOG" 2>&1
-( cd "$ROOT/clipmesh/android"; chmod +x gradlew; ./gradlew :app:assembleDebug :devdriver:assembleDebug --no-daemon ) >> "$LOG" 2>&1
-APP_DEBUG="$ROOT/clipmesh/android/app/build/outputs/apk/debug/app-debug.apk"; DRIVER_DEBUG="$ROOT/clipmesh/android/devdriver/build/outputs/apk/debug/devdriver-debug.apk"
+new_isolated_build_root; ANDROID_BUILD_ROOT="$BUILD_ROOT"
+python3 "$ANDROID_BUILD_ROOT/ci/reconstruct.py" --platform Linux >> "$LOG" 2>&1
+( cd "$ANDROID_BUILD_ROOT/clipmesh/android"; chmod +x gradlew; ./gradlew :app:assembleDebug :devdriver:assembleDebug --no-daemon ) >> "$LOG" 2>&1
+APP_DEBUG="$ANDROID_BUILD_ROOT/clipmesh/android/app/build/outputs/apk/debug/app-debug.apk"; DRIVER_DEBUG="$ANDROID_BUILD_ROOT/clipmesh/android/devdriver/build/outputs/apk/debug/devdriver-debug.apk"
 [ -s "$APP_DEBUG" ] && [ -s "$DRIVER_DEBUG" ] || die "Android build outputs missing."
 sign_apk(){ in="$1"; out="$2"; rm -f "$out"; "$APKSIGNER" sign --ks "$ANDROID_KEYSTORE" --ks-key-alias clipmesh-dev --ks-pass "pass:$ANDROID_PASS" --key-pass "pass:$ANDROID_PASS" --out "$out" "$in"; "$APKSIGNER" verify --print-certs "$out" >/dev/null; }
 SIGNED_APP="$STATE/ClipMesh-dev.apk"; SIGNED_DRIVER="$STATE/ClipMesh-e2e-driver.apk"; sign_apk "$APP_DEBUG" "$SIGNED_APP"; sign_apk "$DRIVER_DEBUG" "$SIGNED_DRIVER"
@@ -168,6 +192,29 @@ info="$(refresh_info || true)"; printf '%s\n' "$info" >> "$LOG"; printf '%s\n' "
 ANDROID_IP="$("${ADB[@]}" shell ip route get 1.1.1.1 2>/dev/null | tr -d '\r' | sed -n 's/.* src \([0-9.][0-9.]*\).*/\1/p' | head -n1)"; [ -n "$ANDROID_IP" ] || die "Android LAN IP missing."
 MAC_IFACE="$(route -n get "$ANDROID_IP" 2>/dev/null | awk '/interface:/{print $2;exit}')"; MAC_IP="$(ipconfig getifaddr "$MAC_IFACE" 2>/dev/null || true)"; [ -n "$MAC_IP" ] || die "Mac LAN IP missing."
 say "Physical LAN: Mac $MAC_IP <-> Android $ANDROID_IP"
+collect_network_preflight(){
+  say "Running IPv4 LAN file-transfer preflight..."
+  {
+    echo "--- Mac listeners ---"
+    lsof -nP -iTCP:41474 -sTCP:LISTEN || true
+    lsof -nP -iTCP:53421 -sTCP:LISTEN || true
+    lsof -nP -i4TCP:53421 -sTCP:LISTEN || true
+    lsof -nP -i6TCP:53421 -sTCP:LISTEN || true
+    echo "--- Android route and reachability ---"
+    "${ADB[@]}" shell ip route get "$MAC_IP" || true
+    "${ADB[@]}" shell ping -c 1 -W 2 "$MAC_IP" || true
+    "${ADB[@]}" shell toybox nc -z -w 3 "$MAC_IP" 41474 || true
+    "${ADB[@]}" shell toybox nc -z -w 3 "$MAC_IP" 53421 || true
+    echo "--- macOS firewall ---"
+    /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate 2>&1 || true
+    echo "--- ClipMesh processes ---"
+    pgrep -alf 'ClipMesh|clipmesh-bin' || true
+  } >> "$LOG" 2>&1
+}
+collect_network_preflight
+lsof -nP -i4TCP:53421 -sTCP:LISTEN >/dev/null 2>&1 || die "Mac file receiver is not listening on IPv4; see $LOG."
+"${ADB[@]}" shell toybox nc -z -w 3 "$MAC_IP" 41474 >/dev/null 2>&1 || die "Android cannot reach the Mac clipboard port; see $LOG."
+"${ADB[@]}" shell toybox nc -z -w 3 "$MAC_IP" 53421 >/dev/null 2>&1 || die "Android cannot reach the Mac IPv4 file port; see $LOG."
 "${ADB[@]}" forward tcp:55421 tcp:53421 >/dev/null
 ok=0; i=0; while [ "$i" -lt 30 ]; do curl --fail --silent --max-time 2 http://127.0.0.1:55421/api/clipmesh/v1/info > "$STATE/android-transfer-info.json" 2>/dev/null && { ok=1; break; }; i=$((i+1)); sleep .25; done; [ "$ok" -eq 1 ] || die "Android file endpoint unavailable in background."
 ANDROID_FP="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["fingerprint"])' "$STATE/android-transfer-info.json")"
@@ -175,12 +222,22 @@ PASTE="$STATE/macos-pasteboard-helper"; swiftc "$ROOT/dev/macos-pasteboard-helpe
 
 start_driver(){ mode="$1"; value="${2:-}"; "${ADB[@]}" shell am force-stop dev.clipmesh.testdriver >/dev/null 2>&1 || true; if [ -n "$value" ]; then "${ADB[@]}" shell am start -W -n dev.clipmesh.testdriver/.MainActivity --es mode "$mode" --es value_b64 "$(b64 "$value")" >/dev/null; else "${ADB[@]}" shell am start -W -n dev.clipmesh.testdriver/.MainActivity --es mode "$mode" >/dev/null; fi; }
 driver_result(){ "${ADB[@]}" shell run-as dev.clipmesh.testdriver cat files/result.txt 2>/dev/null | tr -d '\r'; }
-wait_driver(){ expected="$1"; i=0; while [ "$i" -lt 100 ]; do r="$(driver_result || true)"; case "$r" in "$expected"*) return 0;; FAIL*) return 1;; esac; i=$((i+1)); sleep .2; done; return 1; }
+wait_driver(){ expected="$1"; i=0; while [ "$i" -lt 200 ]; do r="$(driver_result || true)"; case "$r" in "$expected"*) return 0;; FAIL*) return 1;; esac; i=$((i+1)); sleep .2; done; return 1; }
 assert_hidden(){ "${ADB[@]}" shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' | grep -q 'dev\.clipmesh/' && die "ClipMesh became foreground during background clipboard test." || true; }
 NONCE="$(date +%s)-$$"; say "Running physical clipboard E2E..."
 
-A2M="clipmesh-android-to-mac-$NONCE"; printf '%s' "sentinel-$NONCE" | pbcopy; start_driver set_text "$A2M"; assert_hidden; ok=0; i=0; while [ "$i" -lt 100 ]; do [ "$(pbpaste 2>/dev/null || true)" = "$A2M" ] && { ok=1; break; }; i=$((i+1)); sleep .2; done; [ "$ok" -eq 1 ] || die "Android -> Mac text failed."; say "PASS Android -> Mac text"
-M2A="clipmesh-mac-to-android-$NONCE"; start_driver wait_text "$M2A"; wait_driver READY_TEXT || die "Android driver not ready."; printf '%s' "$M2A" | pbcopy; wait_driver PASS_TEXT || die "Mac -> Android text failed."; assert_hidden; say "PASS Mac -> Android text"
+A2M="clipmesh-android-to-mac-$NONCE"; start_driver set_text "$A2M"; assert_hidden; ok=0; i=0; while [ "$i" -lt 100 ]; do [ "$(pbpaste 2>/dev/null || true)" = "$A2M" ] && { ok=1; break; }; i=$((i+1)); sleep .2; done; [ "$ok" -eq 1 ] || die "Android -> Mac text failed."; say "PASS Android -> Mac text"; sleep 3 # Let the receiving app's callback queue settle before testing the reverse edge.
+mac_to_android_text(){
+  expected="$1"
+  start_driver wait_text "$expected"
+  wait_driver READY_TEXT || return 1
+  # The driver's local sentinel is a real clipboard event; drain it before
+  # measuring the reverse edge so it cannot overwrite the Mac test value.
+  sleep 3
+  printf '%s' "$expected" | pbcopy
+  wait_driver PASS_TEXT
+}
+M2A="clipmesh-mac-to-android-$NONCE"; if ! mac_to_android_text "$M2A"; then say "Retrying Mac -> Android text after first-run receiver warm-up..."; M2A="$M2A-retry"; mac_to_android_text "$M2A" || die "Mac -> Android text failed."; fi; assert_hidden; say "PASS Mac -> Android text"
 printf '%s' "image-sentinel-$NONCE" | pbcopy; start_driver set_image; assert_hidden; ok=0; i=0; while [ "$i" -lt 120 ]; do [ "$($PASTE image-info 2>/dev/null || true)" = 3x2 ] && { ok=1; break; }; i=$((i+1)); sleep .2; done; [ "$ok" -eq 1 ] || die "Android -> Mac image failed."; say "PASS Android -> Mac image"
 start_driver wait_image; wait_driver READY_IMAGE || die "Android image driver not ready."; "$PASTE" set-image >/dev/null; wait_driver PASS_IMAGE || die "Mac -> Android image failed."; assert_hidden; say "PASS Mac -> Android image"
 

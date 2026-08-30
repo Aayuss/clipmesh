@@ -67,7 +67,7 @@ assert "ClipMesh-debug.apk" not in release_job
 workflow_tag_match = re.search(r'^\s*tag="(v\d+\.\d+\.\d+-alpha)"$', release_job, re.MULTILINE)
 assert workflow_tag_match is not None
 workflow_tag = workflow_tag_match.group(1)
-assert workflow_tag == "v0.2.10-alpha"
+assert workflow_tag == "v0.2.11-alpha"
 current_version = workflow_tag.removeprefix("v").removesuffix("-alpha")
 
 # README current-download metadata must stay in lockstep with the immutable
@@ -156,6 +156,7 @@ for ignored_key_type in ("*.jks", "*.keystore", "*.p12", "*.pfx"):
     assert ignored_key_type in ignore_rules
 
 assert 'patch-v032-release.py' in reconstruct
+assert 'patch-v033-ipv4-transfer.py' in reconstruct
 assert 'v0.2.10' in release_patch
 assert 'versionCode = 20' in release_patch
 assert 'version = "0.2.10"' in release_patch
@@ -168,7 +169,7 @@ generated_gradle = root / "clipmesh/android/app/build.gradle.kts"
 if system == "Linux" and generated_gradle.is_file():
     generated = generated_gradle.read_text(encoding="utf-8")
     assert "releaseTaskRequested" in generated
-    assert "versionCode = 20" in generated
-    assert 'versionName = "0.2.10"' in generated
+    assert "versionCode = 21" in generated
+    assert 'versionName = "0.2.11"' in generated
 
 print("ClipMesh release-signing policy self-test passed")

@@ -19,7 +19,7 @@ PIPELINES = {
         "patch-v021-final.py", "patch-v021-compile-hotfix.py", "patch-v022-final.py", "patch-v022-hotfix.py",
         "patch-v023-final.py", "patch-v024-repair.py", "patch-v025-nearby-pairing.py", "patch-v026-regressions.py",
         "patch-v027-macos-daemon.py", "patch-v030-finalize.py", "patch-v031-dev-test.py",
-        "patch-v032-release.py",
+        "patch-v032-release.py", "patch-v033-ipv4-transfer.py",
     ],
     "Linux": [
         "patch-features.py", "patch-sync-fixes.py",
@@ -28,7 +28,7 @@ PIPELINES = {
         "patch-v021-final.py", "patch-v021-compile-hotfix.py", "patch-v022-final.py", "patch-v022-hotfix.py",
         "patch-v023-final.py", "patch-v023-android-hotfix.py", "patch-v024-repair.py", "patch-v025-nearby-pairing.py",
         "patch-v026-regressions.py", "patch-v027-macos-daemon.py", "patch-v030-finalize.py", "patch-v031-dev-test.py",
-        "patch-v032-release.py",
+        "patch-v032-release.py", "patch-v033-ipv4-transfer.py",
     ],
     "Windows": [
         "patch-features.py", "patch-sync-fixes.py", "patch-desktop.py", "patch-windows.py",
@@ -37,7 +37,7 @@ PIPELINES = {
         "patch-v021-final.py", "patch-v021-compile-hotfix.py", "patch-v022-final.py", "patch-v022-hotfix.py",
         "patch-v023-windows.py", "patch-v024-repair.py", "patch-v025-nearby-pairing.py", "patch-v026-regressions.py",
         "patch-v027-macos-daemon.py", "patch-v030-finalize.py", "patch-v031-dev-test.py",
-        "patch-v032-release.py",
+        "patch-v032-release.py", "patch-v033-ipv4-transfer.py",
     ],
 }
 
@@ -72,7 +72,7 @@ def main() -> None:
     finally:
         platform.system = real_platform_system  # type: ignore[assignment]
 
-    print(f"[reconstruct] ClipMesh v0.2.10 target={target} ready at {generated}")
+    print(f"[reconstruct] ClipMesh v0.2.11 target={target} ready at {generated}")
 
 
 if __name__ == "__main__":
