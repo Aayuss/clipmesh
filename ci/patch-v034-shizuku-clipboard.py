@@ -4,6 +4,7 @@
 from pathlib import Path
 import os
 import platform
+import runpy
 
 root = Path(__file__).resolve().parents[1]
 project = root / "clipmesh"
@@ -38,7 +39,6 @@ if system == "Linux":
                 "import android.os.Build\nimport android.os.Binder\nimport android.os.IBinder\n",
                 "Shizuku clipboard Binder import",
             )
-            service_text = service.read_text(encoding="utf-8")
 
         broad = '''            val callingIdentity = Binder.clearCallingIdentity()\n            try {\n                val result = method.invoke(target, *args)\n                return result ?: if (method.returnType == Void.TYPE) true else null\n            } catch (error: Exception) {\n                Log.d(TAG, "Clipboard signature did not match: ${method.parameterTypes.joinToString { it.simpleName }}")\n            } finally {\n                Binder.restoreCallingIdentity(callingIdentity)\n            }\n'''
         original = '''            try {\n                val result = method.invoke(target, *args)\n                return result ?: if (method.returnType == Void.TYPE) true else null\n            } catch (error: Exception) {\n                Log.d(TAG, "Clipboard signature did not match: ${method.parameterTypes.joinToString { it.simpleName }}")\n            }\n'''
@@ -74,5 +74,10 @@ if system == "Linux":
             raise SystemExit(f"Shizuku clipboard identity guard missing after patch: {value}")
     if ".version(6)" not in final_manager:
         raise SystemExit("Shizuku UserService generation was not bumped to 6")
+
+    # build.yml still reaches v034 indirectly through v033, while reconstruct.py
+    # lists v035 explicitly. v035 is idempotent so both paths end at identical
+    # generated Android source.
+    runpy.run_path(str(root / "ci/patch-v035-e2e-observability.py"), run_name="__main__")
 
 print(f"Applied ClipMesh Shizuku background-read Binder-identity repair on {system}")
