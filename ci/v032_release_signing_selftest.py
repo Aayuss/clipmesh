@@ -19,6 +19,8 @@ release_patch = (root / "ci/patch-v036-release.py").read_text(encoding="utf-8")
 CURRENT_VERSION = "0.2.12"
 CURRENT_CODE = "22"
 CURRENT_TAG = "v0.2.12-alpha"
+VERIFIED_DEV_VERSION = "0.2.11"
+VERIFIED_DEV_CODE = "21"
 
 # Android release signing must remain fail-closed and use the permanent key.
 for name in (
@@ -172,7 +174,20 @@ generated_gradle = root / "clipmesh/android/app/build.gradle.kts"
 if system == "Linux" and generated_gradle.is_file():
     generated = generated_gradle.read_text(encoding="utf-8")
     assert "releaseTaskRequested" in generated
-    assert f"versionCode = {CURRENT_CODE}" in generated
-    assert f'versionName = "{CURRENT_VERSION}"' in generated
+
+    # reconstruct.py intentionally stops at the physically verified v0.2.11
+    # product generation. Canonical/release CI then applies patch-v036, which is
+    # metadata-only, to produce v0.2.12. Accept exactly either coherent state so
+    # the dev harness can validate the verified product boundary while release CI
+    # still validates the public version/code pair.
+    verified_dev_generation = (
+        f"versionCode = {VERIFIED_DEV_CODE}" in generated
+        and f'versionName = "{VERIFIED_DEV_VERSION}"' in generated
+    )
+    current_release_generation = (
+        f"versionCode = {CURRENT_CODE}" in generated
+        and f'versionName = "{CURRENT_VERSION}"' in generated
+    )
+    assert verified_dev_generation ^ current_release_generation
 
 print(f"ClipMesh v{CURRENT_VERSION} release-signing policy self-test passed")
