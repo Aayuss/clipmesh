@@ -1,4 +1,4 @@
-# ClipMesh v0.2.11
+# ClipMesh v0.2.12
 
 ClipMesh provides encrypted clipboard sync and direct nearby file transfer across macOS, Windows, and Android.
 
@@ -6,14 +6,26 @@ ClipMesh provides encrypted clipboard sync and direct nearby file transfer acros
 
 Download the current installers directly - there is no need to browse the Releases page:
 
-- [Download ClipMesh for macOS](https://github.com/Aayuss/clipmesh/releases/download/v0.2.11-alpha/ClipMesh-macOS.dmg)
-- [Download ClipMesh for Windows](https://github.com/Aayuss/clipmesh/releases/download/v0.2.11-alpha/ClipMesh-Windows.exe)
-- [Download ClipMesh for Android](https://github.com/Aayuss/clipmesh/releases/download/v0.2.11-alpha/ClipMesh-Android.apk)
-- [Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.11-alpha/SHA256SUMS.txt)
+- [Download ClipMesh for macOS](https://github.com/Aayuss/clipmesh/releases/download/v0.2.12-alpha/ClipMesh-macOS.dmg)
+- [Download ClipMesh for Windows](https://github.com/Aayuss/clipmesh/releases/download/v0.2.12-alpha/ClipMesh-Windows.exe)
+- [Download ClipMesh for Android](https://github.com/Aayuss/clipmesh/releases/download/v0.2.12-alpha/ClipMesh-Android.apk)
+- [Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.12-alpha/SHA256SUMS.txt)
 
-These links become live after the `Build ClipMesh` GitHub Action completes and publishes `v0.2.11-alpha`.
+These links become live after the dedicated `Release ClipMesh v0.2.12` GitHub Action completes and publishes `v0.2.12-alpha`.
 
-Release signing setup and the audited v0.2.9 Android migration are documented in [RELEASE_SIGNING.md](RELEASE_SIGNING.md). Official Android publication now fails closed unless the permanent keystore and expected certificate fingerprint are configured; pull-request and local development builds continue to use separate debug/development identities.
+Release signing setup and the audited v0.2.9 Android migration are documented in [RELEASE_SIGNING.md](RELEASE_SIGNING.md). Official Android publication fails closed unless the permanent keystore and expected certificate fingerprint are configured; pull-request and local development builds continue to use separate debug/development identities.
+
+## What changed in v0.2.12
+
+- Fixes Samsung/Android background clipboard reads through Shizuku by clearing the inbound Binder identity only for privileged `getPrimaryClip` calls while preserving the previously working clipboard write path.
+- Separates macOS file-transfer HTTP callbacks, blocking multicast discovery, announcements, and outgoing sends onto independent queues, preventing the discovery `recvfrom()` loop from starving real file-transfer requests.
+- Keeps the macOS file receiver explicitly IPv4-capable on port `53421` for Android LAN peers.
+- Hardens physical-device testing so stale Wireless Debugging endpoints and inherited `ANDROID_SERIAL` values are ignored or refreshed safely.
+- Adds direct Shizuku read/write probes, runtime clipboard-path observability, ANR checks, and an aggregate physical matrix that continues through all independent text, image, and file directions before reporting failures.
+- Physically verified on a Samsung Galaxy S23 Ultra and macOS with `TOTAL FAILURES: 0`: background Shizuku read/write, text both directions, image both directions, file transfer both directions with exact-byte/SHA-256 verification, Android background service, retained Shizuku permission, and no current-run Android ANR.
+- Increments Android to `versionName 0.2.12` and `versionCode 22` while retaining the established permanent Android release-signing identity.
+
+The exact physical verification boundary and matrix are recorded in [PHYSICAL_VERIFICATION.md](PHYSICAL_VERIFICATION.md).
 
 ## What changed in v0.2.11
 
