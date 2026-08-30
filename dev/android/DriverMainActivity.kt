@@ -57,7 +57,8 @@ class MainActivity : Activity() {
     }
 
     private fun waitText(expected: String) {
-        clipboard().setPrimaryClip(ClipData.newPlainText("ClipMesh E2E sentinel", "driver-sentinel-${System.nanoTime()}"))
+        // Waiting must not itself create a clipboard synchronization event.
+        // Every expected text value contains a unique physical-test nonce.
         write("READY_TEXT")
         poll(15_000L, predicate = {
             val clip = clipboard().primaryClip ?: return@poll false
@@ -79,7 +80,8 @@ class MainActivity : Activity() {
     }
 
     private fun waitImage() {
-        clipboard().setPrimaryClip(ClipData.newPlainText("ClipMesh E2E sentinel", "driver-image-sentinel-${System.nanoTime()}"))
+        // The harness clears stale image state before arming this receiver.
+        // Do not create an outgoing clipboard event here.
         write("READY_IMAGE")
         poll(20_000L, predicate = {
             val clip = clipboard().primaryClip ?: return@poll false
