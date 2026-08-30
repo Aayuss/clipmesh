@@ -66,7 +66,10 @@ elif system == "Linux":
     incoming = (root / "clipmesh/android/app/src/main/java/dev/clipmesh/fileshare/IncomingRequestUi.kt").read_text(encoding="utf-8")
     main = (root / "clipmesh/android/app/src/main/java/dev/clipmesh/MainActivity.kt").read_text(encoding="utf-8")
     access = (root / "clipmesh/android/app/src/main/java/dev/clipmesh/exclusion/ExclusionAccessibilityService.kt").read_text(encoding="utf-8")
-    ci_receiver = (root / "clipmesh/android/app/src/main/java/dev/clipmesh/CiBackgroundCaptureReceiver.kt").read_text(encoding="utf-8")
+    main_ci_receiver = root / "clipmesh/android/app/src/main/java/dev/clipmesh/CiBackgroundCaptureReceiver.kt"
+    debug_ci_receiver = root / "clipmesh/android/app/src/debug/java/dev/clipmesh/CiBackgroundCaptureReceiver.kt"
+    ci_receiver_path = debug_ci_receiver if debug_ci_receiver.is_file() else main_ci_receiver
+    ci_receiver = ci_receiver_path.read_text(encoding="utf-8")
     assert 'versionCode = 19' in gradle
     assert 'versionName = "0.2.9"' in gradle
     assert 'ClipMesh-ClipboardWatch' in runtime

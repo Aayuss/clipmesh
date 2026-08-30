@@ -93,6 +93,7 @@ jobs:
           python ci/v025_pairing_protocol_selftest.py
           python ci/v026_regression_selftest.py
           python ci/v027_macos_daemon_selftest.py
+          python ci/v032_release_signing_selftest.py
       - name: Test protocol core and transport
         working-directory: clipmesh
         run: |
@@ -105,6 +106,22 @@ jobs:
         run: |
           chmod +x scripts/build-macos.sh
           ./scripts/build-macos.sh
+      - name: Configure macOS release signing
+        env:
+          CLIPMESH_MACOS_CERTIFICATE_P12_B64: ${{ secrets.CLIPMESH_MACOS_CERTIFICATE_P12_B64 }}
+          CLIPMESH_MACOS_CERTIFICATE_PASSWORD: ${{ secrets.CLIPMESH_MACOS_CERTIFICATE_PASSWORD }}
+          CLIPMESH_MACOS_SIGNING_IDENTITY: ${{ secrets.CLIPMESH_MACOS_SIGNING_IDENTITY }}
+        run: bash ci/macos-release-signing.sh setup
+      - name: Apply and verify macOS release signing
+        env:
+          CLIPMESH_MACOS_SIGNING_IDENTITY: ${{ secrets.CLIPMESH_MACOS_SIGNING_IDENTITY }}
+        run: bash ci/macos-release-signing.sh sign
+      - name: Notarize macOS DMG when configured
+        env:
+          CLIPMESH_MACOS_NOTARY_APPLE_ID: ${{ secrets.CLIPMESH_MACOS_NOTARY_APPLE_ID }}
+          CLIPMESH_MACOS_NOTARY_TEAM_ID: ${{ secrets.CLIPMESH_MACOS_NOTARY_TEAM_ID }}
+          CLIPMESH_MACOS_NOTARY_PASSWORD: ${{ secrets.CLIPMESH_MACOS_NOTARY_PASSWORD }}
+        run: bash ci/macos-release-signing.sh notarize
       - name: Smoke-test and validate macOS package
         working-directory: clipmesh
         run: |
@@ -157,6 +174,9 @@ jobs:
             clipmesh/dist/macos/ClipMesh.app
             clipmesh/dist/macos/ClipMesh-icon.png
             clipmesh/dist/macos/SHA256SUMS.txt
+      - name: Remove temporary macOS signing material
+        if: always()
+        run: bash ci/macos-release-signing.sh cleanup
 
   windows:
     name: Windows EXE
@@ -231,6 +251,7 @@ jobs:
           python ci/v025_pairing_protocol_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/v026_regression_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/v027_macos_daemon_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/v032_release_signing_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Test protocol core and transport
         working-directory: clipmesh
         shell: pwsh
@@ -294,11 +315,14 @@ jobs:
           python ci/patch-v026-regressions.py
           python ci/patch-v027-macos-daemon.py
           python ci/patch-v030-finalize.py
+          python ci/patch-v031-dev-test.py
       - name: Validate Android v0.2.9 sources
         run: |
           set -euo pipefail
           M=clipmesh/android/app/src/main/AndroidManifest.xml
           J=clipmesh/android/app/src/main/java/dev/clipmesh
+          D=clipmesh/android/app/src/debug/java/dev/clipmesh
+          DM=clipmesh/android/app/src/debug/AndroidManifest.xml
           grep -q 'versionCode = 19' clipmesh/android/app/build.gradle.kts
           grep -q 'versionName = "0.2.9"' clipmesh/android/app/build.gradle.kts
           grep -q '100 Continue' "$J/fileshare/LocalTransferEngine.kt"
@@ -308,9 +332,10 @@ jobs:
           grep -q 'fun captureAccessibility' "$J/BackgroundRuntime.kt"
           grep -q 'private fun stopClipboardRuntime' "$J/BackgroundRuntime.kt"
           grep -q 'last_outgoing_at' "$J/BackgroundRuntime.kt"
-          grep -q 'class CiBackgroundCaptureReceiver' "$J/CiBackgroundCaptureReceiver.kt"
-          grep -q 'dev.clipmesh.action.CI_BACKGROUND_CAPTURE' "$M"
-          grep -q 'android.permission.DUMP' "$M"
+          test ! -e "$J/CiBackgroundCaptureReceiver.kt"
+          grep -q 'class CiBackgroundCaptureReceiver' "$D/CiBackgroundCaptureReceiver.kt"
+          grep -q 'dev.clipmesh.action.CI_BACKGROUND_CAPTURE' "$DM"
+          grep -q 'android.permission.DUMP' "$DM"
           grep -q 'fun forgetPeer' "$J/SettingsStore.kt"
           grep -q 'object ClipMeshDialog' "$J/ClipMeshDialog.kt"
           ! grep -q 'AlertDialog.Builder' "$J/fileshare/FileShareActivity.kt"
@@ -352,6 +377,7 @@ jobs:
           python ci/v025_pairing_protocol_selftest.py
           python ci/v026_regression_selftest.py
           python ci/v027_macos_daemon_selftest.py
+          python ci/v032_release_signing_selftest.py
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -365,14 +391,11 @@ jobs:
           cd clipmesh
           chmod +x android/gradlew scripts/build-android-debug.sh
           ./scripts/build-android-debug.sh
-          ./android/gradlew :app:assembleRelease --no-daemon
-          test -s android/app/build/outputs/apk/release/app-release-unsigned.apk
-      - name: Validate packaged Android APK
+      - name: Validate packaged Android debug test APK
         run: |
           set -euo pipefail
           APK=clipmesh/dist/android/ClipMesh-debug.apk
           test -s "$APK"
-          test -s clipmesh/android/app/build/outputs/apk/release/app-release-unsigned.apk
           "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest print "$APK" > /tmp/manifest.xml
           grep -q 'usesCleartextTraffic="true"' /tmp/manifest.xml
           grep -q 'dev.clipmesh.fileshare.FileShareActivity' /tmp/manifest.xml
@@ -396,9 +419,30 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: bash ci/android-v023-runtime-test.sh
+      - name: Build and verify release-signed Android APK
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          CLIPMESH_ANDROID_KEYSTORE_B64: ${{ secrets.CLIPMESH_ANDROID_KEYSTORE_B64 }}
+          CLIPMESH_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.CLIPMESH_ANDROID_KEYSTORE_PASSWORD }}
+          CLIPMESH_ANDROID_KEY_ALIAS: ${{ secrets.CLIPMESH_ANDROID_KEY_ALIAS }}
+          CLIPMESH_ANDROID_KEY_PASSWORD: ${{ secrets.CLIPMESH_ANDROID_KEY_PASSWORD }}
+          CLIPMESH_ANDROID_SIGNING_CERT_SHA256: ${{ vars.CLIPMESH_ANDROID_SIGNING_CERT_SHA256 }}
+          CLIPMESH_ANDROID_EXPECTED_PACKAGE: dev.clipmesh
+          CLIPMESH_ANDROID_EXPECTED_VERSION_NAME: 0.2.9
+          CLIPMESH_ANDROID_EXPECTED_VERSION_CODE: '19'
+        run: bash ci/build-android-release.sh
       - uses: actions/upload-artifact@v7
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         with:
           name: ClipMesh-Android
+          if-no-files-found: error
+          path: |
+            clipmesh/dist/android/ClipMesh-release.apk
+            clipmesh/dist/android/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v7
+        if: github.event_name != 'push' || github.ref != 'refs/heads/main'
+        with:
+          name: ClipMesh-Android-debug-test
           if-no-files-found: error
           path: |
             clipmesh/dist/android/ClipMesh-debug.apk
@@ -431,7 +475,7 @@ jobs:
           cp artifacts/macos/ClipMesh.dmg release/ClipMesh-macOS.dmg
           cp artifacts/macos/ClipMesh-icon.png release/ClipMesh-icon.png
           cp artifacts/windows/clipmesh.exe release/ClipMesh-Windows.exe
-          cp artifacts/android/ClipMesh-debug.apk release/ClipMesh-Android.apk
+          cp artifacts/android/ClipMesh-release.apk release/ClipMesh-Android.apk
           cd release
           sha256sum ClipMesh-macOS.dmg ClipMesh-Windows.exe ClipMesh-Android.apk > SHA256SUMS.txt
       - name: Publish v0.2.9-alpha and dev-latest

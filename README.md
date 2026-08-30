@@ -13,6 +13,8 @@ Download the current installers directly - there is no need to browse the Releas
 
 These links become live after the `Build ClipMesh` GitHub Action completes and publishes `v0.2.9-alpha`.
 
+Release signing setup and the audited v0.2.9 Android migration are documented in [RELEASE_SIGNING.md](RELEASE_SIGNING.md). Official Android publication now fails closed unless the permanent keystore and expected certificate fingerprint are configured; pull-request and local development builds continue to use separate debug/development identities.
+
 ## What changed in v0.2.9
 
 - Clipboard/network reinitialization no longer stops and immediately restarts the independent Android LAN file receiver. This removes the server cleanup race that could make File Transfer requests disappear after a background clipboard lifecycle transition.
@@ -91,11 +93,11 @@ Unknown senders use a separate high-priority Accept/Reject notification when Cli
 
 ClipMesh includes a `com.apple.share-services` extension and refreshes its registration when the app opens. macOS controls whether it is shown directly under Finder -> right-click -> Share. If it is hidden, enable ClipMesh in System Settings -> General -> Login Items & Extensions -> Sharing.
 
-The GitHub DMG is ad-hoc signed rather than Developer-ID notarized, so macOS may require a one-time approval under Privacy & Security.
+The GitHub DMG is currently ad-hoc signed rather than Developer-ID notarized, so macOS may require a one-time approval under Privacy & Security. The release workflow supports a stable Developer ID certificate and optional notarization once the documented GitHub secrets are configured; it reports the ad-hoc mode explicitly until then.
 
 ## Android installation
 
-The GitHub APK is sideloaded and can trigger Play Protect or Samsung's **Install anyway** flow. Avoiding that distribution warning requires stable release signing and recognized store distribution; it is separate from ClipMesh runtime behavior.
+The `v0.2.9-alpha` GitHub APK was debug-signed and requires one uninstall before the first permanently release-signed APK can be installed. The release workflow no longer publishes debug-signed APKs. Sideloading can still trigger Play Protect or Samsung's **Install anyway** flow; avoiding that distribution warning also requires recognized store distribution and is separate from ClipMesh runtime behavior.
 
 ## Security model
 
