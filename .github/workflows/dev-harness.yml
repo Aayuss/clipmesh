@@ -9,7 +9,9 @@ on:
       - 'dev/**'
       - 'ci/reconstruct.py'
       - 'ci/patch-v031-dev-test.py'
+      - 'ci/patch-v032-release.py'
       - 'ci/v031_devtest_selftest.py'
+      - 'ci/v032_release_signing_selftest.py'
       - '.github/workflows/dev-harness.yml'
   pull_request:
     branches: [main]
@@ -18,7 +20,9 @@ on:
       - 'dev/**'
       - 'ci/reconstruct.py'
       - 'ci/patch-v031-dev-test.py'
+      - 'ci/patch-v032-release.py'
       - 'ci/v031_devtest_selftest.py'
+      - 'ci/v032_release_signing_selftest.py'
       - '.github/workflows/dev-harness.yml'
 
 permissions:
@@ -37,7 +41,7 @@ jobs:
       - name: Validate harness scripts
         run: |
           set -euo pipefail
-          python -m py_compile ci/reconstruct.py ci/patch-v031-dev-test.py ci/v031_devtest_selftest.py dev/uia-find-allow.py
+          python -m py_compile ci/reconstruct.py ci/patch-v031-dev-test.py ci/patch-v032-release.py ci/v031_devtest_selftest.py ci/v032_release_signing_selftest.py dev/uia-find-allow.py
           bash -n dev-test.sh
           swiftc dev/macos-pasteboard-helper.swift -o /tmp/clipmesh-pasteboard-helper
           /tmp/clipmesh-pasteboard-helper image-info >/dev/null
@@ -46,6 +50,7 @@ jobs:
           set -euo pipefail
           python ci/reconstruct.py --platform Darwin
           python ci/v031_devtest_selftest.py
+          python ci/v032_release_signing_selftest.py
           grep -q -- '--dev-test-transfer-fingerprint' ci/ClipMeshApp.swift
           grep -q -- '--dev-test-send-file' ci/ClipMeshApp.swift
           grep -q 'func devTestSend' ci/ClipMeshTransfer.swift
@@ -83,6 +88,7 @@ jobs:
           set -euo pipefail
           python ci/reconstruct.py --platform Linux
           python ci/v031_devtest_selftest.py
+          python ci/v032_release_signing_selftest.py
           J=clipmesh/android/app/src/main/java/dev/clipmesh
           D=clipmesh/android/app/src/debug/java/dev/clipmesh
           DM=clipmesh/android/app/src/debug/AndroidManifest.xml

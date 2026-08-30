@@ -20,7 +20,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Reconstruct and patch v0.2.9
+      - name: Reconstruct and patch v0.2.10
         run: |
           set -euo pipefail
           python ci/prepare-icon-assets.py
@@ -47,17 +47,12 @@ jobs:
           python ci/patch-v026-regressions.py
           python ci/patch-v027-macos-daemon.py
           python ci/patch-v030-finalize.py
-          python - <<'PY'
-          from pathlib import Path
-          p = Path('clipmesh/Cargo.toml')
-          s = p.read_text()
-          p.write_text(s.replace('version = "0.1.0"', 'version = "0.2.9"', 1))
-          PY
+          python ci/patch-v032-release.py
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: clipmesh
-      - name: Validate macOS v0.2.9 sources
+      - name: Validate macOS v0.2.10 sources
         run: |
           set -euo pipefail
           grep -q 'buildClipboardPage()' ci/ClipMeshApp.swift
@@ -82,7 +77,9 @@ jobs:
           grep -q 'convenience init(title: String, handler:' ci/ClipMeshTransfer.swift
           grep -q 'TransferSelfTest' ci/ClipMeshTransfer.swift
           grep -q 'clipmesh://pair?' clipmesh/apps/desktop/src/clipboard.rs
-          grep -q 'CFBundleShortVersionString</key><string>0.2.9' clipmesh/scripts/build-macos.sh
+          grep -q 'CFBundleShortVersionString</key><string>0.2.10' clipmesh/scripts/build-macos.sh
+          grep -q 'CFBundleVersion</key><string>0.2.10' clipmesh/scripts/build-macos.sh
+          grep -q '^version = "0.2.10"$' clipmesh/Cargo.toml
           grep -q 'static func reclaimStaleDaemonListener() throws' ci/ClipMeshApp.swift
           grep -q 'Darwin.lockf(descriptor, F_TLOCK, 0)' ci/ClipMeshApp.swift
           grep -q '100 Continue' ci/ClipMeshTransfer.swift
@@ -153,13 +150,14 @@ jobs:
           from pathlib import Path
           main = plistlib.loads(Path('dist/macos/ClipMesh.app/Contents/Info.plist').read_bytes())
           ext = plistlib.loads(Path('dist/macos/ClipMesh.app/Contents/PlugIns/ClipMeshShare.appex/Contents/Info.plist').read_bytes())
-          assert main['CFBundleShortVersionString'] == '0.2.9'
+          assert main['CFBundleShortVersionString'] == '0.2.10'
+          assert main['CFBundleVersion'] == '0.2.10'
           assert ext['CFBundleIdentifier'] == 'dev.clipmesh.private.Share'
           assert ext['NSExtension']['NSExtensionPointIdentifier'] == 'com.apple.share-services'
           rule = ext['NSExtension']['NSExtensionAttributes']['NSExtensionActivationRule']
           assert rule['NSExtensionActivationSupportsFileWithMaxCount'] >= 100
           assert rule['NSExtensionActivationSupportsImageWithMaxCount'] >= 100
-          print('macOS v0.2.9 Share extension metadata validated')
+          print('macOS v0.2.10 Share extension metadata validated')
           PY
           plutil -lint dist/macos/ClipMesh.app/Contents/Info.plist
           plutil -lint dist/macos/ClipMesh.app/Contents/PlugIns/ClipMeshShare.appex/Contents/Info.plist
@@ -186,7 +184,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Reconstruct and patch v0.2.9
+      - name: Reconstruct and patch v0.2.10
         shell: pwsh
         run: |
           python ci/prepare-icon-assets.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
@@ -213,21 +211,19 @@ jobs:
           python ci/patch-v026-regressions.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/patch-v027-macos-daemon.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/patch-v030-finalize.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          $p = 'clipmesh/Cargo.toml'
-          $s = Get-Content $p -Raw
-          $s = $s -replace 'version = "0.1.0"', 'version = "0.2.9"'
-          Set-Content $p $s -Encoding utf8
+          python ci/patch-v032-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: clipmesh
-      - name: Validate Windows v0.2.9 sources
+      - name: Validate Windows v0.2.10 sources
         shell: pwsh
         run: |
           $ui = Get-Content 'ci/ClipMeshWindows.cs' -Raw
           $transfer = Get-Content 'ci/ClipMeshTransfer.cs' -Raw
           $clip = Get-Content 'clipmesh/apps/desktop/src/clipboard.rs' -Raw
-          if (-not $ui.Contains('private const string Version = "0.2.9";')) { throw 'Windows v0.2.9 runtime version missing' }
+          if (-not $ui.Contains('private const string Version = "0.2.10";')) { throw 'Windows v0.2.10 runtime version missing' }
+          if (-not (Get-Content 'clipmesh/Cargo.toml' -Raw).Contains('version = "0.2.10"')) { throw 'Cargo v0.2.10 package version missing' }
           if (-not $transfer.Contains('100 Continue')) { throw 'Windows Expect handshake missing' }
           if ($ui.Contains('MessageBox.Show') -or $transfer.Contains('MessageBox.Show')) { throw 'Native Windows dialogs remain' }
           if (-not $ui.Contains('"Clipboard", "File transfer", "Settings"')) { throw 'Left navigation missing' }
@@ -271,7 +267,7 @@ jobs:
           Remove-Item -Recurse -Force $roaming,$local -ErrorAction SilentlyContinue
           $process = Start-Process -FilePath '.\dist\windows\clipmesh.exe' -ArgumentList '--smoke-test' -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "Windows smoke test failed with exit code $($process.ExitCode)" }
-          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.2.9\clipmesh-bin.exe'))) { throw 'Windows v0.2.9 runtime missing' }
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.2.10\clipmesh-bin.exe'))) { throw 'Windows v0.2.10 runtime missing' }
           $hash = (Get-FileHash dist\windows\clipmesh.exe -Algorithm SHA256).Hash.ToLower()
           "$hash  clipmesh.exe" | Set-Content -Encoding ascii dist\windows\SHA256SUMS.txt
       - uses: actions/upload-artifact@v7
@@ -290,7 +286,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Reconstruct and patch v0.2.9
+      - name: Reconstruct and patch v0.2.10
         run: |
           set -euo pipefail
           python ci/prepare-icon-assets.py
@@ -316,15 +312,17 @@ jobs:
           python ci/patch-v027-macos-daemon.py
           python ci/patch-v030-finalize.py
           python ci/patch-v031-dev-test.py
-      - name: Validate Android v0.2.9 sources
+          python ci/patch-v032-release.py
+      - name: Validate Android v0.2.10 sources
         run: |
           set -euo pipefail
           M=clipmesh/android/app/src/main/AndroidManifest.xml
           J=clipmesh/android/app/src/main/java/dev/clipmesh
           D=clipmesh/android/app/src/debug/java/dev/clipmesh
           DM=clipmesh/android/app/src/debug/AndroidManifest.xml
-          grep -q 'versionCode = 19' clipmesh/android/app/build.gradle.kts
-          grep -q 'versionName = "0.2.9"' clipmesh/android/app/build.gradle.kts
+          grep -q 'versionCode = 20' clipmesh/android/app/build.gradle.kts
+          grep -q 'versionName = "0.2.10"' clipmesh/android/app/build.gradle.kts
+          grep -q '^version = "0.2.10"$' clipmesh/Cargo.toml
           grep -q '100 Continue' "$J/fileshare/LocalTransferEngine.kt"
           grep -q 'clipboard?.primaryClip' "$J/exclusion/ExclusionAccessibilityService.kt"
           grep -q 'BackgroundRuntime.captureAccessibility(clip)' "$J/exclusion/ExclusionAccessibilityService.kt"
@@ -404,7 +402,8 @@ jobs:
           grep -q 'android.permission.DUMP' /tmp/manifest.xml
           grep -q 'android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE' /tmp/manifest.xml
           grep -q 'dev.clipmesh.fileshare.TransferBootReceiver' /tmp/manifest.xml
-          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-name "$APK" | grep -qx '0.2.9'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-name "$APK" | grep -qx '0.2.10'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-code "$APK" | grep -qx '20'
           sha256sum "$APK" > clipmesh/dist/android/SHA256SUMS.txt
       - name: Enable KVM
         run: |
@@ -428,8 +427,8 @@ jobs:
           CLIPMESH_ANDROID_KEY_PASSWORD: ${{ secrets.CLIPMESH_ANDROID_KEY_PASSWORD }}
           CLIPMESH_ANDROID_SIGNING_CERT_SHA256: ${{ vars.CLIPMESH_ANDROID_SIGNING_CERT_SHA256 }}
           CLIPMESH_ANDROID_EXPECTED_PACKAGE: dev.clipmesh
-          CLIPMESH_ANDROID_EXPECTED_VERSION_NAME: 0.2.9
-          CLIPMESH_ANDROID_EXPECTED_VERSION_CODE: '19'
+          CLIPMESH_ANDROID_EXPECTED_VERSION_NAME: 0.2.10
+          CLIPMESH_ANDROID_EXPECTED_VERSION_CODE: '20'
         run: bash ci/build-android-release.sh
       - uses: actions/upload-artifact@v7
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -478,19 +477,19 @@ jobs:
           cp artifacts/android/ClipMesh-release.apk release/ClipMesh-Android.apk
           cd release
           sha256sum ClipMesh-macOS.dmg ClipMesh-Windows.exe ClipMesh-Android.apk > SHA256SUMS.txt
-      - name: Publish v0.2.9-alpha and dev-latest
+      - name: Publish v0.2.10-alpha and dev-latest
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          tag="v0.2.9-alpha"
+          tag="v0.2.10-alpha"
           dev_tag="dev-latest"
           assets=(release/ClipMesh-macOS.dmg release/ClipMesh-Windows.exe release/ClipMesh-Android.apk release/ClipMesh-icon.png release/SHA256SUMS.txt)
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "$tag already exists. Leaving its tag and assets immutable; bump the version for another release."
           else
-            gh release create "$tag" "${assets[@]}" --title "ClipMesh v0.2.9-alpha" --generate-notes --target "$GITHUB_SHA" --prerelease
+            gh release create "$tag" "${assets[@]}" --title "ClipMesh v0.2.10-alpha" --generate-notes --target "$GITHUB_SHA" --prerelease
           fi
 
           if gh release view "$dev_tag" >/dev/null 2>&1; then

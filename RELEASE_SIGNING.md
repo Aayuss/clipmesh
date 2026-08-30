@@ -4,41 +4,35 @@ As audited on 2026-08-30, GitHub Actions had no release-signing secrets configur
 
 ## Android: create the permanent release key once
 
-Run this once on a trusted Mac. Choose strong, unique store and key passwords when `keytool` prompts:
+The first intended permanent-key release is `v0.2.10-alpha` (`versionName 0.2.10`, `versionCode 20`). Run the repository bootstrap exactly once from the ClipMesh checkout on the trusted, persistent Mac that will retain the keystore. It requires Java `keytool`, macOS Keychain, and an authenticated GitHub CLI account that can access `Aayuss/clipmesh`:
 
 ```bash
-keytool -genkeypair -v \
-  -keystore clipmesh-android-release.jks \
-  -alias clipmesh-release \
-  -keyalg RSA -keysize 4096 -validity 10000 \
-  -dname "CN=ClipMesh Android Release,O=ClipMesh,C=NP"
+./scripts/setup-android-release-signing.sh
 ```
 
-Copy the single-line base64 keystore value on macOS:
+The script is safe to rerun. It never generates a key in CI, refuses to overwrite an existing keystore, and fails without changing anything when it detects partial local state. On first use it creates an explicit JKS RSA-4096 key with alias `clipmesh-release` and approximately 27 years of validity at:
 
-```bash
-base64 < clipmesh-android-release.jks | tr -d '\n' | pbcopy
+```text
+~/.clipmesh-release-signing/clipmesh-android-release.jks
 ```
 
-Calculate the expected certificate SHA-256 fingerprint. This value is public and safe to store as a GitHub Actions variable:
+The directory is mode `700`, the keystore is mode `600`, and separate random store/key passwords are retained in the login Keychain under these service names:
 
-```bash
-keytool -exportcert \
-  -keystore clipmesh-android-release.jks \
-  -alias clipmesh-release \
-  | openssl dgst -sha256
-```
+- `ClipMesh Android Release Keystore Password`
+- `ClipMesh Android Release Key Password`
 
-In GitHub, open **Settings -> Secrets and variables -> Actions**. Create these repository secrets exactly:
+After locally validating the alias and public certificate fingerprint, the script streams values directly to authenticated `gh` commands. It creates these repository secrets exactly:
 
-- `CLIPMESH_ANDROID_KEYSTORE_B64`: the base64 value copied above.
+- `CLIPMESH_ANDROID_KEYSTORE_B64`: the base64-encoded permanent JKS.
 - `CLIPMESH_ANDROID_KEYSTORE_PASSWORD`: the keystore password.
-- `CLIPMESH_ANDROID_KEY_ALIAS`: `clipmesh-release` if the command above was used.
+- `CLIPMESH_ANDROID_KEY_ALIAS`: `clipmesh-release`.
 - `CLIPMESH_ANDROID_KEY_PASSWORD`: the private-key password.
 
-Create this repository variable exactly:
+It also creates this repository variable exactly:
 
-- `CLIPMESH_ANDROID_SIGNING_CERT_SHA256`: the 64 hexadecimal characters from the `openssl` output. Colons and letter case are accepted.
+- `CLIPMESH_ANDROID_SIGNING_CERT_SHA256`: the normalized 64-character public certificate fingerprint.
+
+The final verification reads and reports only configured secret/variable names, never their values. It prints the public certificate fingerprint because that identifier is intentionally non-secret.
 
 Then rerun the failed `Build ClipMesh` workflow or push the next intended release commit. The workflow decodes the keystore only into the runner's temporary directory, builds `assembleRelease`, deletes the temporary keystore, and refuses publication unless all of these checks pass:
 
@@ -46,6 +40,7 @@ Then rerun the failed `Build ClipMesh` workflow or push the next intended releas
 - The signer certificate matches `CLIPMESH_ANDROID_SIGNING_CERT_SHA256`.
 - Package name is `dev.clipmesh`.
 - `versionName` and `versionCode` match the release workflow.
+- No CI receiver, development receiver/provider, or test-driver package is present in the release manifest.
 - The publication job receives `ClipMesh-release.apk`; it has no debug-APK fallback.
 
 > **BACK UP THE KEYSTORE AND BOTH PASSWORDS OFFLINE IN AT LEAST TWO SECURE LOCATIONS.** Losing this key prevents future APKs from updating installations signed by it. Do not commit the keystore, its base64 form, or either password.
@@ -68,7 +63,7 @@ When an Apple Developer ID Application certificate is available, export it with 
 - `CLIPMESH_MACOS_CERTIFICATE_PASSWORD`: the `.p12` export password.
 - `CLIPMESH_MACOS_SIGNING_IDENTITY`: the full identity, such as `Developer ID Application: Name (TEAMID)`.
 
-The workflow imports that certificate into a temporary keychain, signs the Finder Share extension and app inside-out with the hardened runtime and timestamp, recreates and signs the DMG, verifies the identity, and removes the temporary keychain.
+The workflow imports that certificate into a temporary keychain, discovers and signs every actual nested Mach-O executable/helper/dylib plus frameworks, XPC services, nested apps and extensions inside-out with the same hardened-runtime identity and timestamp, then signs the outer app. It explicitly verifies every code object's authority and TeamIdentifier instead of relying on `codesign --deep`, recreates and signs the DMG, and removes the temporary keychain.
 
 Optional notarization requires all three additional repository secrets:
 

@@ -66,11 +66,97 @@ sign_package() {
   : "${CLIPMESH_MACOS_SIGNING_IDENTITY:?Signing identity is required}"
   : "${CLIPMESH_MACOS_SIGNING_KEYCHAIN:?Temporary signing keychain is required}"
   local extension="$APP/Contents/PlugIns/ClipMeshShare.appex"
+  local daemon="$APP/Contents/MacOS/clipmesh-bin"
   [ -d "$extension" ] || { echo "ERROR: Finder Share extension is missing." >&2; exit 1; }
-  codesign --force --options runtime --timestamp --sign "$CLIPMESH_MACOS_SIGNING_IDENTITY" --keychain "$CLIPMESH_MACOS_SIGNING_KEYCHAIN" "$extension"
-  codesign --force --options runtime --timestamp --sign "$CLIPMESH_MACOS_SIGNING_IDENTITY" --keychain "$CLIPMESH_MACOS_SIGNING_KEYCHAIN" "$APP"
+  [ -f "$daemon" ] || { echo "ERROR: bundled clipmesh-bin daemon is missing." >&2; exit 1; }
+  file -b "$daemon" | grep -q 'Mach-O' || { echo "ERROR: bundled clipmesh-bin is not Mach-O code." >&2; exit 1; }
+
+  # Sign actual code first, then nested bundles from deepest to shallowest, and
+  # finally the outer app. `--deep` is deliberately not used as a signing
+  # shortcut: every discovered Mach-O/helper/dylib/framework/XPC/app receives
+  # the same hardened-runtime Developer ID signature explicitly.
+  local temp_root="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
+  local macho_manifest bundle_manifest
+  macho_manifest="$(mktemp "$temp_root/clipmesh-macho-code.XXXXXX")"
+  bundle_manifest="$(mktemp "$temp_root/clipmesh-nested-bundles.XXXXXX")"
+  cleanup_sign_manifests() {
+    rm -f "$macho_manifest" "$bundle_manifest"
+  }
+  trap cleanup_sign_manifests EXIT INT TERM
+
+  find "$APP/Contents" -type f -print | while IFS= read -r candidate; do
+    if file -b "$candidate" | grep -q 'Mach-O'; then
+      printf '%s\n' "$candidate" >> "$macho_manifest"
+    fi
+  done
+  grep -Fx "$daemon" "$macho_manifest" >/dev/null || {
+    echo "ERROR: clipmesh-bin was not included in the Mach-O signing manifest." >&2
+    exit 1
+  }
+  find "$APP/Contents" -type d \( \
+      -name '*.framework' -o -name '*.xpc' -o -name '*.appex' -o -name '*.app' \
+    \) -print \
+    | awk '{ print length($0) "\t" $0 }' \
+    | sort -rn \
+    | cut -f2- > "$bundle_manifest"
+
+  while IFS= read -r code_path; do
+    [ -n "$code_path" ] || continue
+    codesign --force --options runtime --timestamp \
+      --sign "$CLIPMESH_MACOS_SIGNING_IDENTITY" \
+      --keychain "$CLIPMESH_MACOS_SIGNING_KEYCHAIN" "$code_path"
+  done < "$macho_manifest"
+  while IFS= read -r bundle_path; do
+    [ -n "$bundle_path" ] || continue
+    codesign --force --options runtime --timestamp \
+      --sign "$CLIPMESH_MACOS_SIGNING_IDENTITY" \
+      --keychain "$CLIPMESH_MACOS_SIGNING_KEYCHAIN" "$bundle_path"
+  done < "$bundle_manifest"
+  codesign --force --options runtime --timestamp \
+    --sign "$CLIPMESH_MACOS_SIGNING_IDENTITY" \
+    --keychain "$CLIPMESH_MACOS_SIGNING_KEYCHAIN" "$APP"
+
+  codesign --verify --strict --verbose=2 "$APP"
+  local app_metadata team_identifier
+  app_metadata="$(codesign -dv --verbose=4 "$APP" 2>&1)"
+  printf '%s\n' "$app_metadata" | grep -Fx "Authority=$CLIPMESH_MACOS_SIGNING_IDENTITY" >/dev/null || {
+    echo "ERROR: outer app authority does not match the configured Developer ID identity." >&2
+    exit 1
+  }
+  team_identifier="$(printf '%s\n' "$app_metadata" | awk -F= '/^TeamIdentifier=/{print $2; exit}')"
+  [ -n "$team_identifier" ] && [ "$team_identifier" != "not set" ] || {
+    echo "ERROR: outer app is missing a Developer ID TeamIdentifier." >&2
+    exit 1
+  }
+
+  verify_nested_code() {
+    local code_path="$1"
+    local metadata nested_team
+    codesign --verify --strict --verbose=2 "$code_path"
+    metadata="$(codesign -dv --verbose=4 "$code_path" 2>&1)"
+    printf '%s\n' "$metadata" | grep -Fx "Authority=$CLIPMESH_MACOS_SIGNING_IDENTITY" >/dev/null || {
+      echo "ERROR: signing authority mismatch: $code_path" >&2
+      exit 1
+    }
+    nested_team="$(printf '%s\n' "$metadata" | awk -F= '/^TeamIdentifier=/{print $2; exit}')"
+    [ "$nested_team" = "$team_identifier" ] || {
+      echo "ERROR: TeamIdentifier mismatch: $code_path" >&2
+      exit 1
+    }
+  }
+
+  while IFS= read -r code_path; do
+    [ -n "$code_path" ] || continue
+    verify_nested_code "$code_path"
+  done < "$macho_manifest"
+  while IFS= read -r bundle_path; do
+    [ -n "$bundle_path" ] || continue
+    verify_nested_code "$bundle_path"
+  done < "$bundle_manifest"
+  # Supplementary whole-bundle validation after explicit per-object checks.
   codesign --verify --deep --strict --verbose=2 "$APP"
-  codesign -dv --verbose=4 "$APP" 2>&1 | grep -F "Authority=$CLIPMESH_MACOS_SIGNING_IDENTITY" >/dev/null
+  cleanup_sign_manifests
+  trap - EXIT INT TERM
 
   local dmg_root="$ROOT/clipmesh/dist/macos/dmg-release-root"
   rm -rf "$dmg_root"
@@ -82,7 +168,8 @@ sign_package() {
   rm -rf "$dmg_root"
   codesign --force --timestamp --sign "$CLIPMESH_MACOS_SIGNING_IDENTITY" --keychain "$CLIPMESH_MACOS_SIGNING_KEYCHAIN" "$DMG"
   codesign --verify --verbose=2 "$DMG"
-  echo "Verified macOS signing mode: Developer ID. Notarization is a separate optional step."
+  codesign -dv --verbose=4 "$DMG" 2>&1 | grep -Fx "Authority=$CLIPMESH_MACOS_SIGNING_IDENTITY" >/dev/null
+  echo "Verified every nested macOS code object with Developer ID TeamIdentifier=$team_identifier. Notarization is a separate optional step."
 }
 
 notarize() {

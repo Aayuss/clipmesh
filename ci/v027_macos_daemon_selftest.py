@@ -47,11 +47,11 @@ if system == "Darwin":
     assert 'guard isRunning && isServerReady else' in transfer
     assert 'listener.stateUpdateHandler' in transfer
     assert '.filter { visibleDevices.contains($0.fingerprint) || favorites.contains($0.fingerprint) }' not in transfer
-    assert 'CFBundleShortVersionString</key><string>0.2.9' in build
+    assert 'CFBundleShortVersionString</key><string>0.2.10' in build
 elif system == "Windows":
     ui = (root / "ci/ClipMeshWindows.cs").read_text(encoding="utf-8")
     transfer = (root / "ci/ClipMeshTransfer.cs").read_text(encoding="utf-8")
-    assert 'private const string Version = "0.2.9";' in ui
+    assert 'private const string Version = "0.2.10";' in ui
     assert 'LocalTransferManagerC.Shared.SetUiVisible(false);' in ui
     assert 'private readonly HashSet<string> visibleDevices' in transfer
     assert '{"visible", uiVisible}' in transfer
@@ -70,8 +70,8 @@ elif system == "Linux":
     debug_ci_receiver = root / "clipmesh/android/app/src/debug/java/dev/clipmesh/CiBackgroundCaptureReceiver.kt"
     ci_receiver_path = debug_ci_receiver if debug_ci_receiver.is_file() else main_ci_receiver
     ci_receiver = ci_receiver_path.read_text(encoding="utf-8")
-    assert 'versionCode = 19' in gradle
-    assert 'versionName = "0.2.9"' in gradle
+    assert 'versionCode = 20' in gradle
+    assert 'versionName = "0.2.10"' in gradle
     assert 'ClipMesh-ClipboardWatch' in runtime
     assert '650L' in runtime
     assert 'shizuku.hasPermission()' in runtime
@@ -104,4 +104,4 @@ elif system == "Linux":
 else:
     raise AssertionError(f"unsupported platform {system}")
 
-print(f"ClipMesh v0.2.9 final background/transfer regression self-test passed on {system}")
+print(f"ClipMesh v0.2.10 final background/transfer regression self-test passed on {system}")

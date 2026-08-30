@@ -5,8 +5,8 @@ ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 ANDROID="$ROOT/clipmesh/android"
 DIST="$ROOT/clipmesh/dist/android"
 EXPECTED_PACKAGE="${CLIPMESH_ANDROID_EXPECTED_PACKAGE:-dev.clipmesh}"
-EXPECTED_VERSION_NAME="${CLIPMESH_ANDROID_EXPECTED_VERSION_NAME:-0.2.9}"
-EXPECTED_VERSION_CODE="${CLIPMESH_ANDROID_EXPECTED_VERSION_CODE:-19}"
+EXPECTED_VERSION_NAME="${CLIPMESH_ANDROID_EXPECTED_VERSION_NAME:-0.2.10}"
+EXPECTED_VERSION_CODE="${CLIPMESH_ANDROID_EXPECTED_VERSION_CODE:-20}"
 
 required=(
   CLIPMESH_ANDROID_KEYSTORE_B64
@@ -97,10 +97,16 @@ manifest="$($APKANALYZER manifest print "$APK")"
 [ "$actual_package" = "$EXPECTED_PACKAGE" ] || { echo "ERROR: package is $actual_package, expected $EXPECTED_PACKAGE." >&2; exit 1; }
 [ "$actual_version_name" = "$EXPECTED_VERSION_NAME" ] || { echo "ERROR: versionName is $actual_version_name, expected $EXPECTED_VERSION_NAME." >&2; exit 1; }
 [ "$actual_version_code" = "$EXPECTED_VERSION_CODE" ] || { echo "ERROR: versionCode is $actual_version_code, expected $EXPECTED_VERSION_CODE." >&2; exit 1; }
-if printf '%s\n' "$manifest" | grep -q 'dev.clipmesh.CiBackgroundCaptureReceiver'; then
-  echo "ERROR: the debug-only Android CI receiver leaked into the release APK." >&2
-  exit 1
-fi
+for debug_component in \
+  dev.clipmesh.CiBackgroundCaptureReceiver \
+  dev.clipmesh.DevTestReceiver \
+  dev.clipmesh.DevTestFileProvider \
+  dev.clipmesh.testdriver; do
+  if printf '%s\n' "$manifest" | grep -q "$debug_component"; then
+    echo "ERROR: debug-only Android component leaked into the release APK: $debug_component" >&2
+    exit 1
+  fi
+done
 
 mkdir -p "$DIST"
 cp "$APK" "$DIST/ClipMesh-release.apk"

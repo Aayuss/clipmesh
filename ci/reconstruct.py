@@ -19,6 +19,7 @@ PIPELINES = {
         "patch-v021-final.py", "patch-v021-compile-hotfix.py", "patch-v022-final.py", "patch-v022-hotfix.py",
         "patch-v023-final.py", "patch-v024-repair.py", "patch-v025-nearby-pairing.py", "patch-v026-regressions.py",
         "patch-v027-macos-daemon.py", "patch-v030-finalize.py", "patch-v031-dev-test.py",
+        "patch-v032-release.py",
     ],
     "Linux": [
         "patch-features.py", "patch-sync-fixes.py",
@@ -27,6 +28,7 @@ PIPELINES = {
         "patch-v021-final.py", "patch-v021-compile-hotfix.py", "patch-v022-final.py", "patch-v022-hotfix.py",
         "patch-v023-final.py", "patch-v023-android-hotfix.py", "patch-v024-repair.py", "patch-v025-nearby-pairing.py",
         "patch-v026-regressions.py", "patch-v027-macos-daemon.py", "patch-v030-finalize.py", "patch-v031-dev-test.py",
+        "patch-v032-release.py",
     ],
     "Windows": [
         "patch-features.py", "patch-sync-fixes.py", "patch-desktop.py", "patch-windows.py",
@@ -35,6 +37,7 @@ PIPELINES = {
         "patch-v021-final.py", "patch-v021-compile-hotfix.py", "patch-v022-final.py", "patch-v022-hotfix.py",
         "patch-v023-windows.py", "patch-v024-repair.py", "patch-v025-nearby-pairing.py", "patch-v026-regressions.py",
         "patch-v027-macos-daemon.py", "patch-v030-finalize.py", "patch-v031-dev-test.py",
+        "patch-v032-release.py",
     ],
 }
 
@@ -69,13 +72,7 @@ def main() -> None:
     finally:
         platform.system = real_platform_system  # type: ignore[assignment]
 
-    if target in {"Darwin", "Windows"}:
-        cargo = generated / "Cargo.toml"
-        text = cargo.read_text(encoding="utf-8")
-        if 'version = "0.1.0"' in text:
-            cargo.write_text(text.replace('version = "0.1.0"', 'version = "0.2.9"', 1), encoding="utf-8")
-
-    print(f"[reconstruct] ClipMesh v0.2.9 target={target} ready at {generated}")
+    print(f"[reconstruct] ClipMesh v0.2.10 target={target} ready at {generated}")
 
 
 if __name__ == "__main__":

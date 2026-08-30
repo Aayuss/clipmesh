@@ -1,0 +1,5 @@
+*.jks
+*.keystore
+*.p12
+*.pfx
+.clipmesh-release-signing/
