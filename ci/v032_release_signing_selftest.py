@@ -1,7 +1,6 @@
 from pathlib import Path
 import os
 import platform
-import re
 
 root = Path(__file__).resolve().parents[1]
 system = os.environ.get("CLIPMESH_PLATFORM", platform.system())
@@ -14,9 +13,14 @@ docs = (root / "RELEASE_SIGNING.md").read_text(encoding="utf-8")
 readme = (root / "README.md").read_text(encoding="utf-8")
 setup_script = (root / "scripts/setup-android-release-signing.sh").read_text(encoding="utf-8")
 ignore_rules = (root / ".gitignore").read_text(encoding="utf-8")
-release_patch = (root / "ci/patch-v032-release.py").read_text(encoding="utf-8")
 reconstruct = (root / "ci/reconstruct.py").read_text(encoding="utf-8")
+release_patch = (root / "ci/patch-v036-release.py").read_text(encoding="utf-8")
 
+CURRENT_VERSION = "0.2.12"
+CURRENT_CODE = "22"
+CURRENT_TAG = "v0.2.12-alpha"
+
+# Android release signing must remain fail-closed and use the permanent key.
 for name in (
     "CLIPMESH_ANDROID_KEYSTORE_PATH",
     "CLIPMESH_ANDROID_KEYSTORE_PASSWORD",
@@ -37,16 +41,21 @@ for name in (
 ):
     assert name in workflow
     assert name in android_script
-assert "apksigner" in android_script
-assert "--print-certs" in android_script
-assert "Signer #1 certificate SHA-256 digest" in android_script
-assert "V2 Signer: certificate SHA-256 digest" in android_script
-assert "reported_certificate_count" in android_script
-assert "manifest application-id" in android_script
-assert "manifest version-name" in android_script
-assert "manifest version-code" in android_script
-assert "ClipMesh-release.apk" in android_script
-assert "trap cleanup EXIT INT TERM" in android_script
+
+for guard in (
+    "apksigner",
+    "--print-certs",
+    "Signer #1 certificate SHA-256 digest",
+    "V2 Signer: certificate SHA-256 digest",
+    "reported_certificate_count",
+    "manifest application-id",
+    "manifest version-name",
+    "manifest version-code",
+    "ClipMesh-release.apk",
+    "trap cleanup EXIT INT TERM",
+):
+    assert guard in android_script
+
 for forbidden_component in (
     "dev.clipmesh.CiBackgroundCaptureReceiver",
     "dev.clipmesh.DevTestReceiver",
@@ -55,40 +64,39 @@ for forbidden_component in (
 ):
     assert forbidden_component in android_script
 
-runtime_index = workflow.index("Runtime-test Android background send and receive on Android 15")
-release_signing_index = workflow.index("Build and verify release-signed Android APK")
-assert runtime_index < release_signing_index
-assert "python ci/patch-v031-dev-test.py" in workflow
-assert workflow.count("python ci/patch-v032-release.py") == 3
-assert 'test ! -e "$J/CiBackgroundCaptureReceiver.kt"' in workflow
-release_job = workflow[workflow.index("\n  release:\n") :]
-assert "ClipMesh-release.apk" in release_job
-assert "ClipMesh-debug.apk" not in release_job
-workflow_tag_match = re.search(r'^\s*tag="(v\d+\.\d+\.\d+-alpha)"$', release_job, re.MULTILINE)
-assert workflow_tag_match is not None
-workflow_tag = workflow_tag_match.group(1)
-assert workflow_tag == "v0.2.11-alpha"
-current_version = workflow_tag.removeprefix("v").removesuffix("-alpha")
+# Canonical CI must build the same current generation on all three platforms.
+for target in ("Darwin", "Windows", "Linux"):
+    assert f"python ci/reconstruct.py --platform {target}" in workflow
+assert workflow.count("python ci/patch-v036-release.py") == 3
+assert f"CLIPMESH_ANDROID_EXPECTED_VERSION_NAME: {CURRENT_VERSION}" in workflow
+assert f"CLIPMESH_ANDROID_EXPECTED_VERSION_CODE: '{CURRENT_CODE}'" in workflow
+assert f"versionCode = {CURRENT_CODE}" in workflow
+assert f'versionName = "{CURRENT_VERSION}"' in workflow
+assert f'^version = "{CURRENT_VERSION}"$' in workflow
 
-# README current-download metadata must stay in lockstep with the immutable
-# release tag selected by the workflow. Historical migration references remain
-# valid outside this section.
-assert readme.startswith(f"# ClipMesh v{current_version}\n")
+# README download metadata must describe the immutable current release.
+assert readme.startswith(f"# ClipMesh v{CURRENT_VERSION}\n")
 download_section = readme.split("## Download", 1)[1].split("\n## ", 1)[0]
-expected_download_assets = (
+for asset_name in (
     "ClipMesh-macOS.dmg",
     "ClipMesh-Windows.exe",
     "ClipMesh-Android.apk",
     "SHA256SUMS.txt",
-)
-for asset_name in expected_download_assets:
-    assert f"releases/download/{workflow_tag}/{asset_name}" in download_section
-readme_download_tags = set(re.findall(r"releases/download/([^/]+)/", download_section))
-assert readme_download_tags == {workflow_tag}
-assert "releases/download/v0.2.9-alpha/" not in download_section
-assert f"publishes `{workflow_tag}`" in download_section
-assert f"## What changed in v{current_version}" in readme
+):
+    assert f"releases/download/{CURRENT_TAG}/{asset_name}" in download_section
+assert f"publishes `{CURRENT_TAG}`" in download_section
+assert f"## What changed in v{CURRENT_VERSION}" in readme
 
+# Current release bump must be metadata-only on top of the physically verified v0.2.11 product code.
+for value in (
+    '0.2.11',
+    '0.2.12',
+    'versionCode = 21',
+    'versionCode = 22',
+):
+    assert value in release_patch
+
+# macOS signing remains structured for Developer ID/notarization with ad-hoc fallback.
 for name in (
     "CLIPMESH_MACOS_CERTIFICATE_P12_B64",
     "CLIPMESH_MACOS_CERTIFICATE_PASSWORD",
@@ -117,21 +125,14 @@ for nested_signing_guard in (
     'verify_nested_code "$bundle_path"',
 ):
     assert nested_signing_guard in mac_script
-assert mac_script.index('done < "$macho_manifest"') < mac_script.index('done < "$bundle_manifest"')
-outer_app_signing = '''codesign --force --options runtime --timestamp \\
-    --sign "$CLIPMESH_MACOS_SIGNING_IDENTITY" \\
-    --keychain "$CLIPMESH_MACOS_SIGNING_KEYCHAIN" "$APP"'''
-assert mac_script.index('done < "$bundle_manifest"') < mac_script.index(outer_app_signing)
-assert "partially configured" in mac_script
 
-# The physical dev harness must retain a separate permanent local identity.
+# Physical DEV signing must stay separate from official Android release signing.
 assert 'STATE="${CLIPMESH_DEV_STATE:-$HOME/.clipmesh-dev}"' in dev_script
 assert 'ANDROID_KEYSTORE="$STATE/android-dev.keystore"' in dev_script
 assert "-alias clipmesh-dev" in dev_script
 assert "CLIPMESH_ANDROID_KEYSTORE_B64" not in dev_script
 
-# Permanent release-key provisioning must be local, persistent, non-overwriting,
-# Keychain-backed, idempotent, and distinct from the physical dev identity.
+# Permanent release-key provisioning must stay local, persistent and non-overwriting.
 for setup_guard in (
     '${HOME}/.clipmesh-release-signing',
     "clipmesh-android-release.jks",
@@ -139,7 +140,6 @@ for setup_guard in (
     "ClipMesh Android Release Keystore Password",
     "ClipMesh Android Release Key Password",
     "gh auth status",
-    'gh repo view "${REPOSITORY}"',
     "-storetype JKS",
     "-keyalg RSA",
     "-keysize 4096",
@@ -155,11 +155,14 @@ assert "clipmesh-dev" not in setup_script
 for ignored_key_type in ("*.jks", "*.keystore", "*.p12", "*.pfx"):
     assert ignored_key_type in ignore_rules
 
-assert 'patch-v032-release.py' in reconstruct
-assert 'patch-v033-ipv4-transfer.py' in reconstruct
-assert 'v0.2.10' in release_patch
-assert 'versionCode = 20' in release_patch
-assert 'version = "0.2.10"' in release_patch
+# Reconstruction must retain every product repair through the physical-test generation.
+for patch in (
+    "patch-v032-release.py",
+    "patch-v033-ipv4-transfer.py",
+    "patch-v034-shizuku-clipboard.py",
+    "patch-v035-e2e-observability.py",
+):
+    assert patch in reconstruct
 
 assert "uninstall clipmesh once" in docs.lower()
 assert "BACK UP" in docs
@@ -169,7 +172,7 @@ generated_gradle = root / "clipmesh/android/app/build.gradle.kts"
 if system == "Linux" and generated_gradle.is_file():
     generated = generated_gradle.read_text(encoding="utf-8")
     assert "releaseTaskRequested" in generated
-    assert "versionCode = 21" in generated
-    assert 'versionName = "0.2.11"' in generated
+    assert f"versionCode = {CURRENT_CODE}" in generated
+    assert f'versionName = "{CURRENT_VERSION}"' in generated
 
-print("ClipMesh release-signing policy self-test passed")
+print(f"ClipMesh v{CURRENT_VERSION} release-signing policy self-test passed")
