@@ -2,6 +2,7 @@
 from pathlib import Path
 import os
 import platform
+import runpy
 
 root = Path(__file__).resolve().parents[1]
 system = os.environ.get("CLIPMESH_PLATFORM", platform.system())
@@ -46,6 +47,9 @@ elif system == "Linux":
     gradle = (root / "clipmesh/android/app/build.gradle.kts").read_text(encoding="utf-8")
     assert "versionCode = 21" in gradle
     assert 'versionName = "0.2.11"' in gradle
+    # build.yml invokes this v033 self-test, so transitively require the v034
+    # Shizuku repair even in the legacy explicit release workflow.
+    runpy.run_path(str(root / "ci/v034_shizuku_clipboard_selftest.py"), run_name="__main__")
 elif system == "Windows":
     ui = (root / "ci/ClipMeshWindows.cs").read_text(encoding="utf-8")
     assert 'private const string Version = "0.2.11";' in ui
