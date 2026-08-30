@@ -1,0 +1,28 @@
+name: Inspect reconstructed macOS secure storage
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/inspect-generated-macos.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Reconstruct and print secure-storage source
+        run: |
+          set -euo pipefail
+          python ci/reconstruct.py --platform Darwin
+          echo '===== secrets.rs ====='
+          sed -n '1,260p' clipmesh/apps/desktop/src/secrets.rs
+          echo '===== Cargo secure storage deps ====='
+          grep -nE 'keyring|security-framework|secret' clipmesh/apps/desktop/Cargo.toml clipmesh/Cargo.toml || true
