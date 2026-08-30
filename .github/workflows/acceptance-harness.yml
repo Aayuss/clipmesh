@@ -6,21 +6,23 @@ on:
     branches: [main]
     paths:
       - 'dev-test-comprehensive.sh'
-      - 'dev/android/AcceptanceReceiver.kt'
+      - 'dev/android/AcceptanceReceiverV2.kt'
       - 'dev/android/DevTestFileProvider.kt'
       - 'dev/macos-pasteboard-helper.swift'
-      - 'ci/patch-acceptance-dev.py'
+      - 'ci/patch-acceptance-v2.py'
       - 'ci/v037_acceptance_selftest.py'
+      - 'ci/build-android-release.sh'
       - '.github/workflows/acceptance-harness.yml'
   pull_request:
     branches: [main]
     paths:
       - 'dev-test-comprehensive.sh'
-      - 'dev/android/AcceptanceReceiver.kt'
+      - 'dev/android/AcceptanceReceiverV2.kt'
       - 'dev/android/DevTestFileProvider.kt'
       - 'dev/macos-pasteboard-helper.swift'
-      - 'ci/patch-acceptance-dev.py'
+      - 'ci/patch-acceptance-v2.py'
       - 'ci/v037_acceptance_selftest.py'
+      - 'ci/build-android-release.sh'
       - '.github/workflows/acceptance-harness.yml'
 
 permissions:
@@ -39,21 +41,24 @@ jobs:
       - name: Validate acceptance sources
         run: |
           set -euo pipefail
-          python -m py_compile ci/patch-acceptance-dev.py
-          if [ -f ci/v037_acceptance_selftest.py ]; then python -m py_compile ci/v037_acceptance_selftest.py; fi
-          if [ -f dev-test-comprehensive.sh ]; then bash -n dev-test-comprehensive.sh; fi
+          python -m py_compile ci/patch-acceptance-v2.py
+          test -f ci/v037_acceptance_selftest.py && python -m py_compile ci/v037_acceptance_selftest.py
+          test -f dev-test-comprehensive.sh && bash -n dev-test-comprehensive.sh
           swiftc dev/macos-pasteboard-helper.swift -o /tmp/clipmesh-acceptance-pasteboard
+          /tmp/clipmesh-acceptance-pasteboard change-count >/dev/null
       - name: Reconstruct and instrument macOS
         run: |
           set -euo pipefail
           python ci/reconstruct.py --platform Darwin
-          CLIPMESH_PLATFORM=Darwin python ci/patch-acceptance-dev.py
+          CLIPMESH_PLATFORM=Darwin python ci/patch-acceptance-v2.py
+          CLIPMESH_PLATFORM=Darwin python ci/v037_acceptance_selftest.py
           grep -q -- '--dev-accept-set-favorite' ci/ClipMeshApp.swift
           grep -q -- '--dev-accept-command' ci/ClipMeshApp.swift
           grep -q -- '--dev-accept-send-files' ci/ClipMeshApp.swift
           grep -q 'devAcceptanceSnapshotLines' ci/ClipMeshTransfer.swift
           grep -q 'ClipMesh.Acceptance.IncomingPolicy' ci/ClipMeshTransfer.swift
-          if [ -f ci/v037_acceptance_selftest.py ]; then CLIPMESH_PLATFORM=Darwin python ci/v037_acceptance_selftest.py; fi
+          grep -q 'private let httpQueue' ci/ClipMeshTransfer.swift
+          grep -q 'listener.start(queue: httpQueue)' ci/ClipMeshTransfer.swift
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: clipmesh
@@ -85,21 +90,23 @@ jobs:
       - name: Reconstruct and instrument Android
         run: |
           set -euo pipefail
-          python -m py_compile ci/patch-acceptance-dev.py
+          python -m py_compile ci/patch-acceptance-v2.py ci/v037_acceptance_selftest.py
           python ci/reconstruct.py --platform Linux
-          CLIPMESH_PLATFORM=Linux python ci/patch-acceptance-dev.py
+          CLIPMESH_PLATFORM=Linux python ci/patch-acceptance-v2.py
+          CLIPMESH_PLATFORM=Linux python ci/v037_acceptance_selftest.py
           J=clipmesh/android/app/src/main/java/dev/clipmesh
           D=clipmesh/android/app/src/debug/java/dev/clipmesh
           DM=clipmesh/android/app/src/debug/AndroidManifest.xml
           grep -q 'class AcceptanceReceiver' "$D/AcceptanceReceiver.kt"
           grep -q 'ACTION_SEND_GENERATED' "$D/AcceptanceReceiver.kt"
           grep -q 'ACTION_RESOLVE_PENDING' "$D/AcceptanceReceiver.kt"
+          grep -q 'ACTION_SET_POLICY' "$D/AcceptanceReceiver.kt"
           grep -q 'devAcceptancePendingRequestIds' "$J/fileshare/LocalTransferEngine.kt"
           grep -q 'clipboard_nearby_count' "$J/MainActivity.kt"
           grep -q 'file_nearby_count' "$J/fileshare/FileShareActivity.kt"
+          grep -q 'incoming_policy' "$J/fileshare/IncomingRequestUi.kt"
           grep -q 'dev.clipmesh.AcceptanceReceiver' "$DM"
           grep -q 'android.permission.DUMP' "$DM"
-          if [ -f ci/v037_acceptance_selftest.py ]; then CLIPMESH_PLATFORM=Linux python ci/v037_acceptance_selftest.py; fi
       - name: Compile acceptance-instrumented Android app
         run: |
           set -euo pipefail
