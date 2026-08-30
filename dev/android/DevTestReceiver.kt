@@ -34,6 +34,7 @@ class DevTestReceiver : BroadcastReceiver() {
                 shizuku.close()
             }
             ACTION_READ_SHIZUKU -> readShizuku(app, intent, goAsync())
+            ACTION_WRITE_SHIZUKU -> writeShizuku(app, intent, goAsync())
             ACTION_SEND_FILE -> sendFile(app, intent, goAsync())
         }
     }
@@ -52,6 +53,7 @@ class DevTestReceiver : BroadcastReceiver() {
         intent.getStringExtra(EXTRA_FINGERPRINT)?.trim()?.takeIf { it.isNotEmpty() }?.let {
             LocalTransferEngine.setFavorite(app, it, true)
         }
+        app.getSharedPreferences("clipmesh_ci", Context.MODE_PRIVATE).edit().clear().apply()
         BackgroundRuntime.restart(app)
         BackgroundService.start(app)
         result(app, "configured=true\nspace=${pairing.spaceId}\n")
@@ -60,21 +62,27 @@ class DevTestReceiver : BroadcastReceiver() {
     private fun writeInfo(app: Context) {
         LocalTransferEngine.start(app)
         val shizuku = ShizukuManager(app)
+        val ci = app.getSharedPreferences("clipmesh_ci", Context.MODE_PRIVATE)
         val text = buildString {
             append("fingerprint=").append(LocalTransferEngine.fingerprint(app)).append('\n')
             append("shizuku_available=").append(shizuku.isAvailable()).append('\n')
             append("shizuku_permission=").append(shizuku.hasPermission()).append('\n')
             append("background_status=").append(BackgroundRuntime.status.replace('\n', ' ')).append('\n')
+            append("clipboard_peer_count=").append(BackgroundRuntime.debugPeerCount()).append('\n')
+            append("last_remote_received_at=").append(ci.getLong("last_remote_received_at", 0L)).append('\n')
+            append("last_remote_received_fingerprint=").append(ci.getString("last_remote_received_fingerprint", "").orEmpty()).append('\n')
+            append("last_remote_apply_at=").append(ci.getLong("last_remote_apply_at", 0L)).append('\n')
+            append("last_remote_apply_fingerprint=").append(ci.getString("last_remote_apply_fingerprint", "").orEmpty()).append('\n')
+            append("last_remote_shizuku_write_at=").append(ci.getLong("last_remote_shizuku_write_at", 0L)).append('\n')
+            append("last_remote_shizuku_write_ok=").append(ci.getBoolean("last_remote_shizuku_write_ok", false)).append('\n')
+            append("last_remote_fallback_at=").append(ci.getLong("last_remote_fallback_at", 0L)).append('\n')
         }
         result(app, text)
         shizuku.close()
     }
 
     private fun readShizuku(app: Context, intent: Intent, pending: BroadcastReceiver.PendingResult) {
-        val expected = String(
-            Base64.decode(intent.getStringExtra(EXTRA_EXPECTED_B64).orEmpty(), Base64.DEFAULT),
-            Charsets.UTF_8
-        )
+        val expected = decodeExpected(intent)
         Executors.newSingleThreadExecutor().execute {
             val shizuku = ShizukuManager(app)
             try {
@@ -86,6 +94,25 @@ class DevTestReceiver : BroadcastReceiver() {
                 })
             } catch (t: Throwable) {
                 result(app, "shizuku_read=FAIL\nerror=${t.javaClass.simpleName}:${t.message.orEmpty()}\n")
+            } finally {
+                shizuku.close()
+                pending.finish()
+            }
+        }
+    }
+
+    private fun writeShizuku(app: Context, intent: Intent, pending: BroadcastReceiver.PendingResult) {
+        val expected = decodeExpected(intent)
+        Executors.newSingleThreadExecutor().execute {
+            val shizuku = ShizukuManager(app)
+            try {
+                val pass = expected.isNotEmpty() && shizuku.setText(expected)
+                result(app, buildString {
+                    append("shizuku_write=").append(if (pass) "PASS" else "FAIL").append('\n')
+                    append("value_b64=").append(Base64.encodeToString(expected.toByteArray(), Base64.NO_WRAP)).append('\n')
+                })
+            } catch (t: Throwable) {
+                result(app, "shizuku_write=FAIL\nerror=${t.javaClass.simpleName}:${t.message.orEmpty()}\n")
             } finally {
                 shizuku.close()
                 pending.finish()
@@ -135,6 +162,11 @@ class DevTestReceiver : BroadcastReceiver() {
         }
     }
 
+    private fun decodeExpected(intent: Intent): String = String(
+        Base64.decode(intent.getStringExtra(EXTRA_EXPECTED_B64).orEmpty(), Base64.DEFAULT),
+        Charsets.UTF_8
+    )
+
     private fun sanitize(value: String): String = value.substringAfterLast('/').substringAfterLast('\\')
         .replace(Regex("[^A-Za-z0-9._-]"), "_")
         .take(120)
@@ -149,6 +181,7 @@ class DevTestReceiver : BroadcastReceiver() {
         const val ACTION_FAVORITE = "dev.clipmesh.devtest.FAVORITE"
         const val ACTION_REQUEST_SHIZUKU = "dev.clipmesh.devtest.REQUEST_SHIZUKU"
         const val ACTION_READ_SHIZUKU = "dev.clipmesh.devtest.READ_SHIZUKU"
+        const val ACTION_WRITE_SHIZUKU = "dev.clipmesh.devtest.WRITE_SHIZUKU"
         const val ACTION_SEND_FILE = "dev.clipmesh.devtest.SEND_FILE"
         const val EXTRA_PAIRING_B64 = "pairing_b64"
         const val EXTRA_FINGERPRINT = "fingerprint"
