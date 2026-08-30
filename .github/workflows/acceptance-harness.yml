@@ -9,6 +9,8 @@ on:
       - 'dev/android/AcceptanceReceiverV2.kt'
       - 'dev/android/DevTestFileProvider.kt'
       - 'dev/macos-pasteboard-helper.swift'
+      - 'ci/reconstruct.py'
+      - 'ci/patch-v038-file-transfer-visibility.py'
       - 'ci/patch-acceptance-v2.py'
       - 'ci/v037_acceptance_selftest.py'
       - 'ci/build-android-release.sh'
@@ -20,6 +22,8 @@ on:
       - 'dev/android/AcceptanceReceiverV2.kt'
       - 'dev/android/DevTestFileProvider.kt'
       - 'dev/macos-pasteboard-helper.swift'
+      - 'ci/reconstruct.py'
+      - 'ci/patch-v038-file-transfer-visibility.py'
       - 'ci/patch-acceptance-v2.py'
       - 'ci/v037_acceptance_selftest.py'
       - 'ci/build-android-release.sh'
@@ -41,9 +45,8 @@ jobs:
       - name: Validate acceptance sources
         run: |
           set -euo pipefail
-          python -m py_compile ci/patch-acceptance-v2.py
-          test -f ci/v037_acceptance_selftest.py && python -m py_compile ci/v037_acceptance_selftest.py
-          test -f dev-test-comprehensive.sh && bash -n dev-test-comprehensive.sh
+          python -m py_compile ci/patch-v038-file-transfer-visibility.py ci/patch-acceptance-v2.py ci/v037_acceptance_selftest.py
+          bash -n dev-test-comprehensive.sh
           swiftc dev/macos-pasteboard-helper.swift -o /tmp/clipmesh-acceptance-pasteboard
           /tmp/clipmesh-acceptance-pasteboard change-count >/dev/null
       - name: Reconstruct and instrument macOS
@@ -90,11 +93,13 @@ jobs:
       - name: Reconstruct and instrument Android
         run: |
           set -euo pipefail
-          python -m py_compile ci/patch-acceptance-v2.py ci/v037_acceptance_selftest.py
+          python -m py_compile ci/patch-v038-file-transfer-visibility.py ci/patch-acceptance-v2.py ci/v037_acceptance_selftest.py
           python ci/reconstruct.py --platform Linux
+          J=clipmesh/android/app/src/main/java/dev/clipmesh
+          grep -q 'val devices = runCatching { LocalTransferEngine.nearbyDevices() }.getOrDefault(emptyList())' "$J/fileshare/FileShareActivity.kt"
+          ! grep -q 'nearbyDevices().filterNot' "$J/fileshare/FileShareActivity.kt"
           CLIPMESH_PLATFORM=Linux python ci/patch-acceptance-v2.py
           CLIPMESH_PLATFORM=Linux python ci/v037_acceptance_selftest.py
-          J=clipmesh/android/app/src/main/java/dev/clipmesh
           D=clipmesh/android/app/src/debug/java/dev/clipmesh
           DM=clipmesh/android/app/src/debug/AndroidManifest.xml
           grep -q 'class AcceptanceReceiver' "$D/AcceptanceReceiver.kt"
