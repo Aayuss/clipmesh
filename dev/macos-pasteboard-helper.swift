@@ -44,9 +44,10 @@ func imageInfo() {
 }
 
 let args = CommandLine.arguments
-if args.count < 2 { fail("usage: macos-pasteboard-helper <set-image|image-info>") }
+if args.count < 2 { fail("usage: macos-pasteboard-helper <set-image|image-info|change-count>") }
 switch args[1] {
 case "set-image": setImage()
 case "image-info": imageInfo()
+case "change-count": print(NSPasteboard.general.changeCount)
 default: fail("unknown command")
 }
