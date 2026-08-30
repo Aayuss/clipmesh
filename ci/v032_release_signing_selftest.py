@@ -1,6 +1,7 @@
 from pathlib import Path
 import os
 import platform
+import re
 
 root = Path(__file__).resolve().parents[1]
 system = os.environ.get("CLIPMESH_PLATFORM", platform.system())
@@ -10,6 +11,7 @@ android_script = (root / "ci/build-android-release.sh").read_text(encoding="utf-
 mac_script = (root / "ci/macos-release-signing.sh").read_text(encoding="utf-8")
 dev_script = (root / "dev-test.sh").read_text(encoding="utf-8")
 docs = (root / "RELEASE_SIGNING.md").read_text(encoding="utf-8")
+readme = (root / "README.md").read_text(encoding="utf-8")
 setup_script = (root / "scripts/setup-android-release-signing.sh").read_text(encoding="utf-8")
 ignore_rules = (root / ".gitignore").read_text(encoding="utf-8")
 release_patch = (root / "ci/patch-v032-release.py").read_text(encoding="utf-8")
@@ -59,7 +61,30 @@ assert 'test ! -e "$J/CiBackgroundCaptureReceiver.kt"' in workflow
 release_job = workflow[workflow.index("\n  release:\n") :]
 assert "ClipMesh-release.apk" in release_job
 assert "ClipMesh-debug.apk" not in release_job
-assert 'tag="v0.2.10-alpha"' in release_job
+workflow_tag_match = re.search(r'^\s*tag="(v\d+\.\d+\.\d+-alpha)"$', release_job, re.MULTILINE)
+assert workflow_tag_match is not None
+workflow_tag = workflow_tag_match.group(1)
+assert workflow_tag == "v0.2.10-alpha"
+current_version = workflow_tag.removeprefix("v").removesuffix("-alpha")
+
+# README current-download metadata must stay in lockstep with the immutable
+# release tag selected by the workflow. Historical migration references remain
+# valid outside this section.
+assert readme.startswith(f"# ClipMesh v{current_version}\n")
+download_section = readme.split("## Download", 1)[1].split("\n## ", 1)[0]
+expected_download_assets = (
+    "ClipMesh-macOS.dmg",
+    "ClipMesh-Windows.exe",
+    "ClipMesh-Android.apk",
+    "SHA256SUMS.txt",
+)
+for asset_name in expected_download_assets:
+    assert f"releases/download/{workflow_tag}/{asset_name}" in download_section
+readme_download_tags = set(re.findall(r"releases/download/([^/]+)/", download_section))
+assert readme_download_tags == {workflow_tag}
+assert "releases/download/v0.2.9-alpha/" not in download_section
+assert f"publishes `{workflow_tag}`" in download_section
+assert f"## What changed in v{current_version}" in readme
 
 for name in (
     "CLIPMESH_MACOS_CERTIFICATE_P12_B64",

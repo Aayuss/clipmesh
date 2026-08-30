@@ -1,4 +1,4 @@
-# ClipMesh v0.2.9
+# ClipMesh v0.2.10
 
 ClipMesh provides encrypted clipboard sync and direct nearby file transfer across macOS, Windows, and Android.
 
@@ -6,14 +6,22 @@ ClipMesh provides encrypted clipboard sync and direct nearby file transfer acros
 
 Download the current installers directly - there is no need to browse the Releases page:
 
-- [Download ClipMesh for macOS](https://github.com/Aayuss/clipmesh/releases/download/v0.2.9-alpha/ClipMesh-macOS.dmg)
-- [Download ClipMesh for Windows](https://github.com/Aayuss/clipmesh/releases/download/v0.2.9-alpha/ClipMesh-Windows.exe)
-- [Download ClipMesh for Android](https://github.com/Aayuss/clipmesh/releases/download/v0.2.9-alpha/ClipMesh-Android.apk)
-- [Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.9-alpha/SHA256SUMS.txt)
+- [Download ClipMesh for macOS](https://github.com/Aayuss/clipmesh/releases/download/v0.2.10-alpha/ClipMesh-macOS.dmg)
+- [Download ClipMesh for Windows](https://github.com/Aayuss/clipmesh/releases/download/v0.2.10-alpha/ClipMesh-Windows.exe)
+- [Download ClipMesh for Android](https://github.com/Aayuss/clipmesh/releases/download/v0.2.10-alpha/ClipMesh-Android.apk)
+- [Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.10-alpha/SHA256SUMS.txt)
 
-These links become live after the `Build ClipMesh` GitHub Action completes and publishes `v0.2.9-alpha`.
+These links become live after the `Build ClipMesh` GitHub Action completes and publishes `v0.2.10-alpha`.
 
 Release signing setup and the audited v0.2.9 Android migration are documented in [RELEASE_SIGNING.md](RELEASE_SIGNING.md). Official Android publication now fails closed unless the permanent keystore and expected certificate fingerprint are configured; pull-request and local development builds continue to use separate debug/development identities.
+
+## What changed in v0.2.10
+
+- Establishes ClipMesh's first permanent Android release-signing identity with `versionName 0.2.10` and `versionCode 20`.
+- Publishes only the verified release-signed APK; CI/debug receivers, development providers, and test-driver packages are rejected from the release artifact.
+- Keeps the physical development harness and its `clipmesh-dev` identity separate from the permanent release key.
+- Keeps `v0.2.9-alpha` as the one-time Android signing migration boundary; releases from `v0.2.10-alpha` onward update normally while the permanent key is retained.
+- Structures future macOS Developer ID signing inside-out across Mach-O helpers, frameworks, XPC services, extensions, nested apps, and the outer app, with explicit authority and TeamIdentifier verification. Until Apple credentials are configured, GitHub continues to label the macOS artifact as ad-hoc signed and not notarized.
 
 ## What changed in v0.2.9
 
@@ -97,7 +105,13 @@ The GitHub DMG is currently ad-hoc signed rather than Developer-ID notarized, so
 
 ## Android installation
 
-The `v0.2.9-alpha` GitHub APK was debug-signed and requires one uninstall before the first permanently release-signed APK can be installed. The release workflow no longer publishes debug-signed APKs. Sideloading can still trigger Play Protect or Samsung's **Install anyway** flow; avoiding that distribution warning also requires recognized store distribution and is separate from ClipMesh runtime behavior.
+The `v0.2.9-alpha` GitHub APK was debug-signed. Existing GitHub `v0.2.9-alpha` Android users must:
+
+1. Uninstall v0.2.9 once.
+2. Install `v0.2.10-alpha`.
+3. Pair devices again if uninstalling removed the app data.
+
+`v0.2.10-alpha` to future versions will update normally as long as the permanent release key is retained. The release workflow no longer publishes debug-signed APKs. Sideloading can still trigger Play Protect or Samsung's **Install anyway** flow; avoiding that distribution warning also requires recognized store distribution and is separate from ClipMesh runtime behavior.
 
 ## Security model
 
