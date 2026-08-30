@@ -9,8 +9,29 @@ system = os.environ.get("CLIPMESH_PLATFORM", platform.system())
 if system == "Darwin":
     transfer = (root / "ci/ClipMeshTransfer.swift").read_text(encoding="utf-8")
     build = (root / "clipmesh/scripts/build-macos.sh").read_text(encoding="utf-8")
+
+    # IPv4 reachability.
     assert "ip.version = .v4" in transfer
     assert "NWListener(using: parameters" in transfer
+
+    # Blocking multicast discovery must never share the HTTP callback queue.
+    for required in (
+        'private let httpQueue = DispatchQueue(label: "dev.clipmesh.fileshare.http"',
+        'private let discoveryQueue = DispatchQueue(label: "dev.clipmesh.fileshare.discovery"',
+        'private let announceQueue = DispatchQueue(label: "dev.clipmesh.fileshare.announce"',
+        'private let sendQueue = DispatchQueue(label: "dev.clipmesh.fileshare.send"',
+        'discoveryQueue.async {',
+        'sendQueue.async {',
+        'DispatchSource.makeTimerSource(queue: announceQueue)',
+        'listener.start(queue: httpQueue)',
+        'connection.start(queue: httpQueue)',
+    ):
+        assert required in transfer, required
+
+    assert 'private let queue = DispatchQueue(label: "dev.clipmesh.fileshare"' not in transfer
+    assert 'listener.start(queue: queue)' not in transfer
+    assert 'connection.start(queue: queue)' not in transfer
+
     assert "NSLocalNetworkUsageDescription" in build
     assert "CFBundleShortVersionString</key><string>0.2.11" in build
 elif system == "Linux":
@@ -25,4 +46,4 @@ else:
 
 cargo = (root / "clipmesh/Cargo.toml").read_text(encoding="utf-8")
 assert 'version = "0.2.11"' in cargo
-print(f"ClipMesh v0.2.11 IPv4 transfer self-test passed on {system}")
+print(f"ClipMesh v0.2.11 IPv4/nonblocking transfer self-test passed on {system}")
