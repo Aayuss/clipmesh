@@ -24,5 +24,7 @@ jobs:
           python ci/reconstruct.py --platform Darwin
           echo '===== secrets.rs ====='
           sed -n '1,260p' clipmesh/apps/desktop/src/secrets.rs
+          echo '===== config.rs ====='
+          sed -n '1,320p' clipmesh/apps/desktop/src/config.rs
           echo '===== Cargo secure storage deps ====='
-          grep -nE 'keyring|security-framework|secret' clipmesh/apps/desktop/Cargo.toml clipmesh/Cargo.toml || true
+          grep -nE 'keyring|security-framework|secret|directories' clipmesh/apps/desktop/Cargo.toml clipmesh/Cargo.toml || true
