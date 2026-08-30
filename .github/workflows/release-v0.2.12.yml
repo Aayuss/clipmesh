@@ -1,0 +1,317 @@
+name: Release ClipMesh v0.2.12
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-v0.2.12.yml'
+      - 'ci/patch-v036-release.py'
+      - 'PHYSICAL_VERIFICATION.md'
+      - 'README.md'
+
+permissions:
+  contents: read
+
+env:
+  VERIFIED_PRODUCT_SHA: 9faf1b8b1baffa2c2a8aee78938ba9d9acf7fe74
+  RELEASE_VERSION: 0.2.12
+  RELEASE_TAG: v0.2.12-alpha
+
+jobs:
+  verify-boundary:
+    name: Verify physical-test boundary
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Prove release descends from physically verified product code
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$VERIFIED_PRODUCT_SHA" HEAD
+          mapfile -t changed < <(git diff --name-only "$VERIFIED_PRODUCT_SHA"..HEAD)
+          printf 'Files changed after physical verification:\n'
+          printf '  %s\n' "${changed[@]}"
+          allowed='^(ci/patch-v036-release\.py|PHYSICAL_VERIFICATION\.md|README\.md|\.github/workflows/release-v0\.2\.12\.yml)$'
+          bad=0
+          for path in "${changed[@]}"; do
+            if ! printf '%s\n' "$path" | grep -Eq "$allowed"; then
+              echo "Unexpected product/runtime change after physical verification: $path"
+              bad=1
+            fi
+          done
+          test "$bad" -eq 0
+          python -m py_compile ci/patch-v036-release.py
+          grep -q "$VERIFIED_PRODUCT_SHA" PHYSICAL_VERIFICATION.md
+          grep -q 'TOTAL FAILURES: 0' PHYSICAL_VERIFICATION.md
+
+  macos:
+    name: macOS v0.2.12 DMG
+    needs: verify-boundary
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: clipmesh
+      - name: Reconstruct physically verified macOS source
+        run: |
+          set -euo pipefail
+          python ci/reconstruct.py --platform Darwin
+          python ci/v033_ipv4_transfer_selftest.py
+          python ci/patch-v036-release.py
+          grep -q 'CFBundleShortVersionString</key><string>0.2.12' clipmesh/scripts/build-macos.sh
+          grep -q 'CFBundleVersion</key><string>0.2.12' clipmesh/scripts/build-macos.sh
+          grep -q '^version = "0.2.12"$' clipmesh/Cargo.toml
+          grep -q 'private let httpQueue' ci/ClipMeshTransfer.swift
+          grep -q 'private let discoveryQueue' ci/ClipMeshTransfer.swift
+          grep -q 'listener.start(queue: httpQueue)' ci/ClipMeshTransfer.swift
+          grep -q 'connection.start(queue: httpQueue)' ci/ClipMeshTransfer.swift
+      - name: Test protocol core and transport
+        working-directory: clipmesh
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check cryptography
+          python tools/protocol_selftest.py
+          cargo test -p clipmesh-core
+          cargo test -p clipmesh
+      - name: Build macOS app and DMG
+        working-directory: clipmesh
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build-macos.sh
+          ./scripts/build-macos.sh
+      - name: Configure macOS release signing
+        env:
+          CLIPMESH_MACOS_CERTIFICATE_P12_B64: ${{ secrets.CLIPMESH_MACOS_CERTIFICATE_P12_B64 }}
+          CLIPMESH_MACOS_CERTIFICATE_PASSWORD: ${{ secrets.CLIPMESH_MACOS_CERTIFICATE_PASSWORD }}
+          CLIPMESH_MACOS_SIGNING_IDENTITY: ${{ secrets.CLIPMESH_MACOS_SIGNING_IDENTITY }}
+        run: bash ci/macos-release-signing.sh setup
+      - name: Apply and verify macOS release signing
+        env:
+          CLIPMESH_MACOS_SIGNING_IDENTITY: ${{ secrets.CLIPMESH_MACOS_SIGNING_IDENTITY }}
+        run: bash ci/macos-release-signing.sh sign
+      - name: Notarize macOS DMG when configured
+        env:
+          CLIPMESH_MACOS_NOTARY_APPLE_ID: ${{ secrets.CLIPMESH_MACOS_NOTARY_APPLE_ID }}
+          CLIPMESH_MACOS_NOTARY_TEAM_ID: ${{ secrets.CLIPMESH_MACOS_NOTARY_TEAM_ID }}
+          CLIPMESH_MACOS_NOTARY_PASSWORD: ${{ secrets.CLIPMESH_MACOS_NOTARY_PASSWORD }}
+        run: bash ci/macos-release-signing.sh notarize
+      - name: Validate packaged macOS release
+        working-directory: clipmesh
+        run: |
+          set -euo pipefail
+          ./dist/macos/ClipMesh.app/Contents/MacOS/ClipMesh --smoke-test
+          test -s dist/macos/ClipMesh.dmg
+          test -x dist/macos/ClipMesh.app/Contents/PlugIns/ClipMeshShare.appex/Contents/MacOS/ClipMeshShare
+          python - <<'PY'
+          import plistlib
+          from pathlib import Path
+          info = plistlib.loads(Path('dist/macos/ClipMesh.app/Contents/Info.plist').read_bytes())
+          assert info['CFBundleShortVersionString'] == '0.2.12'
+          assert info['CFBundleVersion'] == '0.2.12'
+          print('macOS v0.2.12 metadata validated')
+          PY
+          codesign --verify --deep --strict --verbose=2 dist/macos/ClipMesh.app
+          shasum -a 256 dist/macos/ClipMesh.dmg > dist/macos/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ClipMesh-v0.2.12-macOS
+          if-no-files-found: error
+          path: |
+            clipmesh/dist/macos/ClipMesh.dmg
+            clipmesh/dist/macos/ClipMesh-icon.png
+            clipmesh/dist/macos/SHA256SUMS.txt
+      - name: Remove temporary macOS signing material
+        if: always()
+        run: bash ci/macos-release-signing.sh cleanup
+
+  windows:
+    name: Windows v0.2.12 EXE
+    needs: verify-boundary
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: clipmesh
+      - name: Reconstruct physically verified Windows source
+        shell: pwsh
+        run: |
+          python ci/reconstruct.py --platform Windows; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/v033_ipv4_transfer_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/patch-v036-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $ui = Get-Content 'ci/ClipMeshWindows.cs' -Raw
+          if (-not $ui.Contains('private const string Version = "0.2.12";')) { throw 'Windows v0.2.12 runtime version missing' }
+          if (-not (Get-Content 'clipmesh/Cargo.toml' -Raw).Contains('version = "0.2.12"')) { throw 'Cargo v0.2.12 package version missing' }
+      - name: Test protocol core and transport
+        working-directory: clipmesh
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check cryptography; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tools/protocol_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo test -p clipmesh-core; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo test -p clipmesh; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Build and smoke-test Windows release
+        working-directory: clipmesh
+        shell: pwsh
+        run: |
+          .\scripts\build-windows.ps1
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $roaming = Join-Path $env:APPDATA 'ClipMesh\ClipMesh'
+          $local = Join-Path $env:LOCALAPPDATA 'ClipMesh'
+          Remove-Item -Recurse -Force $roaming,$local -ErrorAction SilentlyContinue
+          $process = Start-Process -FilePath '.\dist\windows\clipmesh.exe' -ArgumentList '--smoke-test' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Windows smoke test failed with exit code $($process.ExitCode)" }
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.2.12\clipmesh-bin.exe'))) { throw 'Windows v0.2.12 runtime missing' }
+          $hash = (Get-FileHash dist\windows\clipmesh.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  clipmesh.exe" | Set-Content -Encoding ascii dist\windows\SHA256SUMS.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ClipMesh-v0.2.12-Windows
+          if-no-files-found: error
+          path: |
+            clipmesh/dist/windows/clipmesh.exe
+            clipmesh/dist/windows/SHA256SUMS.txt
+
+  android:
+    name: Android v0.2.12 APK
+    needs: verify-boundary
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+          cache-dependency-path: clipmesh/android/**/*.gradle*
+      - uses: android-actions/setup-android@v4
+      - name: Reconstruct physically verified Android source
+        run: |
+          set -euo pipefail
+          python ci/reconstruct.py --platform Linux
+          python ci/v033_ipv4_transfer_selftest.py
+          python ci/v034_shizuku_clipboard_selftest.py
+          J=clipmesh/android/app/src/main/java/dev/clipmesh
+          grep -q 'val clearInboundIdentity = methodName == "getPrimaryClip"' "$J/shizuku/ClipboardUserService.kt"
+          grep -q '\.version(6)' "$J/shizuku/ShizukuManager.kt"
+          python ci/patch-v036-release.py
+          grep -q 'versionCode = 22' clipmesh/android/app/build.gradle.kts
+          grep -q 'versionName = "0.2.12"' clipmesh/android/app/build.gradle.kts
+          grep -q '^version = "0.2.12"$' clipmesh/Cargo.toml
+      - name: Install Android SDK and build debug APK
+        run: |
+          set -euo pipefail
+          sdkmanager "platforms;android-36" "build-tools;35.0.0" "platform-tools"
+          cd clipmesh
+          chmod +x android/gradlew scripts/build-android-debug.sh
+          ./scripts/build-android-debug.sh
+          APK=dist/android/ClipMesh-debug.apk
+          test -s "$APK"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-name "$APK" | grep -qx '0.2.12'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-code "$APK" | grep -qx '22'
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Runtime-test Android background send and receive on Android 15
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: bash ci/android-v023-runtime-test.sh
+      - name: Build and verify permanently signed Android release APK
+        env:
+          CLIPMESH_ANDROID_KEYSTORE_B64: ${{ secrets.CLIPMESH_ANDROID_KEYSTORE_B64 }}
+          CLIPMESH_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.CLIPMESH_ANDROID_KEYSTORE_PASSWORD }}
+          CLIPMESH_ANDROID_KEY_ALIAS: ${{ secrets.CLIPMESH_ANDROID_KEY_ALIAS }}
+          CLIPMESH_ANDROID_KEY_PASSWORD: ${{ secrets.CLIPMESH_ANDROID_KEY_PASSWORD }}
+          CLIPMESH_ANDROID_SIGNING_CERT_SHA256: ${{ vars.CLIPMESH_ANDROID_SIGNING_CERT_SHA256 }}
+          CLIPMESH_ANDROID_EXPECTED_PACKAGE: dev.clipmesh
+          CLIPMESH_ANDROID_EXPECTED_VERSION_NAME: 0.2.12
+          CLIPMESH_ANDROID_EXPECTED_VERSION_CODE: '22'
+        run: bash ci/build-android-release.sh
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ClipMesh-v0.2.12-Android
+          if-no-files-found: error
+          path: |
+            clipmesh/dist/android/ClipMesh-release.apk
+            clipmesh/dist/android/SHA256SUMS.txt
+
+  release:
+    name: Publish v0.2.12-alpha
+    needs: [verify-boundary, macos, windows, android]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: ClipMesh-v0.2.12-macOS
+          path: artifacts/macos
+      - uses: actions/download-artifact@v8
+        with:
+          name: ClipMesh-v0.2.12-Windows
+          path: artifacts/windows
+      - uses: actions/download-artifact@v8
+        with:
+          name: ClipMesh-v0.2.12-Android
+          path: artifacts/android
+      - name: Prepare and verify release assets
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          cp artifacts/macos/ClipMesh.dmg release/ClipMesh-macOS.dmg
+          cp artifacts/macos/ClipMesh-icon.png release/ClipMesh-icon.png
+          cp artifacts/windows/clipmesh.exe release/ClipMesh-Windows.exe
+          cp artifacts/android/ClipMesh-release.apk release/ClipMesh-Android.apk
+          cd release
+          test -s ClipMesh-macOS.dmg
+          test -s ClipMesh-Windows.exe
+          test -s ClipMesh-Android.apk
+          sha256sum ClipMesh-macOS.dmg ClipMesh-Windows.exe ClipMesh-Android.apk > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - name: Publish immutable release and refresh dev-latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag="$RELEASE_TAG"
+          dev_tag="dev-latest"
+          assets=(release/ClipMesh-macOS.dmg release/ClipMesh-Windows.exe release/ClipMesh-Android.apk release/ClipMesh-icon.png release/SHA256SUMS.txt)
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "$tag already exists. Keeping its published assets immutable."
+          else
+            gh release create "$tag" "${assets[@]}" \
+              --title "ClipMesh v0.2.12-alpha" \
+              --notes "Physically verified on Samsung Galaxy S23 Ultra and macOS. The full clipboard/image/file matrix passed with zero failures before this release metadata bump." \
+              --target "$GITHUB_SHA" \
+              --prerelease
+          fi
+
+          if gh release view "$dev_tag" >/dev/null 2>&1; then
+            gh api "repos/$GH_REPO/git/refs/tags/$dev_tag" -X PATCH -f sha="$GITHUB_SHA" -F force=true >/dev/null
+            gh release upload "$dev_tag" "${assets[@]}" --clobber
+            gh release edit "$dev_tag" --title "ClipMesh dev-latest" --prerelease --latest=false
+          else
+            gh release create "$dev_tag" "${assets[@]}" --title "ClipMesh dev-latest" --notes "Latest physically verified green development build from main." --target "$GITHUB_SHA" --prerelease --latest=false
+          fi
