@@ -33,6 +33,7 @@ class DevTestReceiver : BroadcastReceiver() {
                 result(app, "requested=$requested\n")
                 shizuku.close()
             }
+            ACTION_READ_SHIZUKU -> readShizuku(app, intent, goAsync())
             ACTION_SEND_FILE -> sendFile(app, intent, goAsync())
         }
     }
@@ -67,6 +68,29 @@ class DevTestReceiver : BroadcastReceiver() {
         }
         result(app, text)
         shizuku.close()
+    }
+
+    private fun readShizuku(app: Context, intent: Intent, pending: BroadcastReceiver.PendingResult) {
+        val expected = String(
+            Base64.decode(intent.getStringExtra(EXTRA_EXPECTED_B64).orEmpty(), Base64.DEFAULT),
+            Charsets.UTF_8
+        )
+        Executors.newSingleThreadExecutor().execute {
+            val shizuku = ShizukuManager(app)
+            try {
+                val snapshot = shizuku.readSnapshotJson()
+                val pass = expected.isNotEmpty() && snapshot.contains(expected)
+                result(app, buildString {
+                    append("shizuku_read=").append(if (pass) "PASS" else "FAIL").append('\n')
+                    append("snapshot=").append(snapshot.replace('\n', ' ')).append('\n')
+                })
+            } catch (t: Throwable) {
+                result(app, "shizuku_read=FAIL\nerror=${t.javaClass.simpleName}:${t.message.orEmpty()}\n")
+            } finally {
+                shizuku.close()
+                pending.finish()
+            }
+        }
     }
 
     private fun sendFile(app: Context, intent: Intent, pending: BroadcastReceiver.PendingResult) {
@@ -124,9 +148,11 @@ class DevTestReceiver : BroadcastReceiver() {
         const val ACTION_INFO = "dev.clipmesh.devtest.INFO"
         const val ACTION_FAVORITE = "dev.clipmesh.devtest.FAVORITE"
         const val ACTION_REQUEST_SHIZUKU = "dev.clipmesh.devtest.REQUEST_SHIZUKU"
+        const val ACTION_READ_SHIZUKU = "dev.clipmesh.devtest.READ_SHIZUKU"
         const val ACTION_SEND_FILE = "dev.clipmesh.devtest.SEND_FILE"
         const val EXTRA_PAIRING_B64 = "pairing_b64"
         const val EXTRA_FINGERPRINT = "fingerprint"
+        const val EXTRA_EXPECTED_B64 = "expected_b64"
         const val EXTRA_ADDRESS = "address"
         const val EXTRA_FILE_NAME = "file_name"
         const val EXTRA_PAYLOAD_B64 = "payload_b64"
