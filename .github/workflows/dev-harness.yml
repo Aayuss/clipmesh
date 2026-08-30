@@ -112,6 +112,9 @@ jobs:
           grep -q 'include(":devdriver")' clipmesh/android/settings.gradle.kts
           grep -q 'wait_image' clipmesh/android/devdriver/src/main/java/dev/clipmesh/testdriver/MainActivity.kt
           grep -q 'OnPrimaryClipChangedListener' clipmesh/android/devdriver/src/main/java/dev/clipmesh/testdriver/MainActivity.kt
+          echo '===== RECONSTRUCTED ClipboardUserService.kt ====='
+          cat "$J/shizuku/ClipboardUserService.kt"
+          echo '===== END ClipboardUserService.kt ====='
       - name: Compile ClipMesh and foreground clipboard driver
         run: |
           set -euo pipefail
