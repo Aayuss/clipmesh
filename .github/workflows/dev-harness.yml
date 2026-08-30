@@ -11,9 +11,11 @@ on:
       - 'ci/patch-v031-dev-test.py'
       - 'ci/patch-v032-release.py'
       - 'ci/patch-v033-ipv4-transfer.py'
+      - 'ci/patch-v034-shizuku-clipboard.py'
       - 'ci/v031_devtest_selftest.py'
       - 'ci/v032_release_signing_selftest.py'
       - 'ci/v033_ipv4_transfer_selftest.py'
+      - 'ci/v034_shizuku_clipboard_selftest.py'
       - '.github/workflows/dev-harness.yml'
   pull_request:
     branches: [main]
@@ -24,9 +26,11 @@ on:
       - 'ci/patch-v031-dev-test.py'
       - 'ci/patch-v032-release.py'
       - 'ci/patch-v033-ipv4-transfer.py'
+      - 'ci/patch-v034-shizuku-clipboard.py'
       - 'ci/v031_devtest_selftest.py'
       - 'ci/v032_release_signing_selftest.py'
       - 'ci/v033_ipv4_transfer_selftest.py'
+      - 'ci/v034_shizuku_clipboard_selftest.py'
       - '.github/workflows/dev-harness.yml'
 
 permissions:
@@ -45,7 +49,7 @@ jobs:
       - name: Validate harness scripts
         run: |
           set -euo pipefail
-          python -m py_compile ci/reconstruct.py ci/patch-v031-dev-test.py ci/patch-v032-release.py ci/patch-v033-ipv4-transfer.py ci/v031_devtest_selftest.py ci/v032_release_signing_selftest.py ci/v033_ipv4_transfer_selftest.py dev/uia-find-allow.py
+          python -m py_compile ci/reconstruct.py ci/patch-v031-dev-test.py ci/patch-v032-release.py ci/patch-v033-ipv4-transfer.py ci/patch-v034-shizuku-clipboard.py ci/v031_devtest_selftest.py ci/v032_release_signing_selftest.py ci/v033_ipv4_transfer_selftest.py ci/v034_shizuku_clipboard_selftest.py dev/uia-find-allow.py
           bash -n dev-test.sh
           swiftc dev/macos-pasteboard-helper.swift -o /tmp/clipmesh-pasteboard-helper
           /tmp/clipmesh-pasteboard-helper image-info >/dev/null
@@ -100,6 +104,7 @@ jobs:
           python ci/v031_devtest_selftest.py
           python ci/v032_release_signing_selftest.py
           python ci/v033_ipv4_transfer_selftest.py
+          python ci/v034_shizuku_clipboard_selftest.py
           J=clipmesh/android/app/src/main/java/dev/clipmesh
           D=clipmesh/android/app/src/debug/java/dev/clipmesh
           DM=clipmesh/android/app/src/debug/AndroidManifest.xml
@@ -107,14 +112,15 @@ jobs:
           grep -q 'class CiBackgroundCaptureReceiver' "$D/CiBackgroundCaptureReceiver.kt"
           grep -q 'class DevTestReceiver' "$D/DevTestReceiver.kt"
           grep -q 'ACTION_SEND_FILE' "$D/DevTestReceiver.kt"
+          grep -q 'ACTION_READ_SHIZUKU' "$D/DevTestReceiver.kt"
+          grep -q 'Binder.clearCallingIdentity()' "$J/shizuku/ClipboardUserService.kt"
+          grep -q 'Binder.restoreCallingIdentity(callingIdentity)' "$J/shizuku/ClipboardUserService.kt"
+          grep -q '\.version(5)' "$J/shizuku/ShizukuManager.kt"
           grep -q 'dev.clipmesh.action.CI_BACKGROUND_CAPTURE' "$DM"
           grep -q 'android.permission.DUMP' "$DM"
           grep -q 'include(":devdriver")' clipmesh/android/settings.gradle.kts
           grep -q 'wait_image' clipmesh/android/devdriver/src/main/java/dev/clipmesh/testdriver/MainActivity.kt
           grep -q 'OnPrimaryClipChangedListener' clipmesh/android/devdriver/src/main/java/dev/clipmesh/testdriver/MainActivity.kt
-          echo '===== RECONSTRUCTED ClipboardUserService.kt ====='
-          cat "$J/shizuku/ClipboardUserService.kt"
-          echo '===== END ClipboardUserService.kt ====='
       - name: Compile ClipMesh and foreground clipboard driver
         run: |
           set -euo pipefail
