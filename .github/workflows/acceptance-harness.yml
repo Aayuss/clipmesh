@@ -13,6 +13,7 @@ on:
       - 'ci/reconstruct.py'
       - 'ci/patch-v033-ipv4-transfer.py'
       - 'ci/patch-v038-file-transfer-visibility.py'
+      - 'ci/patch-v039-lan-discovery.py'
       - 'ci/patch-acceptance-v2.py'
       - 'ci/patch-acceptance-v3.py'
       - 'ci/patch-acceptance-chain.py'
@@ -33,6 +34,7 @@ on:
       - 'ci/reconstruct.py'
       - 'ci/patch-v033-ipv4-transfer.py'
       - 'ci/patch-v038-file-transfer-visibility.py'
+      - 'ci/patch-v039-lan-discovery.py'
       - 'ci/patch-acceptance-v2.py'
       - 'ci/patch-acceptance-v3.py'
       - 'ci/patch-acceptance-chain.py'
@@ -59,7 +61,7 @@ jobs:
       - name: Validate acceptance sources and final runner
         run: |
           set -euo pipefail
-          python -m py_compile ci/patch-v033-ipv4-transfer.py ci/patch-v038-file-transfer-visibility.py ci/patch-acceptance-v2.py ci/patch-acceptance-v3.py ci/patch-acceptance-chain.py ci/finalize-comprehensive-runner.py ci/finalize-physical-v2.py ci/v037_acceptance_selftest.py
+          python -m py_compile ci/patch-v033-ipv4-transfer.py ci/patch-v038-file-transfer-visibility.py ci/patch-v039-lan-discovery.py ci/patch-acceptance-v2.py ci/patch-acceptance-v3.py ci/patch-acceptance-chain.py ci/finalize-comprehensive-runner.py ci/finalize-physical-v2.py ci/v037_acceptance_selftest.py
           bash -n dev-test-comprehensive.sh
           bash -n dev-test-final.sh
           python ci/finalize-comprehensive-runner.py dev-test-comprehensive.sh /tmp/clipmesh-final-v1.sh
@@ -127,7 +129,7 @@ jobs:
       - name: Reconstruct and instrument Android
         run: |
           set -euo pipefail
-          python -m py_compile ci/patch-v033-ipv4-transfer.py ci/patch-v038-file-transfer-visibility.py ci/patch-acceptance-v2.py ci/patch-acceptance-v3.py ci/patch-acceptance-chain.py ci/finalize-comprehensive-runner.py ci/finalize-physical-v2.py ci/v037_acceptance_selftest.py
+          python -m py_compile ci/patch-v033-ipv4-transfer.py ci/patch-v038-file-transfer-visibility.py ci/patch-v039-lan-discovery.py ci/patch-acceptance-v2.py ci/patch-acceptance-v3.py ci/patch-acceptance-chain.py ci/finalize-comprehensive-runner.py ci/finalize-physical-v2.py ci/v037_acceptance_selftest.py
           python ci/reconstruct.py --platform Linux
           J=clipmesh/android/app/src/main/java/dev/clipmesh
           grep -q 'val devices = runCatching { LocalTransferEngine.nearbyDevices() }.getOrDefault(emptyList())' "$J/fileshare/FileShareActivity.kt"
