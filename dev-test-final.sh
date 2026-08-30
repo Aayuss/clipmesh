@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Audited entrypoint for the full ClipMesh Mac <-> Android physical acceptance run.
-# It never edits the checkout: the canonical suite is finalized in two audited
+# It never edits the checkout: the canonical suite is finalized in three audited
 # passes, syntax-checked, then executed in a clean bash.
 
 set +e
@@ -10,8 +10,9 @@ trap - ERR
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 TMP_V1="$ROOT/.dev-test-final-v1.$$.sh"
+TMP_V2="$ROOT/.dev-test-final-v2.$$.sh"
 TMP="$ROOT/.dev-test-final.$$.sh"
-cleanup(){ rm -f -- "$TMP_V1" "$TMP"; }
+cleanup(){ rm -f -- "$TMP_V1" "$TMP_V2" "$TMP"; }
 trap cleanup EXIT INT TERM
 
 python3 "$ROOT/ci/finalize-comprehensive-runner.py" "$ROOT/dev-test-comprehensive.sh" "$TMP_V1"
@@ -21,10 +22,17 @@ if [ "$rc" -ne 0 ]; then
   exit "$rc"
 fi
 
-python3 "$ROOT/ci/finalize-physical-v2.py" "$TMP_V1" "$TMP"
+python3 "$ROOT/ci/finalize-physical-v2.py" "$TMP_V1" "$TMP_V2"
 rc=$?
 if [ "$rc" -ne 0 ]; then
-  echo "FAIL: could not apply deterministic physical hardening."
+  echo "FAIL: could not apply deterministic physical hardening v2."
+  exit "$rc"
+fi
+
+python3 "$ROOT/ci/finalize-physical-v3.py" "$TMP_V2" "$TMP"
+rc=$?
+if [ "$rc" -ne 0 ]; then
+  echo "FAIL: could not apply passwordless/restart physical hardening v3."
   exit "$rc"
 fi
 
