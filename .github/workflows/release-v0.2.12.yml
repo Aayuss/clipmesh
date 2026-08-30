@@ -196,8 +196,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-          cache: gradle
-          cache-dependency-path: clipmesh/android/**/*.gradle*
       - uses: android-actions/setup-android@v4
       - name: Reconstruct physically verified Android source
         run: |
