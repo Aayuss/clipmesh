@@ -30,30 +30,84 @@ def replace_all(path: Path, old: str, new: str, label: str, expected: int) -> No
 if system == "Darwin":
     transfer = root / "ci/ClipMeshTransfer.swift"
     build = project / "scripts/build-macos.sh"
+
+    # The original LocalTransferManager used one serial DispatchQueue for:
+    #   - an infinite blocking multicast recvfrom() loop,
+    #   - Network.framework HTTP callbacks,
+    #   - outgoing file sends,
+    #   - discovery announcements.
+    # Once recvfrom() occupied that queue, TCP could be accepted by the kernel
+    # while /prepare-upload and /upload callbacks never ran. Keep blocking
+    # discovery isolated from HTTP and sending work.
     replace_once(
         transfer,
-        '''        do {
-            let listener = try NWListener(using: .tcp, on: NWEndpoint.Port(rawValue: Self.port)!)
-''',
-        '''        do {
-            // File sharing is discovered over IPv4 multicast and Android LAN
-            // clients connect to an IPv4 address.  On some macOS versions the
-            // default Network.framework listener presents as IPv6-only and
-            // never acknowledges those SYNs.  Pin this endpoint to IPv4.
-            let parameters = NWParameters.tcp
-            guard let ip = parameters.defaultProtocolStack.internetProtocol as? NWProtocolIP.Options else {
-                throw NSError(domain: "ClipMesh", code: -1, userInfo: [NSLocalizedDescriptionKey: "Network.framework has no IP options"])
-            }
-            ip.version = .v4
-            let listener = try NWListener(using: parameters, on: NWEndpoint.Port(rawValue: Self.port)!)
-''',
+        '    private let queue = DispatchQueue(label: "dev.clipmesh.fileshare", qos: .utility)\n',
+        '''    private let httpQueue = DispatchQueue(label: "dev.clipmesh.fileshare.http", qos: .utility)\n    private let discoveryQueue = DispatchQueue(label: "dev.clipmesh.fileshare.discovery", qos: .utility)\n    private let announceQueue = DispatchQueue(label: "dev.clipmesh.fileshare.announce", qos: .utility)\n    private let sendQueue = DispatchQueue(label: "dev.clipmesh.fileshare.send", qos: .utility)\n''',
+        "macOS file-transfer queue separation",
+    )
+    replace_once(
+        transfer,
+        '''    func send(files: [URL], to device: TransferDevice, progress: @escaping (String) -> Void, completion: @escaping (Result<Void, Error>) -> Void) {\n        queue.async {\n''',
+        '''    func send(files: [URL], to device: TransferDevice, progress: @escaping (String) -> Void, completion: @escaping (Result<Void, Error>) -> Void) {\n        sendQueue.async {\n''',
+        "macOS outgoing transfer queue",
+    )
+    replace_once(
+        transfer,
+        '''    private func startDiscovery() {\n        queue.async {\n''',
+        '''    private func startDiscovery() {\n        discoveryQueue.async {\n''',
+        "macOS blocking discovery queue",
+    )
+    replace_once(
+        transfer,
+        '        let source = DispatchSource.makeTimerSource(queue: queue)\n',
+        '        let source = DispatchSource.makeTimerSource(queue: announceQueue)\n',
+        "macOS announcement queue",
+    )
+
+    # File sharing is discovered over IPv4 multicast and Android LAN clients
+    # connect to an IPv4 address. Pin Network.framework to IPv4 explicitly.
+    replace_once(
+        transfer,
+        '''        do {\n            let listener = try NWListener(using: .tcp, on: NWEndpoint.Port(rawValue: Self.port)!)\n''',
+        '''        do {\n            let parameters = NWParameters.tcp\n            guard let ip = parameters.defaultProtocolStack.internetProtocol as? NWProtocolIP.Options else {\n                throw NSError(domain: "ClipMesh", code: -1, userInfo: [NSLocalizedDescriptionKey: "Network.framework has no IP options"])\n            }\n            ip.version = .v4\n            let listener = try NWListener(using: parameters, on: NWEndpoint.Port(rawValue: Self.port)!)\n''',
         "macOS IPv4 file listener",
     )
     replace_once(
+        transfer,
+        '            listener.start(queue: queue)\n',
+        '            listener.start(queue: httpQueue)\n',
+        "macOS HTTP listener queue",
+    )
+    replace_once(
+        transfer,
+        '        connection.start(queue: queue)\n',
+        '        connection.start(queue: httpQueue)\n',
+        "macOS HTTP connection queue",
+    )
+
+    final_transfer = transfer.read_text(encoding="utf-8")
+    required = (
+        'private let httpQueue = DispatchQueue(label: "dev.clipmesh.fileshare.http"',
+        'private let discoveryQueue = DispatchQueue(label: "dev.clipmesh.fileshare.discovery"',
+        'private let announceQueue = DispatchQueue(label: "dev.clipmesh.fileshare.announce"',
+        'private let sendQueue = DispatchQueue(label: "dev.clipmesh.fileshare.send"',
+        'discoveryQueue.async {',
+        'sendQueue.async {',
+        'DispatchSource.makeTimerSource(queue: announceQueue)',
+        'listener.start(queue: httpQueue)',
+        'connection.start(queue: httpQueue)',
+        'ip.version = .v4',
+    )
+    for value in required:
+        if value not in final_transfer:
+            raise SystemExit(f"macOS v0.2.11 transfer guard missing after patch: {value}")
+    if 'private let queue = DispatchQueue(label: "dev.clipmesh.fileshare"' in final_transfer:
+        raise SystemExit("macOS v0.2.11 still contains the starvation-prone shared file-transfer queue")
+
+    replace_once(
         build,
         '  <key>NSHighResolutionCapable</key><true/>',
-        '''  <key>NSHighResolutionCapable</key><true/>
-  <key>NSLocalNetworkUsageDescription</key><string>ClipMesh uses your local network to discover paired devices and transfer clipboard content and files between them.</string>''',
+        '''  <key>NSHighResolutionCapable</key><true/>\n  <key>NSLocalNetworkUsageDescription</key><string>ClipMesh uses your local network to discover paired devices and transfer clipboard content and files between them.</string>''',
         "macOS local network privacy description",
     )
     replace_all(build, "0.2.10", "0.2.11", "macOS v0.2.11 version", expected=4)
@@ -70,4 +124,4 @@ else:
 cargo = project / "Cargo.toml"
 replace_once(cargo, 'version = "0.2.10"', 'version = "0.2.11"', f"{system} Cargo package version")
 
-print(f"Applied ClipMesh v0.2.11 IPv4 file-transfer patch on {system}")
+print(f"Applied ClipMesh v0.2.11 IPv4 + nonblocking file-transfer patch on {system}")
