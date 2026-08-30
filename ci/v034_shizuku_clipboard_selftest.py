@@ -13,14 +13,21 @@ if system == "Linux":
 
     assert "import android.os.Binder" in service
     assert 'private const val SHELL_PACKAGE = "com.android.shell"' in service
-    assert "val callingIdentity = Binder.clearCallingIdentity()" in service
-    assert "Binder.restoreCallingIdentity(callingIdentity)" in service
-    assert ".version(5)" in manager
+    assert 'val clearInboundIdentity = methodName == "getPrimaryClip"' in service
+    assert "val callingIdentity = if (clearInboundIdentity) Binder.clearCallingIdentity() else 0L" in service
+    assert "if (clearInboundIdentity) Binder.restoreCallingIdentity(callingIdentity)" in service
+    assert ".version(6)" in manager
     assert ".version(4)" not in manager
+    assert ".version(5)" not in manager
 
-    clear_at = service.index("val callingIdentity = Binder.clearCallingIdentity()")
+    guard_at = service.index('val clearInboundIdentity = methodName == "getPrimaryClip"')
+    clear_at = service.index("Binder.clearCallingIdentity()", guard_at)
     invoke_at = service.index("val result = method.invoke(target, *args)", clear_at)
-    restore_at = service.index("Binder.restoreCallingIdentity(callingIdentity)", invoke_at)
-    assert clear_at < invoke_at < restore_at
+    restore_at = service.index("if (clearInboundIdentity) Binder.restoreCallingIdentity(callingIdentity)", invoke_at)
+    assert guard_at < clear_at < invoke_at < restore_at
 
-print(f"ClipMesh Shizuku clipboard Binder-identity self-test passed on {system}")
+    # The regression guard is the conditional itself: setPrimaryClip must not
+    # unconditionally clear the caller identity that worked on the physical S23.
+    assert "val callingIdentity = Binder.clearCallingIdentity()" not in service
+
+print(f"ClipMesh Shizuku background-read Binder-identity self-test passed on {system}")
