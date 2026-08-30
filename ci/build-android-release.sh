@@ -114,6 +114,7 @@ for debug_component in \
   dev.clipmesh.CiBackgroundCaptureReceiver \
   dev.clipmesh.DevTestReceiver \
   dev.clipmesh.DevTestFileProvider \
+  dev.clipmesh.AcceptanceReceiver \
   dev.clipmesh.testdriver; do
   if printf '%s\n' "$manifest" | grep -q "$debug_component"; then
     echo "ERROR: debug-only Android component leaked into the release APK: $debug_component" >&2
