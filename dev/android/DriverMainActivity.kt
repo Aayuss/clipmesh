@@ -63,9 +63,10 @@ class MainActivity : Activity() {
     }
 
     private fun waitText(expected: String) {
-        // Waiting must not itself create a clipboard synchronization event.
-        // Arm the listener before reporting READY so only a new remote event can pass.
-        armClipboardWait(15_000L, predicate = {
+        // The expected text contains a per-run nonce. Polling is therefore safe
+        // against stale state and also catches shell/Shizuku writes on OEMs that
+        // occasionally omit an app OnPrimaryClipChanged callback.
+        armClipboardWait(20_000L, pollCurrent = true, predicate = {
             val clip = clipboard().primaryClip ?: return@armClipboardWait false
             clip.itemCount > 0 && clip.getItemAt(0).text?.toString() == expected
         }, pass = "PASS_TEXT")
@@ -86,9 +87,9 @@ class MainActivity : Activity() {
     }
 
     private fun waitImage() {
-        // A previous Android -> Mac test may leave an identical 3x2 image on the
-        // clipboard. Only evaluate after a NEW clipboard-change event arrives.
-        armClipboardWait(20_000L, predicate = {
+        // The harness first replaces any prior image with unique text and waits
+        // for that reset to propagate. After that, only a new image event can pass.
+        armClipboardWait(25_000L, pollCurrent = false, predicate = {
             val clip = clipboard().primaryClip ?: return@armClipboardWait false
             if (clip.itemCount == 0) return@armClipboardWait false
             val uri = clip.getItemAt(0).uri ?: return@armClipboardWait false
@@ -100,16 +101,37 @@ class MainActivity : Activity() {
         write("READY_IMAGE")
     }
 
-    private fun armClipboardWait(timeoutMs: Long, predicate: () -> Boolean, pass: String) {
+    private fun armClipboardWait(
+        timeoutMs: Long,
+        pollCurrent: Boolean,
+        predicate: () -> Boolean,
+        pass: String
+    ) {
         val manager = clipboard()
-        val listener = ClipboardManager.OnPrimaryClipChangedListener {
-            if (runCatching(predicate).getOrDefault(false)) {
-                clearWaiter()
-                write(pass)
-            }
+        lateinit var listener: ClipboardManager.OnPrimaryClipChangedListener
+
+        fun check(): Boolean {
+            if (clipListener !== listener) return false
+            if (!runCatching(predicate).getOrDefault(false)) return false
+            clearWaiter()
+            write(pass)
+            return true
         }
+
+        listener = ClipboardManager.OnPrimaryClipChangedListener { check() }
         clipListener = listener
         manager.addPrimaryClipChangedListener(listener)
+
+        if (pollCurrent) {
+            val poller = object : Runnable {
+                override fun run() {
+                    if (clipListener !== listener) return
+                    if (!check()) handler.postDelayed(this, 100L)
+                }
+            }
+            handler.postDelayed(poller, 100L)
+        }
+
         handler.postDelayed({
             if (clipListener === listener) {
                 clearWaiter()
