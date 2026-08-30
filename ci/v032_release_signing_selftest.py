@@ -39,6 +39,9 @@ for name in (
     assert name in android_script
 assert "apksigner" in android_script
 assert "--print-certs" in android_script
+assert "Signer #1 certificate SHA-256 digest" in android_script
+assert "V2 Signer: certificate SHA-256 digest" in android_script
+assert "reported_certificate_count" in android_script
 assert "manifest application-id" in android_script
 assert "manifest version-name" in android_script
 assert "manifest version-code" in android_script

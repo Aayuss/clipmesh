@@ -81,9 +81,22 @@ printf '%s\n' "$verification" | grep -q '^Verified using v2 scheme (APK Signatur
   echo "ERROR: the Android release APK is missing an APK Signature Scheme v2 signature." >&2
   exit 1
 }
-actual_cert="$(printf '%s\n' "$verification" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1 | tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]')"
+reported_certificates="$(
+  printf '%s\n' "$verification" \
+    | awk '/^Signer #1 certificate SHA-256 digest: / || /^V2 Signer: certificate SHA-256 digest: / {
+        digest = $NF
+        gsub(/:/, "", digest)
+        print tolower(digest)
+      }' \
+    | sort -u
+)"
+reported_certificate_count="$(printf '%s\n' "$reported_certificates" | awk 'NF { count += 1 } END { print count + 0 }')"
+[ "$reported_certificate_count" = 1 ] || {
+  echo "ERROR: apksigner must report exactly one unique signer certificate SHA-256; found $reported_certificate_count." >&2
+  exit 1
+}
+actual_cert="$(printf '%s\n' "$reported_certificates" | head -n 1)"
 expected_cert="$(printf '%s' "$CLIPMESH_ANDROID_SIGNING_CERT_SHA256" | tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]')"
-[ -n "$actual_cert" ] || { echo "ERROR: apksigner did not report a signer certificate." >&2; exit 1; }
 if [ "$actual_cert" != "$expected_cert" ]; then
   echo "ERROR: Android signing certificate SHA-256 does not match CLIPMESH_ANDROID_SIGNING_CERT_SHA256." >&2
   echo "Actual certificate SHA-256: $actual_cert" >&2
