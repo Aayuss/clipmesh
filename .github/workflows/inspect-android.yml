@@ -1,0 +1,36 @@
+name: Inspect reconstructed Android clipboard path
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/inspect-android.yml'
+      - 'ci/**'
+      - 'dev/android/**'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Reconstruct final Android source
+        run: |
+          set -euo pipefail
+          python ci/reconstruct.py --platform Linux
+          J=clipmesh/android/app/src/main/java/dev/clipmesh
+          echo '===== ClipboardBridge.kt ====='
+          cat "$J/clipboard/ClipboardBridge.kt"
+          echo '===== NetworkEngine.kt ====='
+          cat "$J/network/NetworkEngine.kt"
+          echo '===== ClipboardUserService.kt ====='
+          cat "$J/shizuku/ClipboardUserService.kt"
+          echo '===== ShizukuManager.kt ====='
+          cat "$J/shizuku/ShizukuManager.kt"
+          echo '===== BackgroundRuntime.kt ====='
+          cat "$J/BackgroundRuntime.kt"
