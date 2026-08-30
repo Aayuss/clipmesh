@@ -23,33 +23,41 @@ if system == "Linux":
     runtime = java / "BackgroundRuntime.kt"
     bridge = java / "clipboard/ClipboardBridge.kt"
 
-    replace_once(
-        runtime,
-        '''        val net = NetworkEngine(settings, key, { payload -> bridge.applyRemote(payload) }, { text -> status = text })\n''',
-        '''        val net = NetworkEngine(settings, key, { payload ->\n            if (BuildConfig.DEBUG) {\n                app.getSharedPreferences("clipmesh_ci", Context.MODE_PRIVATE).edit()\n                    .putLong("last_remote_received_at", System.currentTimeMillis())\n                    .putString("last_remote_received_fingerprint", payload.stableFingerprint())\n                    .apply()\n            }\n            bridge.applyRemote(payload)\n        }, { text -> status = text })\n''',
-        "record incoming clipboard frame",
-    )
+    runtime_text = runtime.read_text(encoding="utf-8")
+    if 'putLong("last_remote_received_at"' not in runtime_text:
+        replace_once(
+            runtime,
+            '''        val net = NetworkEngine(settings, key, { payload -> bridge.applyRemote(payload) }, { text -> status = text })\n''',
+            '''        val net = NetworkEngine(settings, key, { payload ->\n            if (BuildConfig.DEBUG) {\n                app.getSharedPreferences("clipmesh_ci", Context.MODE_PRIVATE).edit()\n                    .putLong("last_remote_received_at", System.currentTimeMillis())\n                    .putString("last_remote_received_fingerprint", payload.stableFingerprint())\n                    .apply()\n            }\n            bridge.applyRemote(payload)\n        }, { text -> status = text })\n''',
+            "record incoming clipboard frame",
+        )
 
-    replace_once(
-        runtime,
-        '''    fun captureNow() { clipboard?.captureNowForForeground() }\n''',
-        '''    fun captureNow() { clipboard?.captureNowForForeground() }\n    fun debugPeerCount(): Int = network?.peerCount() ?: 0\n''',
-        "debug clipboard peer count",
-    )
+    runtime_text = runtime.read_text(encoding="utf-8")
+    if 'fun debugPeerCount(): Int = network?.peerCount() ?: 0' not in runtime_text:
+        replace_once(
+            runtime,
+            '''    fun captureNow() { clipboard?.captureNowForForeground() }\n''',
+            '''    fun captureNow() { clipboard?.captureNowForForeground() }\n    fun debugPeerCount(): Int = network?.peerCount() ?: 0\n''',
+            "debug clipboard peer count",
+        )
 
-    replace_once(
-        bridge,
-        '''        lastRemoteFingerprint.set(remoteFingerprint)\n        lastRemoteAppliedAt = now\n        suppressedFingerprint.set(remoteFingerprint)\n''',
-        '''        lastRemoteFingerprint.set(remoteFingerprint)\n        lastRemoteAppliedAt = now\n        if (dev.clipmesh.BuildConfig.DEBUG) {\n            context.getSharedPreferences("clipmesh_ci", Context.MODE_PRIVATE).edit()\n                .putLong("last_remote_apply_at", now)\n                .putString("last_remote_apply_fingerprint", remoteFingerprint)\n                .apply()\n        }\n        suppressedFingerprint.set(remoteFingerprint)\n''',
-        "record remote clipboard apply",
-    )
+    bridge_text = bridge.read_text(encoding="utf-8")
+    if 'putLong("last_remote_apply_at"' not in bridge_text:
+        replace_once(
+            bridge,
+            '''        lastRemoteFingerprint.set(remoteFingerprint)\n        lastRemoteAppliedAt = now\n        suppressedFingerprint.set(remoteFingerprint)\n''',
+            '''        lastRemoteFingerprint.set(remoteFingerprint)\n        lastRemoteAppliedAt = now\n        if (dev.clipmesh.BuildConfig.DEBUG) {\n            context.getSharedPreferences("clipmesh_ci", Context.MODE_PRIVATE).edit()\n                .putLong("last_remote_apply_at", now)\n                .putString("last_remote_apply_fingerprint", remoteFingerprint)\n                .apply()\n        }\n        suppressedFingerprint.set(remoteFingerprint)\n''',
+            "record remote clipboard apply",
+        )
 
-    replace_once(
-        bridge,
-        '''        if (plain != null && html == null && shizuku.hasPermission() && !settings.showRemoteCopyOverlay) {\n            val text = plain.data.toString(Charsets.UTF_8)\n            if (shizuku.setText(text)) return\n        }\n        main.post {\n''',
-        '''        if (plain != null && html == null && shizuku.hasPermission() && !settings.showRemoteCopyOverlay) {\n            val text = plain.data.toString(Charsets.UTF_8)\n            val wrote = shizuku.setText(text)\n            if (dev.clipmesh.BuildConfig.DEBUG) {\n                context.getSharedPreferences("clipmesh_ci", Context.MODE_PRIVATE).edit()\n                    .putLong("last_remote_shizuku_write_at", System.currentTimeMillis())\n                    .putBoolean("last_remote_shizuku_write_ok", wrote)\n                    .apply()\n            }\n            if (wrote) return\n        }\n        if (dev.clipmesh.BuildConfig.DEBUG) {\n            context.getSharedPreferences("clipmesh_ci", Context.MODE_PRIVATE).edit()\n                .putLong("last_remote_fallback_at", System.currentTimeMillis())\n                .apply()\n        }\n        main.post {\n''',
-        "record remote clipboard write path",
-    )
+    bridge_text = bridge.read_text(encoding="utf-8")
+    if 'putLong("last_remote_shizuku_write_at"' not in bridge_text:
+        replace_once(
+            bridge,
+            '''        if (plain != null && html == null && shizuku.hasPermission() && !settings.showRemoteCopyOverlay) {\n            val text = plain.data.toString(Charsets.UTF_8)\n            if (shizuku.setText(text)) return\n        }\n        main.post {\n''',
+            '''        if (plain != null && html == null && shizuku.hasPermission() && !settings.showRemoteCopyOverlay) {\n            val text = plain.data.toString(Charsets.UTF_8)\n            val wrote = shizuku.setText(text)\n            if (dev.clipmesh.BuildConfig.DEBUG) {\n                context.getSharedPreferences("clipmesh_ci", Context.MODE_PRIVATE).edit()\n                    .putLong("last_remote_shizuku_write_at", System.currentTimeMillis())\n                    .putBoolean("last_remote_shizuku_write_ok", wrote)\n                    .apply()\n            }\n            if (wrote) return\n        }\n        if (dev.clipmesh.BuildConfig.DEBUG) {\n            context.getSharedPreferences("clipmesh_ci", Context.MODE_PRIVATE).edit()\n                .putLong("last_remote_fallback_at", System.currentTimeMillis())\n                .apply()\n        }\n        main.post {\n''',
+            "record remote clipboard write path",
+        )
 
     final_runtime = runtime.read_text(encoding="utf-8")
     final_bridge = bridge.read_text(encoding="utf-8")
