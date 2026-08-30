@@ -17,6 +17,7 @@ on:
       - 'ci/v037_acceptance_selftest.py'
       - 'ci/build-android-release.sh'
       - '.github/workflows/acceptance-harness.yml'
+      - '.github/workflows/dev-harness.yml'
   pull_request:
     branches: [main]
     paths:
@@ -32,6 +33,7 @@ on:
       - 'ci/v037_acceptance_selftest.py'
       - 'ci/build-android-release.sh'
       - '.github/workflows/acceptance-harness.yml'
+      - '.github/workflows/dev-harness.yml'
 
 permissions:
   contents: read
