@@ -20,6 +20,7 @@ import java.io.File
 class MainActivity : Activity() {
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var status: TextView
+    private var clipListener: ClipboardManager.OnPrimaryClipChangedListener? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,8 +39,13 @@ class MainActivity : Activity() {
         intent?.let(::handle)
     }
 
+    override fun onDestroy() {
+        clearWaiter()
+        super.onDestroy()
+    }
+
     private fun handle(intent: Intent) {
-        handler.removeCallbacksAndMessages(null)
+        clearWaiter()
         when (intent.getStringExtra("mode")) {
             "set_text" -> setText(decode(intent.getStringExtra("value_b64")))
             "wait_text" -> waitText(decode(intent.getStringExtra("value_b64")))
@@ -58,12 +64,12 @@ class MainActivity : Activity() {
 
     private fun waitText(expected: String) {
         // Waiting must not itself create a clipboard synchronization event.
-        // Every expected text value contains a unique physical-test nonce.
-        write("READY_TEXT")
-        poll(15_000L, predicate = {
-            val clip = clipboard().primaryClip ?: return@poll false
+        // Arm the listener before reporting READY so only a new remote event can pass.
+        armClipboardWait(15_000L, predicate = {
+            val clip = clipboard().primaryClip ?: return@armClipboardWait false
             clip.itemCount > 0 && clip.getItemAt(0).text?.toString() == expected
-        }, onPass = { write("PASS_TEXT") })
+        }, pass = "PASS_TEXT")
+        write("READY_TEXT")
     }
 
     private fun setImage() {
@@ -80,34 +86,42 @@ class MainActivity : Activity() {
     }
 
     private fun waitImage() {
-        // The harness clears stale image state before arming this receiver.
-        // Do not create an outgoing clipboard event here.
-        write("READY_IMAGE")
-        poll(20_000L, predicate = {
-            val clip = clipboard().primaryClip ?: return@poll false
-            if (clip.itemCount == 0) return@poll false
-            val uri = clip.getItemAt(0).uri ?: return@poll false
+        // A previous Android -> Mac test may leave an identical 3x2 image on the
+        // clipboard. Only evaluate after a NEW clipboard-change event arrives.
+        armClipboardWait(20_000L, predicate = {
+            val clip = clipboard().primaryClip ?: return@armClipboardWait false
+            if (clip.itemCount == 0) return@armClipboardWait false
+            val uri = clip.getItemAt(0).uri ?: return@armClipboardWait false
             val bitmap = runCatching {
                 contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
-            }.getOrNull() ?: return@poll false
+            }.getOrNull() ?: return@armClipboardWait false
             bitmap.width == 3 && bitmap.height == 2
-        }, onPass = { write("PASS_IMAGE 3x2") })
+        }, pass = "PASS_IMAGE 3x2")
+        write("READY_IMAGE")
     }
 
-    private fun poll(timeoutMs: Long, predicate: () -> Boolean, onPass: () -> Unit) {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        fun tick() {
+    private fun armClipboardWait(timeoutMs: Long, predicate: () -> Boolean, pass: String) {
+        val manager = clipboard()
+        val listener = ClipboardManager.OnPrimaryClipChangedListener {
             if (runCatching(predicate).getOrDefault(false)) {
-                onPass()
-                return
+                clearWaiter()
+                write(pass)
             }
-            if (System.currentTimeMillis() >= deadline) {
-                write("FAIL timeout")
-                return
-            }
-            handler.postDelayed(::tick, 120L)
         }
-        handler.postDelayed(::tick, 120L)
+        clipListener = listener
+        manager.addPrimaryClipChangedListener(listener)
+        handler.postDelayed({
+            if (clipListener === listener) {
+                clearWaiter()
+                write("FAIL timeout")
+            }
+        }, timeoutMs)
+    }
+
+    private fun clearWaiter() {
+        handler.removeCallbacksAndMessages(null)
+        clipListener?.let { runCatching { clipboard().removePrimaryClipChangedListener(it) } }
+        clipListener = null
     }
 
     private fun decode(value: String?): String = String(
