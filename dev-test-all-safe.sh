@@ -13,6 +13,38 @@ cleanup(){
 }
 trap cleanup EXIT INT TERM
 
+# If the caller supplied a Wireless Debugging endpoint, connect it instead of
+# failing just because this adb-server process has not opened that transport yet.
+if [ -n "${ANDROID_SERIAL:-}" ]; then
+  ADB_BIN="${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb"
+  [ -x "$ADB_BIN" ] || ADB_BIN="$(command -v adb || true)"
+  if [ -n "$ADB_BIN" ] && ! "$ADB_BIN" -s "$ANDROID_SERIAL" get-state >/dev/null 2>&1; then
+    "$ADB_BIN" connect "$ANDROID_SERIAL" >/dev/null 2>&1 || true
+    if ! "$ADB_BIN" -s "$ANDROID_SERIAL" get-state >/dev/null 2>&1; then
+      host="${ANDROID_SERIAL%%:*}"
+      current="$($ADB_BIN mdns services 2>/dev/null | awk -v host="$host" '
+        /_adb-tls-connect/ {
+          if (match($0, /[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+/)) {
+            ep=substr($0,RSTART,RLENGTH)
+            if (index(ep, host ":") == 1) { print ep; exit }
+          }
+        }')"
+      if [ -n "$current" ]; then
+        "$ADB_BIN" connect "$current" >/dev/null 2>&1 || true
+        if "$ADB_BIN" -s "$current" get-state >/dev/null 2>&1; then
+          export ANDROID_SERIAL="$current"
+          printf 'Wireless Debugging endpoint refreshed: %s\n' "$ANDROID_SERIAL"
+        fi
+      fi
+    fi
+  fi
+fi
+
+# dev-test-all.sh intentionally generates a runtime copy. Its historical bug was
+# placing that copy in ~/.clipmesh-dev, which made dev-test.sh recalculate ROOT
+# as ~/.clipmesh-dev and then fail `git -C "$ROOT" archive`. Generate both the
+# wrapper and runtime inside the real repository so every relative/repository
+# operation remains anchored to the actual checkout.
 python3 - "$ORIGINAL" "$PATCHED" "$RUNTIME" <<'PY'
 from pathlib import Path
 import sys
