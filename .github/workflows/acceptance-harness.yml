@@ -11,9 +11,13 @@ on:
       - 'dev/android/DevTestFileProvider.kt'
       - 'dev/macos-pasteboard-helper.swift'
       - 'ci/reconstruct.py'
+      - 'ci/patch-v033-ipv4-transfer.py'
       - 'ci/patch-v038-file-transfer-visibility.py'
       - 'ci/patch-acceptance-v2.py'
+      - 'ci/patch-acceptance-v3.py'
+      - 'ci/patch-acceptance-chain.py'
       - 'ci/finalize-comprehensive-runner.py'
+      - 'ci/finalize-physical-v2.py'
       - 'ci/v037_acceptance_selftest.py'
       - 'ci/build-android-release.sh'
       - '.github/workflows/acceptance-harness.yml'
@@ -27,9 +31,13 @@ on:
       - 'dev/android/DevTestFileProvider.kt'
       - 'dev/macos-pasteboard-helper.swift'
       - 'ci/reconstruct.py'
+      - 'ci/patch-v033-ipv4-transfer.py'
       - 'ci/patch-v038-file-transfer-visibility.py'
       - 'ci/patch-acceptance-v2.py'
+      - 'ci/patch-acceptance-v3.py'
+      - 'ci/patch-acceptance-chain.py'
       - 'ci/finalize-comprehensive-runner.py'
+      - 'ci/finalize-physical-v2.py'
       - 'ci/v037_acceptance_selftest.py'
       - 'ci/build-android-release.sh'
       - '.github/workflows/acceptance-harness.yml'
@@ -51,12 +59,17 @@ jobs:
       - name: Validate acceptance sources and final runner
         run: |
           set -euo pipefail
-          python -m py_compile ci/patch-v038-file-transfer-visibility.py ci/patch-acceptance-v2.py ci/finalize-comprehensive-runner.py ci/v037_acceptance_selftest.py
+          python -m py_compile ci/patch-v033-ipv4-transfer.py ci/patch-v038-file-transfer-visibility.py ci/patch-acceptance-v2.py ci/patch-acceptance-v3.py ci/patch-acceptance-chain.py ci/finalize-comprehensive-runner.py ci/finalize-physical-v2.py ci/v037_acceptance_selftest.py
           bash -n dev-test-comprehensive.sh
           bash -n dev-test-final.sh
-          python ci/finalize-comprehensive-runner.py dev-test-comprehensive.sh /tmp/clipmesh-final-physical.sh
+          python ci/finalize-comprehensive-runner.py dev-test-comprehensive.sh /tmp/clipmesh-final-v1.sh
+          python ci/finalize-physical-v2.py /tmp/clipmesh-final-v1.sh /tmp/clipmesh-final-physical.sh
           bash -n /tmp/clipmesh-final-physical.sh
           grep -q 'FINAL_COMPREHENSIVE_RUNNER_AUDIT_V1' /tmp/clipmesh-final-physical.sh
+          grep -q 'PHYSICAL_HARDENING_V2' /tmp/clipmesh-final-physical.sh
+          grep -q 'patch-acceptance-chain.py' /tmp/clipmesh-final-physical.sh
+          grep -q 'mac_command discover' /tmp/clipmesh-final-physical.sh
+          grep -q 'wait_driver SET_IMAGE' /tmp/clipmesh-final-physical.sh
           grep -q 'distinct_hashes=2' /tmp/clipmesh-final-physical.sh
           grep -q 'before_prompt=' /tmp/clipmesh-final-physical.sh
           grep -q 'before_pending=' /tmp/clipmesh-final-physical.sh
@@ -69,11 +82,16 @@ jobs:
         run: |
           set -euo pipefail
           python ci/reconstruct.py --platform Darwin
-          CLIPMESH_PLATFORM=Darwin python ci/patch-acceptance-v2.py
+          grep -q 'SO_BROADCAST' ci/ClipMeshTransfer.swift
+          grep -q '255.255.255.255' ci/ClipMeshTransfer.swift
+          CLIPMESH_PLATFORM=Darwin python ci/patch-acceptance-chain.py
           CLIPMESH_PLATFORM=Darwin python ci/v037_acceptance_selftest.py
           grep -q -- '--dev-accept-set-favorite' ci/ClipMeshApp.swift
           grep -q -- '--dev-accept-command' ci/ClipMeshApp.swift
           grep -q -- '--dev-accept-send-files' ci/ClipMeshApp.swift
+          grep -q 'ClipMesh.Acceptance.CommandKey' ci/ClipMeshApp.swift
+          grep -q 'devAcceptancePollCommand' ci/ClipMeshApp.swift
+          grep -q 'case "discover"' ci/ClipMeshApp.swift
           grep -q 'devAcceptanceSnapshotLines' ci/ClipMeshTransfer.swift
           grep -q 'ClipMesh.Acceptance.IncomingPolicy' ci/ClipMeshTransfer.swift
           grep -q 'private let httpQueue' ci/ClipMeshTransfer.swift
@@ -109,12 +127,14 @@ jobs:
       - name: Reconstruct and instrument Android
         run: |
           set -euo pipefail
-          python -m py_compile ci/patch-v038-file-transfer-visibility.py ci/patch-acceptance-v2.py ci/finalize-comprehensive-runner.py ci/v037_acceptance_selftest.py
+          python -m py_compile ci/patch-v033-ipv4-transfer.py ci/patch-v038-file-transfer-visibility.py ci/patch-acceptance-v2.py ci/patch-acceptance-v3.py ci/patch-acceptance-chain.py ci/finalize-comprehensive-runner.py ci/finalize-physical-v2.py ci/v037_acceptance_selftest.py
           python ci/reconstruct.py --platform Linux
           J=clipmesh/android/app/src/main/java/dev/clipmesh
           grep -q 'val devices = runCatching { LocalTransferEngine.nearbyDevices() }.getOrDefault(emptyList())' "$J/fileshare/FileShareActivity.kt"
           ! grep -q 'nearbyDevices().filterNot' "$J/fileshare/FileShareActivity.kt"
-          CLIPMESH_PLATFORM=Linux python ci/patch-acceptance-v2.py
+          grep -q '255.255.255.255' "$J/fileshare/LocalTransferEngine.kt"
+          grep -q 'socket.broadcast = true' "$J/fileshare/LocalTransferEngine.kt"
+          CLIPMESH_PLATFORM=Linux python ci/patch-acceptance-chain.py
           CLIPMESH_PLATFORM=Linux python ci/v037_acceptance_selftest.py
           D=clipmesh/android/app/src/debug/java/dev/clipmesh
           DM=clipmesh/android/app/src/debug/AndroidManifest.xml
