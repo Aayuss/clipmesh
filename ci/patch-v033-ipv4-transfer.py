@@ -4,6 +4,7 @@
 from pathlib import Path
 import os
 import platform
+import runpy
 
 
 root = Path(__file__).resolve().parents[1]
@@ -132,6 +133,10 @@ elif system == "Linux":
     gradle = project / "android/app/build.gradle.kts"
     replace_once(gradle, "versionCode = 20", "versionCode = 21", "Android v0.2.11 versionCode")
     replace_once(gradle, 'versionName = "0.2.10"', 'versionName = "0.2.11"', "Android v0.2.11 versionName")
+    # build.yml still invokes the historical patch stack explicitly instead of
+    # reconstruct.py. Chain the Android-only v034 repair here as well so release,
+    # dev-latest, CI and the physical harness all compile identical source.
+    runpy.run_path(str(root / "ci/patch-v034-shizuku-clipboard.py"), run_name="__main__")
 elif system == "Windows":
     ui = root / "ci/ClipMeshWindows.cs"
     replace_once(ui, 'private const string Version = "0.2.10";', 'private const string Version = "0.2.11";', "Windows v0.2.11 version")
