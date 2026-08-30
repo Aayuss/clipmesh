@@ -23,14 +23,22 @@ if system == "Darwin":
         'discoveryQueue.async {',
         'sendQueue.async {',
         'DispatchSource.makeTimerSource(queue: announceQueue)',
+        'func discoverNow()',
+        'announceQueue.async { [weak self] in',
+        'self.announceQueue.asyncAfter',
         'listener.start(queue: httpQueue)',
         'connection.start(queue: httpQueue)',
     ):
         assert required in transfer, required
 
-    assert 'private let queue = DispatchQueue(label: "dev.clipmesh.fileshare"' not in transfer
-    assert 'listener.start(queue: queue)' not in transfer
-    assert 'connection.start(queue: queue)' not in transfer
+    for forbidden in (
+        'private let queue = DispatchQueue(label: "dev.clipmesh.fileshare"',
+        'listener.start(queue: queue)',
+        'connection.start(queue: queue)',
+        'func discoverNow() { queue.async',
+        'self.queue.asyncAfter',
+    ):
+        assert forbidden not in transfer, forbidden
 
     assert "NSLocalNetworkUsageDescription" in build
     assert "CFBundleShortVersionString</key><string>0.2.11" in build
