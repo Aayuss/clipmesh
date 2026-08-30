@@ -7,6 +7,7 @@ on:
     paths:
       - 'dev-test.sh'
       - 'dev-test-all.sh'
+      - 'dev-test-comprehensive.sh'
       - 'dev-test-final.sh'
       - 'dev/**'
       - 'ci/reconstruct.py'
@@ -16,7 +17,13 @@ on:
       - 'ci/patch-v034-shizuku-clipboard.py'
       - 'ci/patch-v035-e2e-observability.py'
       - 'ci/patch-v038-file-transfer-visibility.py'
+      - 'ci/patch-v039-lan-discovery.py'
+      - 'ci/patch-v040-macos-resilience.py'
+      - 'ci/patch-acceptance-v4.py'
+      - 'ci/patch-acceptance-chain.py'
       - 'ci/finalize-comprehensive-runner.py'
+      - 'ci/finalize-physical-v2.py'
+      - 'ci/finalize-physical-v3.py'
       - 'ci/v031_devtest_selftest.py'
       - 'ci/v032_release_signing_selftest.py'
       - 'ci/v033_ipv4_transfer_selftest.py'
@@ -28,6 +35,7 @@ on:
     paths:
       - 'dev-test.sh'
       - 'dev-test-all.sh'
+      - 'dev-test-comprehensive.sh'
       - 'dev-test-final.sh'
       - 'dev/**'
       - 'ci/reconstruct.py'
@@ -37,7 +45,13 @@ on:
       - 'ci/patch-v034-shizuku-clipboard.py'
       - 'ci/patch-v035-e2e-observability.py'
       - 'ci/patch-v038-file-transfer-visibility.py'
+      - 'ci/patch-v039-lan-discovery.py'
+      - 'ci/patch-v040-macos-resilience.py'
+      - 'ci/patch-acceptance-v4.py'
+      - 'ci/patch-acceptance-chain.py'
       - 'ci/finalize-comprehensive-runner.py'
+      - 'ci/finalize-physical-v2.py'
+      - 'ci/finalize-physical-v3.py'
       - 'ci/v031_devtest_selftest.py'
       - 'ci/v032_release_signing_selftest.py'
       - 'ci/v033_ipv4_transfer_selftest.py'
@@ -61,13 +75,19 @@ jobs:
       - name: Validate harness scripts
         run: |
           set -euo pipefail
-          python -m py_compile ci/reconstruct.py ci/patch-v031-dev-test.py ci/patch-v032-release.py ci/patch-v033-ipv4-transfer.py ci/patch-v034-shizuku-clipboard.py ci/patch-v035-e2e-observability.py ci/patch-v038-file-transfer-visibility.py ci/finalize-comprehensive-runner.py ci/v031_devtest_selftest.py ci/v032_release_signing_selftest.py ci/v033_ipv4_transfer_selftest.py ci/v034_shizuku_clipboard_selftest.py dev/uia-find-allow.py
+          python -m py_compile ci/reconstruct.py ci/patch-v031-dev-test.py ci/patch-v032-release.py ci/patch-v033-ipv4-transfer.py ci/patch-v034-shizuku-clipboard.py ci/patch-v035-e2e-observability.py ci/patch-v038-file-transfer-visibility.py ci/patch-v039-lan-discovery.py ci/patch-v040-macos-resilience.py ci/patch-acceptance-v4.py ci/patch-acceptance-chain.py ci/finalize-comprehensive-runner.py ci/finalize-physical-v2.py ci/finalize-physical-v3.py ci/v031_devtest_selftest.py ci/v032_release_signing_selftest.py ci/v033_ipv4_transfer_selftest.py ci/v034_shizuku_clipboard_selftest.py dev/uia-find-allow.py
           bash -n dev-test.sh
           bash -n dev-test-all.sh
           bash -n dev-test-final.sh
-          python ci/finalize-comprehensive-runner.py dev-test-comprehensive.sh /tmp/clipmesh-final-physical.sh
+          python ci/finalize-comprehensive-runner.py dev-test-comprehensive.sh /tmp/clipmesh-final-v1.sh
+          python ci/finalize-physical-v2.py /tmp/clipmesh-final-v1.sh /tmp/clipmesh-final-v2.sh
+          python ci/finalize-physical-v3.py /tmp/clipmesh-final-v2.sh /tmp/clipmesh-final-physical.sh
           bash -n /tmp/clipmesh-final-physical.sh
           grep -q 'FINAL_COMPREHENSIVE_RUNNER_AUDIT_V1' /tmp/clipmesh-final-physical.sh
+          grep -q 'PHYSICAL_HARDENING_V2' /tmp/clipmesh-final-physical.sh
+          grep -q 'PHYSICAL_HARDENING_V3' /tmp/clipmesh-final-physical.sh
+          grep -q 'CLIPMESH_CODESIGN_IDENTITY="-"' /tmp/clipmesh-final-physical.sh
+          grep -q 'Mac restart restores clipboard daemon' /tmp/clipmesh-final-physical.sh
           swiftc dev/macos-pasteboard-helper.swift -o /tmp/clipmesh-pasteboard-helper
           /tmp/clipmesh-pasteboard-helper image-info >/dev/null
       - name: Reconstruct macOS dev source
@@ -85,6 +105,15 @@ jobs:
           grep -q 'listener.start(queue: httpQueue)' ci/ClipMeshTransfer.swift
           grep -q 'connection.start(queue: httpQueue)' ci/ClipMeshTransfer.swift
           ! grep -q 'self.queue.asyncAfter' ci/ClipMeshTransfer.swift
+          grep -q 'scheduleDaemonRestart' ci/ClipMeshApp.swift
+          grep -q 'clipboardDaemonIsListening' ci/ClipMeshApp.swift
+          python - <<'PY'
+          import re
+          from pathlib import Path
+          s=Path('ci/ClipMeshApp.swift').read_text()
+          f=re.search(r'private\s+func\s+refreshTransferDevices\s*\(\)\s*\{(.*?)(?=\n\s*private\s+func\s+)',s,re.S)
+          assert f and 'LocalTransferManager.shared.nearbyDevices()' in f.group(1) and 'pairedNames' not in f.group(1)
+          PY
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: clipmesh
