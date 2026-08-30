@@ -29,6 +29,7 @@ PIPELINES = {
         "patch-v023-final.py", "patch-v023-android-hotfix.py", "patch-v024-repair.py", "patch-v025-nearby-pairing.py",
         "patch-v026-regressions.py", "patch-v027-macos-daemon.py", "patch-v030-finalize.py", "patch-v031-dev-test.py",
         "patch-v032-release.py", "patch-v033-ipv4-transfer.py", "patch-v034-shizuku-clipboard.py",
+        "patch-v035-e2e-observability.py",
     ],
     "Windows": [
         "patch-features.py", "patch-sync-fixes.py", "patch-desktop.py", "patch-windows.py",
