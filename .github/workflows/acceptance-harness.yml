@@ -110,7 +110,7 @@ jobs:
           grep -q 'clipboard_nearby_count' "$J/MainActivity.kt"
           grep -q 'file_nearby_count' "$J/fileshare/FileShareActivity.kt"
           grep -q 'incoming_policy' "$J/fileshare/IncomingRequestUi.kt"
-          grep -q 'dev.clipmesh.AcceptanceReceiver' "$DM"
+          grep -q '\.AcceptanceReceiver' "$DM"
           grep -q 'android.permission.DUMP' "$DM"
       - name: Compile acceptance-instrumented Android app
         run: |
