@@ -63,6 +63,12 @@ if system == "Darwin":
         '        let source = DispatchSource.makeTimerSource(queue: announceQueue)\n',
         "macOS announcement queue",
     )
+    replace_once(
+        transfer,
+        '    func discoverNow() { queue.async { [weak self] in guard let self else { return }; self.sendAnnouncement(announce:true);self.queue.asyncAfter(deadline:.now()+0.18){self.sendAnnouncement(announce:true)};self.queue.asyncAfter(deadline:.now()+0.36){self.sendAnnouncement(announce:true)} } }\n',
+        '''    func discoverNow() {\n        announceQueue.async { [weak self] in\n            guard let self else { return }\n            self.sendAnnouncement(announce: true)\n            self.announceQueue.asyncAfter(deadline: .now() + 0.18) { [weak self] in self?.sendAnnouncement(announce: true) }\n            self.announceQueue.asyncAfter(deadline: .now() + 0.36) { [weak self] in self?.sendAnnouncement(announce: true) }\n        }\n    }\n''',
+        "macOS immediate discovery queue",
+    )
 
     # File sharing is discovered over IPv4 multicast and Android LAN clients
     # connect to an IPv4 address. Pin Network.framework to IPv4 explicitly.
@@ -94,6 +100,9 @@ if system == "Darwin":
         'discoveryQueue.async {',
         'sendQueue.async {',
         'DispatchSource.makeTimerSource(queue: announceQueue)',
+        'func discoverNow()',
+        'announceQueue.async { [weak self] in',
+        'self.announceQueue.asyncAfter',
         'listener.start(queue: httpQueue)',
         'connection.start(queue: httpQueue)',
         'ip.version = .v4',
@@ -101,8 +110,16 @@ if system == "Darwin":
     for value in required:
         if value not in final_transfer:
             raise SystemExit(f"macOS v0.2.11 transfer guard missing after patch: {value}")
-    if 'private let queue = DispatchQueue(label: "dev.clipmesh.fileshare"' in final_transfer:
-        raise SystemExit("macOS v0.2.11 still contains the starvation-prone shared file-transfer queue")
+    forbidden = (
+        'private let queue = DispatchQueue(label: "dev.clipmesh.fileshare"',
+        'listener.start(queue: queue)',
+        'connection.start(queue: queue)',
+        'func discoverNow() { queue.async',
+        'self.queue.asyncAfter',
+    )
+    for value in forbidden:
+        if value in final_transfer:
+            raise SystemExit(f"macOS v0.2.11 still contains starvation-prone shared queue reference: {value}")
 
     replace_once(
         build,
