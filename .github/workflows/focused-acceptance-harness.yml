@@ -1,0 +1,76 @@
+name: Validate Focused Physical Retry Harness
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'dev-test-retry-failures.sh'
+      - 'dev-test-final.sh'
+      - 'dev-test-comprehensive.sh'
+      - 'ci/focus-physical-failures.py'
+      - 'ci/finalize-comprehensive-runner.py'
+      - 'ci/finalize-physical-v2.py'
+      - 'ci/finalize-physical-v3.py'
+      - '.github/workflows/focused-acceptance-harness.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'dev-test-retry-failures.sh'
+      - 'dev-test-final.sh'
+      - 'dev-test-comprehensive.sh'
+      - 'ci/focus-physical-failures.py'
+      - 'ci/finalize-comprehensive-runner.py'
+      - 'ci/finalize-physical-v2.py'
+      - 'ci/finalize-physical-v3.py'
+      - '.github/workflows/focused-acceptance-harness.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-focused-runner:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Generate and audit focused retry runner
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            ci/finalize-comprehensive-runner.py \
+            ci/finalize-physical-v2.py \
+            ci/finalize-physical-v3.py \
+            ci/focus-physical-failures.py
+          bash -n dev-test-comprehensive.sh
+          bash -n dev-test-final.sh
+          bash -n dev-test-retry-failures.sh
+
+          python ci/finalize-comprehensive-runner.py dev-test-comprehensive.sh /tmp/clipmesh-v1.sh
+          python ci/finalize-physical-v2.py /tmp/clipmesh-v1.sh /tmp/clipmesh-v2.sh
+          python ci/finalize-physical-v3.py /tmp/clipmesh-v2.sh /tmp/clipmesh-full.sh
+          python ci/focus-physical-failures.py /tmp/clipmesh-full.sh /tmp/clipmesh-focused.sh
+          bash -n /tmp/clipmesh-focused.sh
+
+          grep -Fq 'FOCUSED_PREVIOUS_FAILURES_V1' /tmp/clipmesh-focused.sh
+          grep -Fq 'Mac File Transfer UI shows paired Android as live target' /tmp/clipmesh-focused.sh
+          grep -Fq 'Android file discovery survives both UIs hidden' /tmp/clipmesh-focused.sh
+          grep -Fq 'Clipboard text Mac -> Android [A-open M-open]' /tmp/clipmesh-focused.sh
+          grep -Fq 'Android text -> image -> text ordering' /tmp/clipmesh-focused.sh
+          grep -Fq 'Mac -> Android rapid 10-event burst final state' /tmp/clipmesh-focused.sh
+          grep -Fq 'Mac non-favorite real prompt Reject' /tmp/clipmesh-focused.sh
+          grep -Fq 'm2a-reset-$(nonce)' /tmp/clipmesh-focused.sh
+          grep -Fq 'patch-acceptance-chain.py' /tmp/clipmesh-focused.sh
+          grep -Fq 'CLIPMESH_CODESIGN_IDENTITY="-"' /tmp/clipmesh-focused.sh
+
+          # Focused iteration must not silently become another full 100-test run.
+          ! grep -Fq '1 MiB Android -> Mac SHA integrity' /tmp/clipmesh-focused.sh
+          ! grep -Fq '3-file Mac -> Android batch' /tmp/clipmesh-focused.sh
+          ! grep -Fq 'RESTART, REDISCOVERY AND PERSISTENCE' /tmp/clipmesh-focused.sh
+          ! grep -Fq 'FINAL STABILITY AND FAILURE SCAN' /tmp/clipmesh-focused.sh
+
+          grep -Fq 'status --porcelain --untracked-files=no' dev-test-retry-failures.sh
+          grep -Fq 'fetch --quiet origin main' dev-test-retry-failures.sh
+          grep -Fq 'rev-parse origin/main' dev-test-retry-failures.sh
