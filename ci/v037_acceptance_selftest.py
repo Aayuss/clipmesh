@@ -6,6 +6,7 @@ root = Path(__file__).resolve().parents[1]
 platform = os.environ.get("CLIPMESH_PLATFORM", "")
 reconstruct = (root / "ci/reconstruct.py").read_text(encoding="utf-8")
 release = (root / "ci/build-android-release.sh").read_text(encoding="utf-8")
+final_entry = (root / "dev-test-final.sh").read_text(encoding="utf-8")
 
 # Acceptance hooks must always be opt-in and must never become part of canonical
 # release reconstruction.
@@ -19,6 +20,19 @@ for forbidden in (
 ):
     if forbidden in reconstruct:
         raise SystemExit(f"acceptance instrumentation leaked into canonical reconstruction: {forbidden}")
+
+# The final physical entrypoint must refuse the exact failure mode that can waste
+# several minutes: running stale or locally modified code after a failed pull.
+for needle in (
+    'status --porcelain --untracked-files=no',
+    'fetch --quiet origin main',
+    'rev-parse origin/main',
+    'Local checkout is behind origin/main',
+    'CLIPMESH_ACCEPTANCE_ALLOW_DIRTY',
+    'CLIPMESH_ACCEPTANCE_SKIP_REMOTE_CHECK',
+):
+    if needle not in final_entry:
+        raise SystemExit(f"final physical Git precheck guard missing: {needle}")
 
 if platform == "Linux":
     debug = root / "clipmesh/android/app/src/debug/java/dev/clipmesh/AcceptanceReceiver.kt"
