@@ -15,9 +15,9 @@ def main() -> None:
 
     # The focused retry runner intentionally reuses the exact same finalized
     # physical setup/build/helper code as the full certification suite. It then
-    # executes only the scenarios that failed on the stale 518557e hardware run.
-    # This keeps debugging fast without creating a second implementation of the
-    # product setup or clipboard primitives.
+    # executes only scenarios that have failed on physical hardware during this
+    # release-candidate cycle. This keeps debugging fast without creating a
+    # second implementation of product setup or clipboard primitives.
     marker = 'section "PREFLIGHT AND PRIVILEGED CLIPBOARD"'
     if text.count(marker) != 1:
         raise SystemExit(f"focused runner prefix anchor: expected one match, found {text.count(marker)}")
@@ -26,7 +26,8 @@ def main() -> None:
         "FINAL_COMPREHENSIVE_RUNNER_AUDIT_V1",
         "PHYSICAL_HARDENING_V2",
         "PHYSICAL_HARDENING_V3",
-        'm2a-reset-$(nonce)',
+        'local a="$1" target="$2" reset="m2a-reset-$(nonce)"',
+        'start_driver wait_text "$target"',
         "wait_driver SET_IMAGE",
         "patch-acceptance-chain.py",
         "last_prompt_decision=",
@@ -40,8 +41,8 @@ def main() -> None:
     prefix = text.split(marker, 1)[0]
 
     focused = r'''
-section "FOCUSED RETRY - PREVIOUS PHYSICAL FAILURES"
-echo "Mode: six previously failing scenarios only"
+section "FOCUSED RETRY - PHYSICAL REGRESSION SET"
+echo "Mode: nine targeted physical regression scenarios only"
 echo "Final certification still requires ./dev-test-final.sh"
 
 focused_discover_pair_once(){
@@ -53,9 +54,26 @@ focused_android_has_mac(){
   contains "$focused_ai" "nearby=$MAC_FP|"
 }
 focused_wait_android_has_mac(){
-  i=0
+  local i=0
   while [ "$i" -lt 20 ]; do
     focused_android_has_mac && return 0
+    focused_discover_pair_once
+    i=$((i+1))
+    sleep .25
+  done
+  return 1
+}
+focused_android_clipboard_connected(){
+  local info
+  "${ADB[@]}" shell am broadcast -n dev.clipmesh/.DevTestReceiver -a dev.clipmesh.devtest.INFO >/dev/null 2>&1
+  sleep .12
+  info="$("${ADB[@]}" shell run-as dev.clipmesh cat files/clipmesh-devtest.txt 2>/dev/null | tr -d '\r')"
+  printf '%s\n' "$info" | awk -F= '/clipboard_peer_count=/{exit !($2>0)}'
+}
+focused_wait_android_clipboard_connected(){
+  local i=0
+  while [ "$i" -lt 36 ]; do
+    focused_android_clipboard_connected && return 0
     focused_discover_pair_once
     i=$((i+1))
     sleep .25
@@ -65,6 +83,11 @@ focused_wait_android_has_mac(){
 focused_mac_file_visible(){
   mac_command file >/dev/null 2>&1 || return 1
   mac_state | awk -F= '/file_nearby_count=/{exit !($2>0)}'
+}
+focused_mac_clipboard_ready(){
+  pgrep -x clipmesh-bin >/dev/null 2>&1 \
+    && lsof -nP -i4TCP:41474 -sTCP:LISTEN 2>/dev/null | grep -q clipmesh- \
+    && "$CLI_EXE" status >/dev/null 2>&1
 }
 
 # 1) macOS File Transfer must render the already-paired Android receiver.
@@ -94,7 +117,8 @@ ai="$(acc_sync dev.clipmesh.acceptance.INFO)"
   && pass "Android file discovery survives both UIs hidden" \
   || fail "Android file discovery survives both UIs hidden" "$ai"
 
-# 3) The first open/open Mac -> Android text edge must cross cleanly.
+# 3) Open/open Mac -> Android text must verify the intended payload, not merely
+# the direction-reset barrier.
 set_state open open
 focused_text="focused-m2a-open-open-$STAMP"
 clipboard_m2a_text open "$focused_text" \
@@ -127,7 +151,53 @@ sleep .85
   && pass "Mac -> Android rapid 10-event burst final state" \
   || fail "Mac -> Android rapid 10-event burst final state"
 
-# 6) The real macOS non-favorite prompt must actually click Reject.
+# 6) Regression from the 102/3 full run: ClipMesh backgrounded, Mac window open.
+set_state background open
+focused_bg_open="focused-m2a-bg-mac-open-$STAMP"
+clipboard_m2a_text background "$focused_bg_open" \
+  && pass "Clipboard text Mac -> Android [A-background M-open]" \
+  || fail "Clipboard text Mac -> Android [A-background M-open]"
+
+# 7) Same background text edge while the Mac UI is hidden in the tray.
+set_state background tray
+focused_bg_tray="focused-m2a-bg-mac-tray-$STAMP"
+clipboard_m2a_text background "$focused_bg_tray" \
+  && pass "Clipboard text Mac -> Android [A-background M-tray]" \
+  || fail "Clipboard text Mac -> Android [A-background M-tray]"
+
+# 8) Reproduce the full-suite restart boundary before testing Mac -> Android text.
+set_android_favorite "$MAC_FP" true
+set_mac_favorite "$ANDROID_FP" true
+pkill -x ClipMesh >/dev/null 2>&1 || true
+pkill -x clipmesh-bin >/dev/null 2>&1 || true
+sleep .6
+open "$INSTALL_APP"
+restart_ready=1
+i=0
+while [ "$i" -lt 80 ] && ! lsof -nP -i4TCP:53421 -sTCP:LISTEN >/dev/null 2>&1; do
+  i=$((i+1)); sleep .2
+done
+lsof -nP -i4TCP:53421 -sTCP:LISTEN >/dev/null 2>&1 || restart_ready=0
+i=0
+while [ "$i" -lt 80 ] && ! focused_mac_clipboard_ready; do
+  i=$((i+1)); sleep .15
+done
+focused_mac_clipboard_ready || restart_ready=0
+mac_command snapshot >/dev/null 2>&1 || restart_ready=0
+"${ADB[@]}" shell am force-stop dev.clipmesh >/dev/null 2>&1
+sleep .5
+android_main
+android_background
+focused_discover_pair_once
+focused_wait_android_has_mac || restart_ready=0
+focused_wait_android_clipboard_connected || restart_ready=0
+set_state background tray
+focused_restart="focused-restart-m2a-$STAMP"
+[ "$restart_ready" -eq 1 ] && clipboard_m2a_text background "$focused_restart" \
+  && pass "Clipboard Mac -> Android after restart" \
+  || fail "Clipboard Mac -> Android after restart" "restart_ready=$restart_ready"
+
+# 9) The real macOS non-favorite prompt must actually click Reject.
 set_state open open
 set_android_favorite "$MAC_FP" false
 set_mac_favorite "$ANDROID_FP" false
@@ -169,7 +239,7 @@ printf 'Full log:         %s\nMatrix:           %s\n' "$LOG" "$MATRIX"
 
 if [ "$FAILURES" -eq 0 ]; then
   echo
-  echo "ALL FOCUSED PREVIOUS-FAILURE TESTS PASSED"
+  echo "ALL TARGETED PHYSICAL REGRESSION TESTS PASSED"
   echo "Next release gate: run the full ./dev-test-final.sh certification once."
   exit 0
 fi
@@ -178,7 +248,7 @@ echo
 echo "FOCUSED RETRY FOUND $FAILURES FAILURE(S). Fix these before rerunning the full matrix."
 exit 1
 
-# FOCUSED_PREVIOUS_FAILURES_V1
+# FOCUSED_PREVIOUS_FAILURES_V2
 '''
 
     out = prefix + focused
@@ -188,14 +258,23 @@ exit 1
         "Clipboard text Mac -> Android [A-open M-open]",
         "Android text -> image -> text ordering",
         "Mac -> Android rapid 10-event burst final state",
+        "Clipboard text Mac -> Android [A-background M-open]",
+        "Clipboard text Mac -> Android [A-background M-tray]",
+        "Clipboard Mac -> Android after restart",
         "Mac non-favorite real prompt Reject",
-        "FOCUSED_PREVIOUS_FAILURES_V1",
+        "FOCUSED_PREVIOUS_FAILURES_V2",
     ):
         if needle not in out:
             raise SystemExit(f"focused runner guard missing: {needle}")
 
+    # The exact 2026-08-31 harness bug was a caller variable named `expected`
+    # being overwritten by wait_mac_text(reset). Refuse to generate a focused
+    # runner unless the finalized helper uses an independent local target.
+    if 'local a="$1" target="$2" reset="m2a-reset-$(nonce)"' not in out:
+        raise SystemExit("focused runner is missing locally-scoped Mac->Android text target")
+
     dst.write_text(out, encoding="utf-8")
-    print(f"Generated focused previous-failure physical runner: {dst}")
+    print(f"Generated focused physical regression runner: {dst}")
 
 
 if __name__ == "__main__":

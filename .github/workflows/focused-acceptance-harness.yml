@@ -52,16 +52,27 @@ jobs:
           python ci/finalize-physical-v2.py /tmp/clipmesh-v1.sh /tmp/clipmesh-v2.sh
           python ci/finalize-physical-v3.py /tmp/clipmesh-v2.sh /tmp/clipmesh-full.sh
           python ci/focus-physical-failures.py /tmp/clipmesh-full.sh /tmp/clipmesh-focused.sh
+          bash -n /tmp/clipmesh-full.sh
           bash -n /tmp/clipmesh-focused.sh
 
-          grep -Fq 'FOCUSED_PREVIOUS_FAILURES_V1' /tmp/clipmesh-focused.sh
+          # The full runner itself must carry the locally-scoped real payload.
+          grep -Fq 'local a="$1" target="$2" reset="m2a-reset-$(nonce)"' /tmp/clipmesh-full.sh
+          grep -Fq 'start_driver wait_text "$target"' /tmp/clipmesh-full.sh
+          ! grep -Fq 'a="$1"; expected="$2"; reset="m2a-reset-$(nonce)"' /tmp/clipmesh-full.sh
+
+          grep -Fq 'FOCUSED_PREVIOUS_FAILURES_V2' /tmp/clipmesh-focused.sh
+          grep -Fq 'nine targeted physical regression scenarios only' /tmp/clipmesh-focused.sh
           grep -Fq 'Mac File Transfer UI shows paired Android as live target' /tmp/clipmesh-focused.sh
           grep -Fq 'Android file discovery survives both UIs hidden' /tmp/clipmesh-focused.sh
           grep -Fq 'Clipboard text Mac -> Android [A-open M-open]' /tmp/clipmesh-focused.sh
           grep -Fq 'Android text -> image -> text ordering' /tmp/clipmesh-focused.sh
           grep -Fq 'Mac -> Android rapid 10-event burst final state' /tmp/clipmesh-focused.sh
+          grep -Fq 'Clipboard text Mac -> Android [A-background M-open]' /tmp/clipmesh-focused.sh
+          grep -Fq 'Clipboard text Mac -> Android [A-background M-tray]' /tmp/clipmesh-focused.sh
+          grep -Fq 'Clipboard Mac -> Android after restart' /tmp/clipmesh-focused.sh
           grep -Fq 'Mac non-favorite real prompt Reject' /tmp/clipmesh-focused.sh
-          grep -Fq 'm2a-reset-$(nonce)' /tmp/clipmesh-focused.sh
+          grep -Fq 'local a="$1" target="$2" reset="m2a-reset-$(nonce)"' /tmp/clipmesh-focused.sh
+          grep -Fq 'start_driver wait_text "$target"' /tmp/clipmesh-focused.sh
           grep -Fq 'patch-acceptance-chain.py' /tmp/clipmesh-focused.sh
           grep -Fq 'CLIPMESH_CODESIGN_IDENTITY="-"' /tmp/clipmesh-focused.sh
 

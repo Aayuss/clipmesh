@@ -60,24 +60,30 @@ echo "Git:     $(git -C "$ROOT" rev-parse HEAD)"
     # barrier. This drains any prior Android local event and remote-suppression
     # state before macOS becomes the sender. It fixes the one open/open race and
     # makes the restart tests use the exact same deterministic edge.
+    #
+    # IMPORTANT: target is local. Bash function variables are otherwise dynamic/
+    # global by default. wait_mac_text() historically assigned `expected="$1"`;
+    # when called with the reset barrier it silently overwrote this function's
+    # intended payload. That made foreground tests falsely pass on the reset value
+    # and made background/restart tests wait for the reset a second time.
     text = regex_once(
         text,
         r'''clipboard_m2a_text\(\)\{\n  a="\$1"; expected="\$2"\n  if \[ "\$a" = open \]; then\n    printf '%s' "\$expected" \| pbcopy\n    wait_android_open_text "\$expected"\n  else\n    start_driver wait_text "\$expected"; wait_driver READY_TEXT \|\| return 1\n    sleep \.25\n    printf '%s' "\$expected" \| pbcopy\n    wait_driver PASS_TEXT\n  fi\n\}''',
         r'''clipboard_m2a_text(){
-  a="$1"; expected="$2"; reset="m2a-reset-$(nonce)"
+  local a="$1" target="$2" reset="m2a-reset-$(nonce)"
   if [ "$a" = open ]; then
     acc_sync dev.clipmesh.acceptance.SET_TEXT --es expected_b64 "$(b64 "$reset")" >/dev/null || return 1
     wait_mac_text "$reset" || return 1
     sleep .55
-    printf '%s' "$expected" | pbcopy
-    wait_android_open_text "$expected"
+    printf '%s' "$target" | pbcopy
+    wait_android_open_text "$target"
   else
     start_driver set_text "$reset"; wait_driver SET_TEXT || return 1
     wait_mac_text "$reset" || return 1
     sleep .55
-    start_driver wait_text "$expected"; wait_driver READY_TEXT || return 1
+    start_driver wait_text "$target"; wait_driver READY_TEXT || return 1
     sleep .20
-    printf '%s' "$expected" | pbcopy
+    printf '%s' "$target" | pbcopy
     wait_driver PASS_TEXT
   fi
 }''',
@@ -161,7 +167,8 @@ mac_command snapshot >/dev/null 2>&1 && pass "Mac restart restores acceptance UI
     required = (
         'CLIPMESH_CODESIGN_IDENTITY="-"',
         "dev.ClipMesh.ClipMesh-Acceptance",
-        "m2a-reset-$(nonce)",
+        'local a="$1" target="$2" reset="m2a-reset-$(nonce)"',
+        'start_driver wait_text "$target"',
         "last_prompt_decision=",
         "Mac restart restores clipboard daemon",
         "Mac restart restores acceptance UI command loop",
@@ -170,6 +177,13 @@ mac_command snapshot >/dev/null 2>&1 && pass "Mac restart restores acceptance UI
     for needle in required:
         if needle not in text:
             raise SystemExit(f"physical v3 runner guard missing: {needle}")
+
+    # Never allow the old dynamically-scoped target back into this helper. The
+    # physical log from 2026-08-31 proved it caused the driver to wait for the
+    # m2a-reset barrier instead of the scenario's intended payload.
+    m2a = re.search(r'clipboard_m2a_text\(\)\{.*?\n\}', text, re.S)
+    if not m2a or 'expected="$2"' in m2a.group(0) or 'wait_text "$expected"' in m2a.group(0):
+        raise SystemExit("physical v3 Mac->Android text target is not locally scoped")
 
     dst.write_text(text, encoding="utf-8")
     print(f"Applied passwordless/restart physical hardening: {dst}")
