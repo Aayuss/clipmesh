@@ -9,7 +9,14 @@ release = (root / "ci/build-android-release.sh").read_text(encoding="utf-8")
 
 # Acceptance hooks must always be opt-in and must never become part of canonical
 # release reconstruction.
-for forbidden in ("patch-acceptance-dev.py", "patch-acceptance-v2.py"):
+for forbidden in (
+    "patch-acceptance-dev.py",
+    "patch-acceptance-v2.py",
+    "patch-acceptance-v3.py",
+    "patch-acceptance-v4.py",
+    "patch-acceptance-v5.py",
+    "patch-acceptance-chain.py",
+):
     if forbidden in reconstruct:
         raise SystemExit(f"acceptance instrumentation leaked into canonical reconstruction: {forbidden}")
 
@@ -45,16 +52,22 @@ if platform == "Linux":
 elif platform == "Darwin":
     app = root / "ci/ClipMeshApp.swift"
     transfer = root / "ci/ClipMeshTransfer.swift"
+    secrets = root / "clipmesh/apps/desktop/src/secrets.rs"
     checks = {
         app: (
             "--dev-accept-set-favorite", "--dev-accept-command", "--dev-accept-state",
-            "--dev-accept-send-files", "ClipMesh.Acceptance.WindowVisible",
+            "--dev-accept-send-files", "acceptance-command.txt", "acceptance-ack.txt",
+            "acceptance-incoming-policy.txt", "last_prompt_decision=",
+            "dev.ClipMesh.ClipMesh-Acceptance",
             "ClipMesh.Acceptance.ClipboardNearbyCount", "ClipMesh.Acceptance.FileNearbyCount",
         ),
         transfer: (
             "devAcceptanceSnapshotLines", "devAcceptanceSend(files:",
-            "ClipMesh.Acceptance.IncomingPolicy", "alert.buttons[index].performClick",
-            "DispatchQueue.main.sync",
+            "acceptance-incoming-policy.txt", "ClipMesh.Acceptance.LastPromptDecision",
+            "alert.buttons[index].performClick(nil)", "DispatchQueue.main.sync",
+        ),
+        secrets: (
+            "ACCEPTANCE-ONLY SECRET BACKEND", "0o700", "0o600",
         ),
     }
     for path, needles in checks.items():
@@ -62,6 +75,14 @@ elif platform == "Darwin":
         for needle in needles:
             if needle not in text:
                 raise SystemExit(f"macOS acceptance guard missing: {path}: {needle}")
+
+    # The physical acceptance executable must never call the production macOS
+    # Keychain API. Mentions in comments are harmless, so inspect executable API
+    # forms rather than rejecting descriptive text.
+    secret_text = secrets.read_text(encoding="utf-8")
+    for forbidden in ("use keyring::Entry;", "Entry::new(", "set_password("):
+        if forbidden in secret_text:
+            raise SystemExit(f"macOS acceptance secret backend still uses Keychain API: {forbidden}")
 else:
     raise SystemExit("CLIPMESH_PLATFORM must be Darwin or Linux")
 
