@@ -112,6 +112,8 @@ network.write_text(network_text, encoding="utf-8")
 # caused by a remote write and prevents echo/ping-pong. What must go is v026's
 # 30-second content gate, because two intentional copies of the same bytes are two
 # distinct clipboard events and therefore two distinct transport message IDs.
+# v035 inserts debug observability between this gate and suppressedFingerprint,
+# so remove only the obsolete condition/assignments and preserve its timestamp.
 # ---------------------------------------------------------------------------
 bridge_text = bridge.read_text(encoding="utf-8")
 old_fields = '''    private val lastRemoteFingerprint = AtomicReference<String?>(null)
@@ -123,23 +125,17 @@ if bridge_text.count(old_fields) != 1:
     )
 bridge_text = bridge_text.replace(old_fields, "", 1)
 
-old_gate = '''        val remoteFingerprint = payload.stableFingerprint()
-        val now = System.currentTimeMillis()
-        // Retries and reconnect outbox delivery must ACK at the network layer but
+old_gate = '''        // Retries and reconnect outbox delivery must ACK at the network layer but
         // must never rewrite Android's clipboard (or trigger SystemUI) repeatedly.
         if (lastRemoteFingerprint.get() == remoteFingerprint && now - lastRemoteAppliedAt < 30_000L) return
         lastRemoteFingerprint.set(remoteFingerprint)
         lastRemoteAppliedAt = now
-        suppressedFingerprint.set(remoteFingerprint)
-'''
-new_gate = '''        val remoteFingerprint = payload.stableFingerprint()
-        suppressedFingerprint.set(remoteFingerprint)
 '''
 if bridge_text.count(old_gate) != 1:
     raise SystemExit(
-        f"Android legacy content-dedupe gate: expected one match, found {bridge_text.count(old_gate)}"
+        f"Android legacy content-dedupe condition: expected one match, found {bridge_text.count(old_gate)}"
     )
-bridge_text = bridge_text.replace(old_gate, new_gate, 1)
+bridge_text = bridge_text.replace(old_gate, "", 1)
 bridge.write_text(bridge_text, encoding="utf-8")
 
 # ---------------------------------------------------------------------------
@@ -187,9 +183,10 @@ for required in (
     "private val suppressedFingerprint = RecentRemoteFingerprintSuppressor()",
     "val remoteFingerprint = payload.stableFingerprint()",
     "suppressedFingerprint.set(remoteFingerprint)",
+    'putLong("last_remote_apply_at", now)',
 ):
     if required not in final_bridge:
-        raise SystemExit(f"Android echo-suppression guard missing after v042: {required}")
+        raise SystemExit(f"Android echo-suppression/observability guard missing after v042: {required}")
 
 print(
     "Applied Android once-per-transport-message clipboard delivery: durable sender/message IDs, "
