@@ -131,7 +131,7 @@ new_apply = r'''    if contents.is_empty() { return Ok(()); }
     let set_result=ctx.set(contents).map_err(|e| anyhow::anyhow!(e.to_string()));
     let mut actual_fingerprint=None;
     if set_result.is_ok() {
-        let mut observe_cg=cfg.clone();
+        let mut observe_cfg=cfg.clone();
         // Remote-write observation must not depend on whichever foreground app is
         // excluded by the user; this is internal dedupe bookkeeping only.
         observe_cfg.exclusions.clear();
@@ -166,6 +166,7 @@ for needle in (
     "state.remote_write_depth=state.remote_write_depth.saturating_add(1)",
     "state.remote_write_depth=state.remote_write_depth.saturating_sub(1)",
     "state.begin_remote_write(fp)",
+    "let mut observe_cfg=cfg.clone()",
     "observe_cfg.exclusions.clear()",
     "actual_fingerprint=Some(observed_fp)",
     "state.finish_remote_write(actual_fingerprint)",
@@ -177,8 +178,9 @@ for needle in (
 for forbidden in (
     "suppress_next_observed",
     "state.suppress(fp)",
+    "observe_cg=",
 ):
     if forbidden in final:
-        raise SystemExit(f"desktop stale remote-event suppression remains: {forbidden}")
+        raise SystemExit(f"desktop stale/invalid remote-event suppression remains: {forbidden}")
 
 print(f"Applied scoped desktop remote-write echo suppression on {SYSTEM}")
