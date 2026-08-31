@@ -29,6 +29,27 @@ if count != 1:
     raise SystemExit(f"acceptance v5 prompt-target repair: expected one v4 anchor, found {count}")
 source = source.replace(old, new, 1)
 
+# NSAlert.runModal() enters AppKit's modal-panel run-loop mode. A delayed block
+# submitted to DispatchQueue.main is not guaranteed to execute while that nested
+# modal loop is active, which made the physical Reject automation wait forever
+# for a human click. Schedule the one-shot button click explicitly in
+# RunLoop.Mode.modalPanel so it is serviced by the modal event loop itself.
+old_modal = '''                DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                    guard alert.buttons.indices.contains(index) else { return }
+                    alert.buttons[index].performClick(nil)
+                }
+'''
+new_modal = '''                let acceptanceClickTimer = Timer(timeInterval: 0.18, repeats: false) { _ in
+                    guard alert.buttons.indices.contains(index) else { return }
+                    alert.buttons[index].performClick(nil)
+                }
+                RunLoop.main.add(acceptanceClickTimer, forMode: .modalPanel)
+'''
+count = source.count(old_modal)
+if count != 1:
+    raise SystemExit(f"acceptance v5 modal-run-loop repair: expected one v4 async click, found {count}")
+source = source.replace(old_modal, new_modal, 1)
+
 # v4's safety guard searched for the text `keyring::Entry` anywhere in the
 # generated acceptance source. The acceptance-only source intentionally mentions
 # the production backend in a comment, so that check rejected its own
@@ -59,9 +80,13 @@ if system == "Darwin":
         "acceptance-incoming-policy.txt",
         "ClipMesh.Acceptance.LastPromptDecision",
         "alert.buttons[index].performClick(nil)",
+        "Timer(timeInterval: 0.18",
+        "RunLoop.main.add(acceptanceClickTimer, forMode: .modalPanel)",
     ):
         if needle not in transfer:
             raise SystemExit(f"acceptance v5 transfer guard missing: {needle}")
+    if "DispatchQueue.main.asyncAfter(deadline: .now() + 0.18)" in transfer:
+        raise SystemExit("acceptance v5 still uses a default main-queue delay for modal prompt automation")
     if "last_prompt_decision=" not in app:
         raise SystemExit("acceptance v5 app decision-state guard missing")
     for forbidden in ("use keyring::Entry;", "Entry::new(", "set_password("):

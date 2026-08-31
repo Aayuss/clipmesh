@@ -79,6 +79,8 @@ elif platform == "Darwin":
             "devAcceptanceSnapshotLines", "devAcceptanceSend(files:",
             "acceptance-incoming-policy.txt", "ClipMesh.Acceptance.LastPromptDecision",
             "alert.buttons[index].performClick(nil)", "DispatchQueue.main.sync",
+            "Timer(timeInterval: 0.18",
+            "RunLoop.main.add(acceptanceClickTimer, forMode: .modalPanel)",
         ),
         secrets: (
             "ACCEPTANCE-ONLY SECRET BACKEND", "0o700", "0o600",
@@ -89,6 +91,10 @@ elif platform == "Darwin":
         for needle in needles:
             if needle not in text:
                 raise SystemExit(f"macOS acceptance guard missing: {path}: {needle}")
+
+    transfer_text = transfer.read_text(encoding="utf-8")
+    if "DispatchQueue.main.asyncAfter(deadline: .now() + 0.18)" in transfer_text:
+        raise SystemExit("macOS acceptance prompt auto-click is not attached to the modal run loop")
 
     # The physical acceptance executable must never call the production macOS
     # Keychain API. Mentions in comments are harmless, so inspect executable API
