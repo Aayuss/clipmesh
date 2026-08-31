@@ -8,6 +8,7 @@ on:
       - 'dev-test-retry-failures.sh'
       - 'dev-test-final.sh'
       - 'dev-test-comprehensive.sh'
+      - 'ci/patch-acceptance-v5.py'
       - 'ci/focus-physical-failures.py'
       - 'ci/finalize-comprehensive-runner.py'
       - 'ci/finalize-physical-v2.py'
@@ -19,6 +20,7 @@ on:
       - 'dev-test-retry-failures.sh'
       - 'dev-test-final.sh'
       - 'dev-test-comprehensive.sh'
+      - 'ci/patch-acceptance-v5.py'
       - 'ci/focus-physical-failures.py'
       - 'ci/finalize-comprehensive-runner.py'
       - 'ci/finalize-physical-v2.py'
@@ -40,6 +42,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m py_compile \
+            ci/patch-acceptance-v5.py \
             ci/finalize-comprehensive-runner.py \
             ci/finalize-physical-v2.py \
             ci/finalize-physical-v3.py \
@@ -55,13 +58,16 @@ jobs:
           bash -n /tmp/clipmesh-full.sh
           bash -n /tmp/clipmesh-focused.sh
 
-          # The full runner itself must carry the locally-scoped real payload.
+          # The full runner itself must carry the locally-scoped real payload and
+          # the actual macOS Clipboard renderer-row signal.
           grep -Fq 'local a="$1" target="$2" reset="m2a-reset-$(nonce)"' /tmp/clipmesh-full.sh
           grep -Fq 'start_driver wait_text "$target"' /tmp/clipmesh-full.sh
+          grep -Fq 'clipboard_renderer_rows=' /tmp/clipmesh-full.sh
           ! grep -Fq 'a="$1"; expected="$2"; reset="m2a-reset-$(nonce)"' /tmp/clipmesh-full.sh
 
-          grep -Fq 'FOCUSED_PREVIOUS_FAILURES_V2' /tmp/clipmesh-focused.sh
-          grep -Fq 'nine targeted physical regression scenarios only' /tmp/clipmesh-focused.sh
+          grep -Fq 'FOCUSED_PREVIOUS_FAILURES_V3' /tmp/clipmesh-focused.sh
+          grep -Fq 'ten targeted physical regression scenarios only' /tmp/clipmesh-focused.sh
+          grep -Fq 'Mac Clipboard available-to-pair list rendered' /tmp/clipmesh-focused.sh
           grep -Fq 'Mac File Transfer UI shows paired Android as live target' /tmp/clipmesh-focused.sh
           grep -Fq 'Android file discovery survives both UIs hidden' /tmp/clipmesh-focused.sh
           grep -Fq 'Clipboard text Mac -> Android [A-open M-open]' /tmp/clipmesh-focused.sh
@@ -71,6 +77,7 @@ jobs:
           grep -Fq 'Clipboard text Mac -> Android [A-background M-tray]' /tmp/clipmesh-focused.sh
           grep -Fq 'Clipboard Mac -> Android after restart' /tmp/clipmesh-focused.sh
           grep -Fq 'Mac non-favorite real prompt Reject' /tmp/clipmesh-focused.sh
+          grep -Fq 'clipboard_renderer_rows=' /tmp/clipmesh-focused.sh
           grep -Fq 'local a="$1" target="$2" reset="m2a-reset-$(nonce)"' /tmp/clipmesh-focused.sh
           grep -Fq 'start_driver wait_text "$target"' /tmp/clipmesh-focused.sh
           grep -Fq 'patch-acceptance-chain.py' /tmp/clipmesh-focused.sh

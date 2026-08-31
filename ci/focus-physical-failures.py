@@ -28,6 +28,7 @@ def main() -> None:
         "PHYSICAL_HARDENING_V3",
         'local a="$1" target="$2" reset="m2a-reset-$(nonce)"',
         'start_driver wait_text "$target"',
+        "clipboard_renderer_rows=",
         "wait_driver SET_IMAGE",
         "patch-acceptance-chain.py",
         "last_prompt_decision=",
@@ -42,7 +43,7 @@ def main() -> None:
 
     focused = r'''
 section "FOCUSED RETRY - PHYSICAL REGRESSION SET"
-echo "Mode: nine targeted physical regression scenarios only"
+echo "Mode: ten targeted physical regression scenarios only"
 echo "Final certification still requires ./dev-test-final.sh"
 
 focused_discover_pair_once(){
@@ -80,6 +81,10 @@ focused_wait_android_clipboard_connected(){
   done
   return 1
 }
+focused_mac_clipboard_rendered(){
+  mac_command clipboard >/dev/null 2>&1 || return 1
+  mac_state | awk -F= '/clipboard_renderer_rows=/{exit !($2>0)}'
+}
 focused_mac_file_visible(){
   mac_command file >/dev/null 2>&1 || return 1
   mac_state | awk -F= '/file_nearby_count=/{exit !($2>0)}'
@@ -90,7 +95,21 @@ focused_mac_clipboard_ready(){
     && "$CLI_EXE" status >/dev/null 2>&1
 }
 
-# 1) macOS File Transfer must render the already-paired Android receiver.
+# 1) The real macOS Clipboard page must execute its nearby renderer. This is the
+# single 104/1 failure from the latest full run. An empty available-to-pair list
+# still renders its explicit empty-state row, so the real stack must have >0 rows.
+set_android_favorite "$MAC_FP" false
+set_mac_favorite "$ANDROID_FP" false
+acc_sync dev.clipmesh.acceptance.CLEAR_NEARBY >/dev/null
+mac_command clear-nearby >/dev/null 2>&1
+android_main
+mac_show
+focused_discover_pair_once
+wait_until 50 focused_mac_clipboard_rendered \
+  && pass "Mac Clipboard available-to-pair list rendered" \
+  || fail "Mac Clipboard available-to-pair list rendered" "$(mac_state)"
+
+# 2) macOS File Transfer must render the already-paired Android receiver.
 set_android_favorite "$MAC_FP" false
 set_mac_favorite "$ANDROID_FP" false
 acc_sync dev.clipmesh.acceptance.CLEAR_NEARBY >/dev/null
@@ -102,7 +121,7 @@ wait_until 50 focused_mac_file_visible \
   && pass "Mac File Transfer UI shows paired Android as live target" \
   || fail "Mac File Transfer UI shows paired Android as live target" "$(mac_state)"
 
-# 2) Android discovery must continue when both app UIs are hidden.
+# 3) Android discovery must continue when both app UIs are hidden.
 set_android_favorite "$MAC_FP" true
 set_mac_favorite "$ANDROID_FP" true
 android_background
@@ -117,7 +136,7 @@ ai="$(acc_sync dev.clipmesh.acceptance.INFO)"
   && pass "Android file discovery survives both UIs hidden" \
   || fail "Android file discovery survives both UIs hidden" "$ai"
 
-# 3) Open/open Mac -> Android text must verify the intended payload, not merely
+# 4) Open/open Mac -> Android text must verify the intended payload, not merely
 # the direction-reset barrier.
 set_state open open
 focused_text="focused-m2a-open-open-$STAMP"
@@ -125,7 +144,7 @@ clipboard_m2a_text open "$focused_text" \
   && pass "Clipboard text Mac -> Android [A-open M-open]" \
   || fail "Clipboard text Mac -> Android [A-open M-open]"
 
-# 4) Android text -> image -> text must preserve final ordering.
+# 5) Android text -> image -> text must preserve final ordering.
 set_state open open
 order_image_ok=0
 clipboard_a2m_image open >/dev/null 2>&1 && order_image_ok=1
@@ -136,7 +155,7 @@ acc_sync dev.clipmesh.acceptance.SET_TEXT --es expected_b64 "$(b64 "$focused_ord
   && pass "Android text -> image -> text ordering" \
   || fail "Android text -> image -> text ordering"
 
-# 5) Rapid Mac -> Android changes need only guarantee final stable state.
+# 6) Rapid Mac -> Android changes need only guarantee final stable state.
 burst_reset="focused-burst-reset-$(nonce)"
 burst_ready=1
 acc_sync dev.clipmesh.acceptance.SET_TEXT --es expected_b64 "$(b64 "$burst_reset")" >/dev/null || burst_ready=0
@@ -151,21 +170,21 @@ sleep .85
   && pass "Mac -> Android rapid 10-event burst final state" \
   || fail "Mac -> Android rapid 10-event burst final state"
 
-# 6) Regression from the 102/3 full run: ClipMesh backgrounded, Mac window open.
+# 7) Regression from the 102/3 full run: ClipMesh backgrounded, Mac window open.
 set_state background open
 focused_bg_open="focused-m2a-bg-mac-open-$STAMP"
 clipboard_m2a_text background "$focused_bg_open" \
   && pass "Clipboard text Mac -> Android [A-background M-open]" \
   || fail "Clipboard text Mac -> Android [A-background M-open]"
 
-# 7) Same background text edge while the Mac UI is hidden in the tray.
+# 8) Same background text edge while the Mac UI is hidden in the tray.
 set_state background tray
 focused_bg_tray="focused-m2a-bg-mac-tray-$STAMP"
 clipboard_m2a_text background "$focused_bg_tray" \
   && pass "Clipboard text Mac -> Android [A-background M-tray]" \
   || fail "Clipboard text Mac -> Android [A-background M-tray]"
 
-# 8) Reproduce the full-suite restart boundary before testing Mac -> Android text.
+# 9) Reproduce the full-suite restart boundary before testing Mac -> Android text.
 set_android_favorite "$MAC_FP" true
 set_mac_favorite "$ANDROID_FP" true
 pkill -x ClipMesh >/dev/null 2>&1 || true
@@ -197,7 +216,7 @@ focused_restart="focused-restart-m2a-$STAMP"
   && pass "Clipboard Mac -> Android after restart" \
   || fail "Clipboard Mac -> Android after restart" "restart_ready=$restart_ready"
 
-# 9) The real macOS non-favorite prompt must actually click Reject.
+# 10) The real macOS non-favorite prompt must actually click Reject.
 set_state open open
 set_android_favorite "$MAC_FP" false
 set_mac_favorite "$ANDROID_FP" false
@@ -248,11 +267,12 @@ echo
 echo "FOCUSED RETRY FOUND $FAILURES FAILURE(S). Fix these before rerunning the full matrix."
 exit 1
 
-# FOCUSED_PREVIOUS_FAILURES_V2
+# FOCUSED_PREVIOUS_FAILURES_V3
 '''
 
     out = prefix + focused
     for needle in (
+        "Mac Clipboard available-to-pair list rendered",
         "Mac File Transfer UI shows paired Android as live target",
         "Android file discovery survives both UIs hidden",
         "Clipboard text Mac -> Android [A-open M-open]",
@@ -262,7 +282,8 @@ exit 1
         "Clipboard text Mac -> Android [A-background M-tray]",
         "Clipboard Mac -> Android after restart",
         "Mac non-favorite real prompt Reject",
-        "FOCUSED_PREVIOUS_FAILURES_V2",
+        "clipboard_renderer_rows=",
+        "FOCUSED_PREVIOUS_FAILURES_V3",
     ):
         if needle not in out:
             raise SystemExit(f"focused runner guard missing: {needle}")

@@ -73,8 +73,50 @@ exec(compile(source, str(source_path), "exec"), namespace, namespace)
 
 system = os.environ.get("CLIPMESH_PLATFORM", "")
 if system == "Darwin":
+    app_path = ROOT / "ci/ClipMeshApp.swift"
+    app_text = app_path.read_text(encoding="utf-8")
+
+    # `clipboard_nearby_count` was an indirect renderer metric and a real
+    # hardware run proved it could remain absent even while the Mac engine saw
+    # Android and all clipboard transfers worked. Record the actual rendered
+    # stack after the real Clipboard command refreshes the page. The empty-state
+    # label is itself a row, so >0 proves the UI renderer ran even when there are
+    # zero unpaired devices to show.
+    old_clipboard_command = '''        case "clipboard":
+            showWindow(); selectTab(0, animated: false)
+            LocalTransferManager.shared.discoverNow(); refreshNearbyPairDevices()
+        case "file":
+'''
+    new_clipboard_command = '''        case "clipboard":
+            showWindow(); selectTab(0, animated: false)
+            LocalTransferManager.shared.discoverNow(); refreshNearbyPairDevices()
+            defaults.set(nearbyPairStack?.arrangedSubviews.count ?? -1, forKey: "ClipMesh.Acceptance.ClipboardRendererRows")
+        case "file":
+'''
+    count = app_text.count(old_clipboard_command)
+    if count != 1:
+        raise SystemExit(f"acceptance v5 Clipboard renderer command anchor: expected one match, found {count}")
+    app_text = app_text.replace(old_clipboard_command, new_clipboard_command, 1)
+
+    prompt_state_anchor = '''    print("prompt_count=\\(defaults.integer(forKey: \"ClipMesh.Acceptance.PromptCount\"))")
+'''
+    renderer_state = '''    print("clipboard_renderer_rows=\\(defaults.object(forKey: \"ClipMesh.Acceptance.ClipboardRendererRows\") == nil ? -1 : defaults.integer(forKey: \"ClipMesh.Acceptance.ClipboardRendererRows\"))")
+'''
+    count = app_text.count(prompt_state_anchor)
+    if count != 1:
+        raise SystemExit(f"acceptance v5 Clipboard renderer state anchor: expected one match, found {count}")
+    app_text = app_text.replace(prompt_state_anchor, renderer_state + prompt_state_anchor, 1)
+
+    reset_anchor = '"ClipMesh.Acceptance.ClipboardNearbyCount", "ClipMesh.Acceptance.FileNearbyCount"'
+    reset_replacement = '"ClipMesh.Acceptance.ClipboardNearbyCount", "ClipMesh.Acceptance.ClipboardRendererRows", "ClipMesh.Acceptance.FileNearbyCount"'
+    count = app_text.count(reset_anchor)
+    if count != 1:
+        raise SystemExit(f"acceptance v5 Clipboard renderer reset anchor: expected one match, found {count}")
+    app_text = app_text.replace(reset_anchor, reset_replacement, 1)
+    app_path.write_text(app_text, encoding="utf-8")
+
     transfer = (ROOT / "ci/ClipMeshTransfer.swift").read_text(encoding="utf-8")
-    app = (ROOT / "ci/ClipMeshApp.swift").read_text(encoding="utf-8")
+    app = app_path.read_text(encoding="utf-8")
     secrets = (ROOT / "clipmesh/apps/desktop/src/secrets.rs").read_text(encoding="utf-8")
     for needle in (
         "acceptance-incoming-policy.txt",
@@ -87,10 +129,16 @@ if system == "Darwin":
             raise SystemExit(f"acceptance v5 transfer guard missing: {needle}")
     if "DispatchQueue.main.asyncAfter(deadline: .now() + 0.18)" in transfer:
         raise SystemExit("acceptance v5 still uses a default main-queue delay for modal prompt automation")
-    if "last_prompt_decision=" not in app:
-        raise SystemExit("acceptance v5 app decision-state guard missing")
+    for needle in (
+        "last_prompt_decision=",
+        "ClipMesh.Acceptance.ClipboardRendererRows",
+        "clipboard_renderer_rows=",
+        "nearbyPairStack?.arrangedSubviews.count ?? -1",
+    ):
+        if needle not in app:
+            raise SystemExit(f"acceptance v5 app guard missing: {needle}")
     for forbidden in ("use keyring::Entry;", "Entry::new(", "set_password("):
         if forbidden in secrets:
             raise SystemExit(f"acceptance v5 executable Keychain API remained: {forbidden}")
 
-print(f"Applied ClipMesh physical acceptance v5 prompt/Keychain guard repairs on {system or 'unknown'}")
+print(f"Applied ClipMesh physical acceptance v5 prompt/Keychain/UI-observability repairs on {system or 'unknown'}")

@@ -120,6 +120,21 @@ mac_file_visible(){ mac_command file >/dev/null 2>&1 || return 1; mac_state | aw
         "Mac renderer refresh while converging",
     )
 
+    # The Clipboard acceptance signal must prove that the real renderer populated
+    # its actual NSStackView, not merely that an indirect device-count preference
+    # happened to be written. The renderer always has at least one arranged row:
+    # either one or more device rows, or its explicit empty-state label.
+    text = replace_once(
+        text,
+        '''mac_clipboard_rendered(){ mac_command clipboard >/dev/null 2>&1 || return 1; mac_state | awk -F= '/clipboard_nearby_count=/{exit !($2>=0)}'; }
+mac_file_visible(){ mac_command file >/dev/null 2>&1 || return 1; mac_state | awk -F= '/file_nearby_count=/{exit !($2>0)}'; }
+''',
+        '''mac_clipboard_rendered(){ mac_command clipboard >/dev/null 2>&1 || return 1; mac_state | awk -F= '/clipboard_renderer_rows=/{exit !($2>0)}'; }
+mac_file_visible(){ mac_command file >/dev/null 2>&1 || return 1; mac_state | awk -F= '/file_nearby_count=/{exit !($2>0)}'; }
+''',
+        "Mac Clipboard actual renderer assertion",
+    )
+
     # The real Mac incoming alert is automated by the acceptance build. Prove the
     # Reject button was actually clicked, not merely that the sender happened to
     # fail for another reason.
@@ -169,6 +184,7 @@ mac_command snapshot >/dev/null 2>&1 && pass "Mac restart restores acceptance UI
         "dev.ClipMesh.ClipMesh-Acceptance",
         'local a="$1" target="$2" reset="m2a-reset-$(nonce)"',
         'start_driver wait_text "$target"',
+        "clipboard_renderer_rows=",
         "last_prompt_decision=",
         "Mac restart restores clipboard daemon",
         "Mac restart restores acceptance UI command loop",
