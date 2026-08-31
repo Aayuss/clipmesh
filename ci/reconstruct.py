@@ -21,6 +21,7 @@ PIPELINES = {
         "patch-v027-macos-daemon.py", "patch-v030-finalize.py", "patch-v031-dev-test.py",
         "patch-v032-release.py", "patch-v033-ipv4-transfer.py", "patch-v038-file-transfer-visibility.py",
         "patch-v039-lan-discovery.py", "patch-v040-macos-resilience.py",
+        "patch-v043-desktop-image-echo.py",
     ],
     "Linux": [
         "patch-features.py", "patch-sync-fixes.py",
@@ -32,7 +33,7 @@ PIPELINES = {
         "patch-v032-release.py", "patch-v033-ipv4-transfer.py", "patch-v034-shizuku-clipboard.py",
         "patch-v035-e2e-observability.py", "patch-v038-file-transfer-visibility.py", "patch-v039-lan-discovery.py",
         "patch-v040-macos-resilience.py", "patch-v041-android-remote-suppression.py",
-        "patch-v042-android-once-delivery.py",
+        "patch-v042-android-once-delivery.py", "patch-v043-desktop-image-echo.py",
     ],
     "Windows": [
         "patch-features.py", "patch-sync-fixes.py", "patch-desktop.py", "patch-windows.py",
@@ -43,6 +44,7 @@ PIPELINES = {
         "patch-v027-macos-daemon.py", "patch-v030-finalize.py", "patch-v031-dev-test.py",
         "patch-v032-release.py", "patch-v033-ipv4-transfer.py", "patch-v038-file-transfer-visibility.py",
         "patch-v039-lan-discovery.py", "patch-v040-macos-resilience.py",
+        "patch-v043-desktop-image-echo.py",
     ],
 }
 

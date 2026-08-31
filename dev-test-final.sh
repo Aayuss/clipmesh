@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Audited entrypoint for the full ClipMesh Mac <-> Android physical acceptance run.
-# It never edits the checkout: the canonical suite is finalized in three audited
+# It never edits the checkout: the canonical suite is finalized in four audited
 # passes, syntax-checked, then executed in a clean bash.
 #
 # Final physical acceptance is intentionally strict: by default it only runs from
@@ -54,8 +54,9 @@ fi
 
 TMP_V1="$ROOT/.dev-test-final-v1.$$.sh"
 TMP_V2="$ROOT/.dev-test-final-v2.$$.sh"
+TMP_V3="$ROOT/.dev-test-final-v3.$$.sh"
 TMP="$ROOT/.dev-test-final.$$.sh"
-cleanup(){ rm -f -- "$TMP_V1" "$TMP_V2" "$TMP"; }
+cleanup(){ rm -f -- "$TMP_V1" "$TMP_V2" "$TMP_V3" "$TMP"; }
 trap cleanup EXIT INT TERM
 
 python3 "$ROOT/ci/finalize-comprehensive-runner.py" "$ROOT/dev-test-comprehensive.sh" "$TMP_V1"
@@ -72,10 +73,17 @@ if [ "$rc" -ne 0 ]; then
   exit "$rc"
 fi
 
-python3 "$ROOT/ci/finalize-physical-v3.py" "$TMP_V2" "$TMP"
+python3 "$ROOT/ci/finalize-physical-v3.py" "$TMP_V2" "$TMP_V3"
 rc=$?
 if [ "$rc" -ne 0 ]; then
   echo "FAIL: could not apply passwordless/restart physical hardening v3."
+  exit "$rc"
+fi
+
+python3 "$ROOT/ci/finalize-physical-v4.py" "$TMP_V3" "$TMP"
+rc=$?
+if [ "$rc" -ne 0 ]; then
+  echo "FAIL: could not apply delayed image-echo physical hardening v4."
   exit "$rc"
 fi
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fast physical retry loop for only the scenarios that previously failed.
+# Fast physical retry loop for only the scenarios that currently fail.
 # Uses the exact same finalized setup/helpers as dev-test-final.sh, but does not
 # execute the already-green full matrix. Final release certification must still
 # use dev-test-final.sh once all focused failures are green.
@@ -48,9 +48,10 @@ fi
 
 TMP_V1="$ROOT/.dev-test-focused-v1.$$.sh"
 TMP_V2="$ROOT/.dev-test-focused-v2.$$.sh"
+TMP_V3="$ROOT/.dev-test-focused-v3.$$.sh"
 TMP_FULL="$ROOT/.dev-test-focused-full.$$.sh"
 TMP="$ROOT/.dev-test-focused.$$.sh"
-cleanup(){ rm -f -- "$TMP_V1" "$TMP_V2" "$TMP_FULL" "$TMP"; }
+cleanup(){ rm -f -- "$TMP_V1" "$TMP_V2" "$TMP_V3" "$TMP_FULL" "$TMP"; }
 trap cleanup EXIT INT TERM
 
 python3 "$ROOT/ci/finalize-comprehensive-runner.py" "$ROOT/dev-test-comprehensive.sh" "$TMP_V1"
@@ -61,13 +62,17 @@ python3 "$ROOT/ci/finalize-physical-v2.py" "$TMP_V1" "$TMP_V2"
 rc=$?
 [ "$rc" -eq 0 ] || { echo "FAIL: could not apply physical hardening v2."; exit "$rc"; }
 
-python3 "$ROOT/ci/finalize-physical-v3.py" "$TMP_V2" "$TMP_FULL"
+python3 "$ROOT/ci/finalize-physical-v3.py" "$TMP_V2" "$TMP_V3"
 rc=$?
 [ "$rc" -eq 0 ] || { echo "FAIL: could not apply physical hardening v3."; exit "$rc"; }
 
+python3 "$ROOT/ci/finalize-physical-v4.py" "$TMP_V3" "$TMP_FULL"
+rc=$?
+[ "$rc" -eq 0 ] || { echo "FAIL: could not apply image-echo hardening v4."; exit "$rc"; }
+
 python3 "$ROOT/ci/focus-physical-failures.py" "$TMP_FULL" "$TMP"
 rc=$?
-[ "$rc" -eq 0 ] || { echo "FAIL: could not generate focused previous-failure runner."; exit "$rc"; }
+[ "$rc" -eq 0 ] || { echo "FAIL: could not generate focused image-echo runner."; exit "$rc"; }
 
 chmod +x "$TMP"
 /bin/bash -n "$TMP"

@@ -8,11 +8,14 @@ on:
       - 'dev-test-retry-failures.sh'
       - 'dev-test-final.sh'
       - 'dev-test-comprehensive.sh'
+      - 'ci/reconstruct.py'
+      - 'ci/patch-v043-desktop-image-echo.py'
       - 'ci/patch-acceptance-v5.py'
       - 'ci/focus-physical-failures.py'
       - 'ci/finalize-comprehensive-runner.py'
       - 'ci/finalize-physical-v2.py'
       - 'ci/finalize-physical-v3.py'
+      - 'ci/finalize-physical-v4.py'
       - '.github/workflows/focused-acceptance-harness.yml'
   pull_request:
     branches: [main]
@@ -20,11 +23,14 @@ on:
       - 'dev-test-retry-failures.sh'
       - 'dev-test-final.sh'
       - 'dev-test-comprehensive.sh'
+      - 'ci/reconstruct.py'
+      - 'ci/patch-v043-desktop-image-echo.py'
       - 'ci/patch-acceptance-v5.py'
       - 'ci/focus-physical-failures.py'
       - 'ci/finalize-comprehensive-runner.py'
       - 'ci/finalize-physical-v2.py'
       - 'ci/finalize-physical-v3.py'
+      - 'ci/finalize-physical-v4.py'
       - '.github/workflows/focused-acceptance-harness.yml'
 
 permissions:
@@ -38,14 +44,16 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Generate and audit focused retry runner
+      - name: Generate and audit focused image retry runner
         run: |
           set -euo pipefail
           python -m py_compile \
+            ci/patch-v043-desktop-image-echo.py \
             ci/patch-acceptance-v5.py \
             ci/finalize-comprehensive-runner.py \
             ci/finalize-physical-v2.py \
             ci/finalize-physical-v3.py \
+            ci/finalize-physical-v4.py \
             ci/focus-physical-failures.py
           bash -n dev-test-comprehensive.sh
           bash -n dev-test-final.sh
@@ -53,42 +61,37 @@ jobs:
 
           python ci/finalize-comprehensive-runner.py dev-test-comprehensive.sh /tmp/clipmesh-v1.sh
           python ci/finalize-physical-v2.py /tmp/clipmesh-v1.sh /tmp/clipmesh-v2.sh
-          python ci/finalize-physical-v3.py /tmp/clipmesh-v2.sh /tmp/clipmesh-full.sh
+          python ci/finalize-physical-v3.py /tmp/clipmesh-v2.sh /tmp/clipmesh-v3.sh
+          python ci/finalize-physical-v4.py /tmp/clipmesh-v3.sh /tmp/clipmesh-full.sh
           python ci/focus-physical-failures.py /tmp/clipmesh-full.sh /tmp/clipmesh-focused.sh
           bash -n /tmp/clipmesh-full.sh
           bash -n /tmp/clipmesh-focused.sh
 
-          # The full runner itself must carry the locally-scoped real payload and
-          # the actual macOS Clipboard renderer-row signal.
           grep -Fq 'local a="$1" target="$2" reset="m2a-reset-$(nonce)"' /tmp/clipmesh-full.sh
           grep -Fq 'start_driver wait_text "$target"' /tmp/clipmesh-full.sh
           grep -Fq 'clipboard_renderer_rows=' /tmp/clipmesh-full.sh
+          grep -Fq 'PHYSICAL_HARDENING_V4_IMAGE_ECHO' /tmp/clipmesh-full.sh
+          grep -Fq 'Android -> Mac image does not echo back to Android' /tmp/clipmesh-full.sh
+          grep -Fq 'Mac -> Android image applies only once' /tmp/clipmesh-full.sh
+          grep -Fq 'last_remote_apply_at=' /tmp/clipmesh-full.sh
           ! grep -Fq 'a="$1"; expected="$2"; reset="m2a-reset-$(nonce)"' /tmp/clipmesh-full.sh
 
-          grep -Fq 'FOCUSED_PREVIOUS_FAILURES_V3' /tmp/clipmesh-focused.sh
-          grep -Fq 'ten targeted physical regression scenarios only' /tmp/clipmesh-focused.sh
-          grep -Fq 'Mac Clipboard available-to-pair list rendered' /tmp/clipmesh-focused.sh
-          grep -Fq 'Mac File Transfer UI shows paired Android as live target' /tmp/clipmesh-focused.sh
-          grep -Fq 'Android file discovery survives both UIs hidden' /tmp/clipmesh-focused.sh
-          grep -Fq 'Clipboard text Mac -> Android [A-open M-open]' /tmp/clipmesh-focused.sh
-          grep -Fq 'Android text -> image -> text ordering' /tmp/clipmesh-focused.sh
-          grep -Fq 'Mac -> Android rapid 10-event burst final state' /tmp/clipmesh-focused.sh
-          grep -Fq 'Clipboard text Mac -> Android [A-background M-open]' /tmp/clipmesh-focused.sh
-          grep -Fq 'Clipboard text Mac -> Android [A-background M-tray]' /tmp/clipmesh-focused.sh
-          grep -Fq 'Clipboard Mac -> Android after restart' /tmp/clipmesh-focused.sh
-          grep -Fq 'Mac non-favorite real prompt Reject' /tmp/clipmesh-focused.sh
-          grep -Fq 'clipboard_renderer_rows=' /tmp/clipmesh-focused.sh
-          grep -Fq 'local a="$1" target="$2" reset="m2a-reset-$(nonce)"' /tmp/clipmesh-focused.sh
-          grep -Fq 'start_driver wait_text "$target"' /tmp/clipmesh-focused.sh
+          grep -Fq 'FOCUSED_IMAGE_ECHO_V4' /tmp/clipmesh-focused.sh
+          grep -Fq 'two targeted image echo regression scenarios only' /tmp/clipmesh-focused.sh
+          grep -Fq 'Android -> Mac image does not echo back to Android' /tmp/clipmesh-focused.sh
+          grep -Fq 'Mac -> Android image applies only once' /tmp/clipmesh-focused.sh
+          grep -Fq 'last_remote_apply_at=' /tmp/clipmesh-focused.sh
           grep -Fq 'patch-acceptance-chain.py' /tmp/clipmesh-focused.sh
           grep -Fq 'CLIPMESH_CODESIGN_IDENTITY="-"' /tmp/clipmesh-focused.sh
 
-          # Focused iteration must not silently become another full 100-test run.
           ! grep -Fq '1 MiB Android -> Mac SHA integrity' /tmp/clipmesh-focused.sh
           ! grep -Fq '3-file Mac -> Android batch' /tmp/clipmesh-focused.sh
           ! grep -Fq 'RESTART, REDISCOVERY AND PERSISTENCE' /tmp/clipmesh-focused.sh
           ! grep -Fq 'FINAL STABILITY AND FAILURE SCAN' /tmp/clipmesh-focused.sh
+          ! grep -Fq 'Mac non-favorite real prompt Reject' /tmp/clipmesh-focused.sh
 
           grep -Fq 'status --porcelain --untracked-files=no' dev-test-retry-failures.sh
           grep -Fq 'fetch --quiet origin main' dev-test-retry-failures.sh
           grep -Fq 'rev-parse origin/main' dev-test-retry-failures.sh
+          grep -Fq 'finalize-physical-v4.py' dev-test-final.sh
+          grep -Fq 'finalize-physical-v4.py' dev-test-retry-failures.sh
