@@ -17,6 +17,14 @@ def replace_once(path: Path, old: str, new: str, label: str) -> None:
     path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
 
+def replace_exact(path: Path, old: str, new: str, expected: int, label: str) -> None:
+    text = path.read_text(encoding="utf-8")
+    count = text.count(old)
+    if count != expected:
+        raise SystemExit(f"{label}: expected exactly {expected} matches in {path}, found {count}")
+    path.write_text(text.replace(old, new), encoding="utf-8")
+
+
 if system == "Darwin":
     app = root / "ci/ClipMeshApp.swift"
 
@@ -46,7 +54,7 @@ if system == "Darwin":
         return commandMatches && executableMatches
     }
 ''',
-        '''    private static func processIsClipMeshDaemon(_ pid: Int32) -> Bool {
+        r'''    private static func processIsClipMeshDaemon(_ pid: Int32) -> Bool {
         guard let result = try? external("/usr/sbin/lsof", ["-nP", "-a", "-p", String(pid), "-d", "txt", "-FcFn"]), result.status == 0 else { return false }
         let lines = result.output.split(whereSeparator: { $0.isNewline }).map(String.init)
         let commandMatches = lines.contains("cclipmesh-bin")
@@ -69,18 +77,26 @@ if system == "Darwin":
         "macOS clipboard daemon readiness probe",
     )
 
-    replace_once(
+    # There are exactly two legitimate shutdown paths: applicationWillTerminate
+    # and the explicit Quit action. Cancel pending recovery in both without using
+    # an ambiguous single-line anchor.
+    replace_exact(
         app,
         '''        quitting = true
+        LocalTransferManager.shared.stop()
+        stopDaemon()
 ''',
         '''        quitting = true
         daemonRestartWorkItem?.cancel()
         daemonRestartWorkItem = nil
+        LocalTransferManager.shared.stop()
+        stopDaemon()
 ''',
-        "macOS terminate cancels daemon restart",
+        2,
+        "macOS shutdown paths cancel daemon restart",
     )
 
-    old_handler = '''        process.terminationHandler = { [weak self, weak process] ended in
+    old_handler = r'''        process.terminationHandler = { [weak self, weak process] ended in
             DispatchQueue.main.async {
                 guard let self, let process, !self.quitting, self.daemon === process else { return }
                 self.daemon = nil
@@ -90,7 +106,7 @@ if system == "Darwin":
             }
         }
 '''
-    new_handler = '''        process.terminationHandler = { [weak self, weak process] ended in
+    new_handler = r'''        process.terminationHandler = { [weak self, weak process] ended in
             DispatchQueue.main.async {
                 guard let self, let process, !self.quitting, self.daemon === process else { return }
                 self.daemon = nil
@@ -106,7 +122,7 @@ if system == "Darwin":
         app,
         '''    private func startDaemon() throws {
 ''',
-        '''    private func scheduleDaemonRestart(after terminationStatus: Int32) {
+        r'''    private func scheduleDaemonRestart(after terminationStatus: Int32) {
         guard !quitting else { return }
         daemonRestartWorkItem?.cancel()
         daemonRestartAttempts += 1
