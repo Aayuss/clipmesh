@@ -44,7 +44,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Generate and audit focused image retry runner
+      - name: Generate and audit focused clipboard retry runner
         run: |
           set -euo pipefail
           python -m py_compile \
@@ -58,6 +58,15 @@ jobs:
           bash -n dev-test-comprehensive.sh
           bash -n dev-test-final.sh
           bash -n dev-test-retry-failures.sh
+
+          python ci/reconstruct.py --platform Darwin
+          grep -Fq 'remote_write_depth: usize' clipmesh/apps/desktop/src/clipboard.rs
+          grep -Fq 'state.begin_remote_write(fp)' clipmesh/apps/desktop/src/clipboard.rs
+          grep -Fq 'observe_cfg.exclusions.clear()' clipmesh/apps/desktop/src/clipboard.rs
+          grep -Fq 'state.finish_remote_write(actual_fingerprint)' clipmesh/apps/desktop/src/clipboard.rs
+          grep -Fq 'if state.remote_write_depth>0' clipmesh/apps/desktop/src/clipboard.rs
+          ! grep -Fq 'suppress_next_observed' clipmesh/apps/desktop/src/clipboard.rs
+          ! grep -Fq 'state.suppress(fp)' clipmesh/apps/desktop/src/clipboard.rs
 
           python ci/finalize-comprehensive-runner.py dev-test-comprehensive.sh /tmp/clipmesh-v1.sh
           python ci/finalize-physical-v2.py /tmp/clipmesh-v1.sh /tmp/clipmesh-v2.sh
@@ -76,8 +85,10 @@ jobs:
           grep -Fq 'last_remote_apply_at=' /tmp/clipmesh-full.sh
           ! grep -Fq 'a="$1"; expected="$2"; reset="m2a-reset-$(nonce)"' /tmp/clipmesh-full.sh
 
-          grep -Fq 'FOCUSED_IMAGE_ECHO_V4' /tmp/clipmesh-focused.sh
-          grep -Fq 'two targeted image echo regression scenarios only' /tmp/clipmesh-focused.sh
+          grep -Fq 'FOCUSED_SCOPED_REMOTE_WRITE_V5' /tmp/clipmesh-focused.sh
+          grep -Fq 'four targeted clipboard regression scenarios only' /tmp/clipmesh-focused.sh
+          grep -Fq 'Android text -> image -> text ordering' /tmp/clipmesh-focused.sh
+          grep -Fq 'Mac -> Android rapid 10-event burst final state' /tmp/clipmesh-focused.sh
           grep -Fq 'Android -> Mac image does not echo back to Android' /tmp/clipmesh-focused.sh
           grep -Fq 'Mac -> Android image applies only once' /tmp/clipmesh-focused.sh
           grep -Fq 'last_remote_apply_at=' /tmp/clipmesh-focused.sh

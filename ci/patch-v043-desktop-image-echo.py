@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prevent remote image clipboard writes from being re-emitted by desktop watchers."""
+"""Prevent remote desktop clipboard writes from being re-emitted without suppressing later local copies."""
 
 from pathlib import Path
 import os
@@ -44,57 +44,59 @@ impl ClipboardState {
 }
 '''
 
-new = r'''pub struct ClipboardState {
-    suppressed: Mutex<Option<[u8; 32]>>,
-    last_observed: Mutex<Option<[u8; 32]>>,
-    suppress_next_observed: Mutex<bool>,
+new = r'''struct ClipboardDedupe {
+    suppressed: Option<[u8; 32]>,
+    last_observed: Option<[u8; 32]>,
+    remote_write_depth: usize,
+}
+
+pub struct ClipboardState {
+    dedupe: Mutex<ClipboardDedupe>,
 }
 
 impl ClipboardState {
     pub fn new() -> Self {
         Self {
-            suppressed: Mutex::new(None),
-            last_observed: Mutex::new(None),
-            suppress_next_observed: Mutex::new(false),
+            dedupe: Mutex::new(ClipboardDedupe {
+                suppressed: None,
+                last_observed: None,
+                remote_write_depth: 0,
+            }),
         }
     }
     pub fn seed(&self, fingerprint: [u8; 32]) {
-        *self.last_observed.lock()=Some(fingerprint);
+        self.dedupe.lock().last_observed=Some(fingerprint);
     }
-    pub fn suppress(&self, fingerprint: [u8; 32]) {
-        // A remote clipboard write is one event even when the platform re-encodes
-        // its bytes. In particular, macOS may expose an image with PNG bytes that
-        // differ from the bytes received over ClipMesh. The first observation
-        // caused by this remote write must therefore be suppressed by event, not
-        // only by an exact content fingerprint.
-        *self.suppressed.lock()=Some(fingerprint);
-        *self.suppress_next_observed.lock()=true;
+    pub fn begin_remote_write(&self, fingerprint: [u8; 32]) {
+        let mut state=self.dedupe.lock();
+        state.suppressed=Some(fingerprint);
+        state.remote_write_depth=state.remote_write_depth.saturating_add(1);
+    }
+    pub fn finish_remote_write(&self, actual_fingerprint: Option<[u8; 32]>) {
+        let mut state=self.dedupe.lock();
+        if let Some(fingerprint)=actual_fingerprint {
+            // Seed the representation the OS actually stored. macOS can re-encode
+            // image bytes, so the wire fingerprint alone is not enough to stop an
+            // echo after the remote write completes.
+            state.last_observed=Some(fingerprint);
+            state.suppressed=None;
+        }
+        state.remote_write_depth=state.remote_write_depth.saturating_sub(1);
     }
     fn should_emit(&self, fingerprint: &[u8; 32]) -> bool {
-        let suppress_next = {
-            let mut pending=self.suppress_next_observed.lock();
-            let value=*pending;
-            if value { *pending=false; }
-            value
-        };
-        if suppress_next {
-            // Seed the ACTUAL representation that the local clipboard exposes
-            // after the remote write. Subsequent native-watcher/poller reads of
-            // the same image now dedupe even if the platform re-encoded it.
-            *self.last_observed.lock()=Some(*fingerprint);
-            *self.suppressed.lock()=None;
+        let mut state=self.dedupe.lock();
+        if state.remote_write_depth>0 {
+            // Only events observed while apply_remote() is actively writing are
+            // suppressed. There is no sticky "ignore the next clipboard event"
+            // bit, so an immediate genuine local copy can never be swallowed later.
+            state.last_observed=Some(*fingerprint);
+            if state.suppressed.as_ref()==Some(fingerprint) { state.suppressed=None; }
             return false;
         }
-        {
-            let mut last=self.last_observed.lock();
-            if last.as_ref()==Some(fingerprint) { return false; }
-            *last=Some(*fingerprint);
-        }
-        // Keep exact-fingerprint suppression as a fallback for platforms where
-        // the observer sees the received representation byte-for-byte.
-        let mut suppressed=self.suppressed.lock();
-        if suppressed.as_ref()==Some(fingerprint) {
-            *suppressed=None;
+        if state.last_observed.as_ref()==Some(fingerprint) { return false; }
+        state.last_observed=Some(*fingerprint);
+        if state.suppressed.as_ref()==Some(fingerprint) {
+            state.suppressed=None;
             return false;
         }
         true
@@ -104,27 +106,79 @@ impl ClipboardState {
 
 if text.count(old) != 1:
     raise SystemExit(
-        f"desktop ClipboardState remote-event suppression anchor: expected one match, found {text.count(old)}"
+        f"desktop ClipboardState scoped remote-write anchor: expected one match, found {text.count(old)}"
     )
-
 text = text.replace(old, new, 1)
+
+old_apply = r'''    if contents.is_empty() { return Ok(()); }
+    let fp=payload.stable_fingerprint()?;
+    state.suppress(fp);
+    ctx.set(contents).map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    Ok(())
+'''
+
+new_apply = r'''    if contents.is_empty() { return Ok(()); }
+    let fp=payload.stable_fingerprint()?;
+    state.begin_remote_write(fp);
+
+    // Keep suppression scoped to this exact remote write. ctx.set() is
+    // synchronous, but native clipboard watchers may run on another thread while
+    // it is executing, so should_emit() suppresses only while remote_write_depth
+    // is non-zero. Once the write completes, read the actual OS representation
+    // back and seed its fingerprint before clearing the gate. This handles macOS
+    // image re-encoding without leaving a sticky flag that can swallow the next
+    // genuine local copy.
+    let set_result=ctx.set(contents).map_err(|e| anyhow::anyhow!(e.to_string()));
+    let mut actual_fingerprint=None;
+    if set_result.is_ok() {
+        let mut observe_cg=cfg.clone();
+        // Remote-write observation must not depend on whichever foreground app is
+        // excluded by the user; this is internal dedupe bookkeeping only.
+        observe_cfg.exclusions.clear();
+        for _ in 0..4 {
+            if let Ok(Some(observed))=read_payload(&ctx,&observe_cfg) {
+                if let Ok(observed_fp)=observed.stable_fingerprint() {
+                    actual_fingerprint=Some(observed_fp);
+                    break;
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+    }
+    state.finish_remote_write(actual_fingerprint);
+    if set_result.is_ok() && actual_fingerprint.is_none() {
+        warn!("remote clipboard write succeeded but readback fingerprint was unavailable; exact wire suppression retained");
+    }
+    set_result?;
+    Ok(())
+'''
+
+if text.count(old_apply) != 1:
+    raise SystemExit(
+        f"desktop apply_remote scoped suppression anchor: expected one match, found {text.count(old_apply)}"
+    )
+text = text.replace(old_apply, new_apply, 1)
 clipboard.write_text(text, encoding="utf-8")
 
 final = clipboard.read_text(encoding="utf-8")
 for needle in (
-    "suppress_next_observed: Mutex<bool>",
-    "*self.suppress_next_observed.lock()=true",
-    "let suppress_next = {",
-    "*self.last_observed.lock()=Some(*fingerprint)",
-    "*self.suppressed.lock()=None",
-    "macOS may expose an image with PNG bytes",
+    "remote_write_depth: usize",
+    "state.remote_write_depth=state.remote_write_depth.saturating_add(1)",
+    "state.remote_write_depth=state.remote_write_depth.saturating_sub(1)",
+    "state.begin_remote_write(fp)",
+    "observe_cfg.exclusions.clear()",
+    "actual_fingerprint=Some(observed_fp)",
+    "state.finish_remote_write(actual_fingerprint)",
+    'There is no sticky "ignore the next clipboard event"',
 ):
     if needle not in final:
-        raise SystemExit(f"desktop image echo suppression guard missing: {needle}")
+        raise SystemExit(f"desktop scoped image-echo suppression guard missing: {needle}")
 
-# The old behavior seeded last_observed from the wire representation before the
-# OS wrote/re-encoded the clipboard. That exact pattern is the image-loop bug.
-if "*self.suppressed.lock()=Some(fingerprint);\n        *self.last_observed.lock()=Some(fingerprint);" in final:
-    raise SystemExit("desktop remote write still seeds last_observed from wire bytes")
+for forbidden in (
+    "suppress_next_observed",
+    "state.suppress(fp)",
+):
+    if forbidden in final:
+        raise SystemExit(f"desktop stale remote-event suppression remains: {forbidden}")
 
-print(f"Applied desktop once-per-remote-event image echo suppression on {SYSTEM}")
+print(f"Applied scoped desktop remote-write echo suppression on {SYSTEM}")
