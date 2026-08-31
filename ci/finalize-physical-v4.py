@@ -36,26 +36,37 @@ android_remote_apply_at(){
     | tr -d '\r' | sed -n 's/^last_remote_apply_at=//p' | tail -n1
 }
 
-# Android -> Mac image: after a text barrier has definitely reached Android,
-# Android performs a LOCAL image copy. Nothing should then be remotely applied
-# back to Android. Any change to last_remote_apply_at proves the Mac echoed it.
+# Android -> Mac image: first establish a deterministic Mac -> Android TEXT
+# barrier while ClipMesh itself is backgrounded. The foreground test driver owns
+# the clipboard check, so this proves the encrypted clipboard connection is ready
+# without incorrectly relying on a foreground-only acceptance receiver. Android
+# then performs a LOCAL image copy. Nothing should be remotely applied back to
+# Android. Any change to last_remote_apply_at proves the Mac echoed it.
 set_state background tray
 image_a2m_reset="image-echo-a2m-reset-$(nonce)"
-printf '%s' "$image_a2m_reset" | pbcopy
 image_a2m_ready=1
-wait_android_open_text "$image_a2m_reset" >/dev/null 2>&1 || image_a2m_ready=0
+image_a2m_reason="ready"
+start_driver wait_text "$image_a2m_reset"
+wait_driver READY_TEXT || { image_a2m_ready=0; image_a2m_reason="reset-driver-not-ready"; }
+if [ "$image_a2m_ready" -eq 1 ]; then
+  sleep .25
+  printf '%s' "$image_a2m_reset" | pbcopy
+  wait_driver PASS_TEXT || { image_a2m_ready=0; image_a2m_reason="reset-text-not-received"; }
+fi
 sleep 1
 image_a2m_before="$(android_remote_apply_at)"
 start_driver set_image
-wait_driver SET_IMAGE || image_a2m_ready=0
-[ "$image_a2m_ready" -eq 1 ] && wait_mac_image || image_a2m_ready=0
+wait_driver SET_IMAGE || { image_a2m_ready=0; image_a2m_reason="android-local-image-not-set"; }
+if [ "$image_a2m_ready" -eq 1 ]; then
+  wait_mac_image || { image_a2m_ready=0; image_a2m_reason="mac-image-not-received"; }
+fi
 sleep 10
 image_a2m_after="$(android_remote_apply_at)"
 [ "$image_a2m_ready" -eq 1 ] \
   && [ -n "$image_a2m_before" ] \
   && [ "$image_a2m_before" = "$image_a2m_after" ] \
   && pass "Android -> Mac image does not echo back to Android" "remote_apply_at $image_a2m_before -> $image_a2m_after" \
-  || fail "Android -> Mac image does not echo back to Android" "ready=$image_a2m_ready remote_apply_at $image_a2m_before -> $image_a2m_after"
+  || fail "Android -> Mac image does not echo back to Android" "ready=$image_a2m_ready reason=$image_a2m_reason remote_apply_at $image_a2m_before -> $image_a2m_after"
 
 # Mac -> Android image: establish Android-local text first, then wait for one
 # remote image application. Once the first apply is observed, its timestamp must
@@ -91,6 +102,8 @@ image_m2a_after="$(android_remote_apply_at)"
         "Android -> Mac image does not echo back to Android",
         "Mac -> Android image applies only once",
         "last_remote_apply_at=",
+        "start_driver wait_text",
+        "reset-driver-not-ready",
         "sleep 10",
         "PHYSICAL_HARDENING_V4_IMAGE_ECHO",
     ):

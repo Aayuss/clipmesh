@@ -50,25 +50,34 @@ set_android_favorite "$MAC_FP" true
 set_mac_favorite "$ANDROID_FP" true
 set_state background tray
 
-# 1) Reproduce the user's Android -> Mac image loop exactly. A local Android
-# image may arrive on Mac, but Mac must not mistake its re-encoded pasteboard
-# representation for a fresh local copy and send it back to Android.
+# 1) Reproduce the user's Android -> Mac image loop exactly. Establish the
+# reverse-direction reset with the foreground test driver because ClipMesh itself
+# is intentionally backgrounded here. Only after that barrier is proven do we
+# perform the Android-local image copy and watch for a Mac echo.
 focused_a2m_reset="focused-image-a2m-reset-$(nonce)"
-printf '%s' "$focused_a2m_reset" | pbcopy
 focused_a2m_ready=1
-wait_android_open_text "$focused_a2m_reset" >/dev/null 2>&1 || focused_a2m_ready=0
+focused_a2m_reason="ready"
+start_driver wait_text "$focused_a2m_reset"
+wait_driver READY_TEXT || { focused_a2m_ready=0; focused_a2m_reason="reset-driver-not-ready"; }
+if [ "$focused_a2m_ready" -eq 1 ]; then
+  sleep .25
+  printf '%s' "$focused_a2m_reset" | pbcopy
+  wait_driver PASS_TEXT || { focused_a2m_ready=0; focused_a2m_reason="reset-text-not-received"; }
+fi
 sleep 1
 focused_a2m_before="$(focused_android_remote_apply_at)"
 start_driver set_image
-wait_driver SET_IMAGE || focused_a2m_ready=0
-[ "$focused_a2m_ready" -eq 1 ] && wait_mac_image || focused_a2m_ready=0
+wait_driver SET_IMAGE || { focused_a2m_ready=0; focused_a2m_reason="android-local-image-not-set"; }
+if [ "$focused_a2m_ready" -eq 1 ]; then
+  wait_mac_image || { focused_a2m_ready=0; focused_a2m_reason="mac-image-not-received"; }
+fi
 sleep 10
 focused_a2m_after="$(focused_android_remote_apply_at)"
 [ "$focused_a2m_ready" -eq 1 ] \
   && [ -n "$focused_a2m_before" ] \
   && [ "$focused_a2m_before" = "$focused_a2m_after" ] \
   && pass "Android -> Mac image does not echo back to Android" "remote_apply_at $focused_a2m_before -> $focused_a2m_after" \
-  || fail "Android -> Mac image does not echo back to Android" "ready=$focused_a2m_ready remote_apply_at $focused_a2m_before -> $focused_a2m_after"
+  || fail "Android -> Mac image does not echo back to Android" "ready=$focused_a2m_ready reason=$focused_a2m_reason remote_apply_at $focused_a2m_before -> $focused_a2m_after"
 
 # 2) A Mac-local image must be applied to Android once, then remain quiet. The
 # timestamp is captured immediately after the first proven remote application
@@ -130,6 +139,8 @@ exit 1
         "Android -> Mac image does not echo back to Android",
         "Mac -> Android image applies only once",
         "last_remote_apply_at=",
+        'start_driver wait_text "$focused_a2m_reset"',
+        "reset-driver-not-ready",
         "FOCUSED_IMAGE_ECHO_V4",
         "patch-acceptance-chain.py",
         'CLIPMESH_CODESIGN_IDENTITY="-"',
