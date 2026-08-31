@@ -42,6 +42,7 @@ if platform == "Linux":
     incoming = root / "clipmesh/android/app/src/main/java/dev/clipmesh/fileshare/IncomingRequestUi.kt"
     main_ui = root / "clipmesh/android/app/src/main/java/dev/clipmesh/MainActivity.kt"
     file_ui = root / "clipmesh/android/app/src/main/java/dev/clipmesh/fileshare/FileShareActivity.kt"
+    bridge = root / "clipmesh/android/app/src/main/java/dev/clipmesh/clipboard/ClipboardBridge.kt"
     if not debug.is_file():
         raise SystemExit("acceptance receiver missing from Android debug source")
     if main.exists():
@@ -56,12 +57,20 @@ if platform == "Linux":
         incoming: ("incoming_policy", "accept.performClick()", "reject.performClick()"),
         main_ui: ("clipboard_nearby_count",),
         file_ui: ("file_nearby_count",),
+        bridge: (
+            "private val suppressedFingerprint = RecentRemoteFingerprintSuppressor()",
+            "private class RecentRemoteFingerprintSuppressor",
+            "pendingUntil.containsKey(expected)",
+            "maxEntries: Int = 64",
+        ),
     }
     for path, needles in checks.items():
         text = path.read_text(encoding="utf-8")
         for needle in needles:
             if needle not in text:
                 raise SystemExit(f"Android acceptance guard missing: {path}: {needle}")
+    if 'private val suppressedFingerprint = AtomicReference<String?>(null)' in bridge.read_text(encoding="utf-8"):
+        raise SystemExit("Android one-slot remote clipboard suppressor remained after reconstruction")
 
 elif platform == "Darwin":
     app = root / "ci/ClipMeshApp.swift"
