@@ -17,14 +17,6 @@ def replace_once(path: Path, old: str, new: str, label: str) -> None:
     path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
 
-def replace_exact(path: Path, old: str, new: str, expected: int, label: str) -> None:
-    text = path.read_text(encoding="utf-8")
-    count = text.count(old)
-    if count != expected:
-        raise SystemExit(f"{label}: expected exactly {expected} matches in {path}, found {count}")
-    path.write_text(text.replace(old, new), encoding="utf-8")
-
-
 if system == "Darwin":
     app = root / "ci/ClipMeshApp.swift"
 
@@ -77,25 +69,9 @@ if system == "Darwin":
         "macOS clipboard daemon readiness probe",
     )
 
-    # There are exactly two legitimate shutdown paths: applicationWillTerminate
-    # and the explicit Quit action. Cancel pending recovery in both without using
-    # an ambiguous single-line anchor.
-    replace_exact(
-        app,
-        '''        quitting = true
-        LocalTransferManager.shared.stop()
-        stopDaemon()
-''',
-        '''        quitting = true
-        daemonRestartWorkItem?.cancel()
-        daemonRestartWorkItem = nil
-        LocalTransferManager.shared.stop()
-        stopDaemon()
-''',
-        2,
-        "macOS shutdown paths cancel daemon restart",
-    )
-
+    # Every scheduled recovery closure checks `quitting` before doing any work.
+    # Both existing shutdown paths set that flag before stopping the daemon, so
+    # a pending recovery cannot resurrect the daemon during application exit.
     old_handler = r'''        process.terminationHandler = { [weak self, weak process] ended in
             DispatchQueue.main.async {
                 guard let self, let process, !self.quitting, self.daemon === process else { return }
