@@ -27,7 +27,10 @@ if system == "Darwin":
     assert 'return commandMatches && executableMatches' in app
     assert 'ClipMesh left that process untouched' in app
     assert 'try Runtime.reclaimStaleDaemonListener()' in app
-    assert 'guard process.isRunning else' in app
+    assert 'static func clipboardDaemonIsListening(_ pid: Int32) -> Bool' in app
+    assert 'guard ready, process.isRunning else' in app
+    assert 'scheduleDaemonRestart(after:' in app
+    assert 'Background sync interrupted - recovering' in app
     assert '--reclaim-stale-daemon-test' in app
     assert '--clipboard-preview-self-test' in app
     assert '--dev-test-transfer-fingerprint' in app
