@@ -1,16 +1,56 @@
-# ClipMesh v0.2.11 continuation
+# ClipMesh v0.2.12 continuation
 
-## Verified and included
+## Current repository state
 
-- macOS direct file receiving now explicitly uses an IPv4 Network.framework listener on port `53421`. The installed test app was verified with `lsof` as `IPv4 *:53421 (LISTEN)`; Android reached it with `toybox nc`.
-- The macOS bundle includes `NSLocalNetworkUsageDescription` for LAN discovery and transfers.
-- Android and macOS build metadata, CI assertions, release workflow, README download links, and Android release-signing checks are updated for `0.2.11` / Android `versionCode 21`.
-- `dev-test.sh` finds Java 17 and Cargo, uses one canonical ADB transport, disables ADB mDNS auto-connect, reconstructs only in isolated copies, and performs IPv4/network preflight checks.
-- `scripts/setup-adb-single-device.sh` and its scoped LaunchAgent persist `ADB_MDNS_AUTO_CONNECT=0` without hard-coded device addresses.
-- Real-device direct tests on the installed builds passed for Android-to-Mac and Mac-to-Android text clipboard transfer. The connected Android device reached the Mac on both ports.
+- Current `main` checkpoint before this continuation update: `fa89e5b9b411a4c29fd5673c7ebea634cc26c6fc`.
+- The previous physical verification boundary is `9faf1b8b1baffa2c2a8aee78938ba9d9acf7fe74` and recorded `TOTAL FAILURES: 0` on the Samsung Galaxy S23 Ultra + macOS matrix.
+- That old physical boundary is no longer sufficient for release because real shipped-code reconstruction patches were added afterward:
+  - `ci/patch-v038-file-transfer-visibility.py` - keeps clipboard-paired devices visible in File Transfer.
+  - `ci/patch-v039-lan-discovery.py` - adds IPv4 broadcast fallback alongside multicast for LAN discovery.
+  - `ci/patch-v040-macos-resilience.py` - adds macOS clipboard-daemon readiness checks and bounded automatic recovery.
+- The release workflow intentionally still points at the old verified SHA, so it refuses to publish while those post-verification runtime changes exist. Do not weaken that guard.
 
-## Remaining work
+## Current automated verification
 
-- The all-in-one `dev-test.sh` sequence still reports a false Mac-to-Android text timeout after a fresh rebuild, while the same installed binaries and equivalent direct two-way commands pass. This is a composite-harness ordering issue, not an IPv4 listener or network reachability failure.
-- Do not publish the GitHub release until that composite-harness discrepancy is either fixed or replaced by a deterministic targeted test sequence that covers clipboard, image, and file transfers in both directions.
-- No GitHub release artifact has been verified or published from this change yet.
+At `fa89e5b9b411a4c29fd5673c7ebea634cc26c6fc` all current automated workflows passed:
+
+- `Build ClipMesh`
+  - Windows EXE build + smoke test
+  - macOS DMG build + smoke/signing/notarization validation
+  - Android APK build + Android 15 background send/receive emulator runtime test + release-signing verification
+- `Validate ClipMesh Dev Harness`
+  - macOS harness build
+  - Android harness compile
+- `Validate Comprehensive Physical Acceptance Harness`
+  - macOS acceptance instrumentation/build
+  - Android acceptance instrumentation/compile
+
+These prove buildability, packaging, instrumentation, and emulator/runtime coverage. They do not replace the real Samsung + Mac physical matrix.
+
+## The one remaining release gate
+
+Run the audited physical suite from a checkout pinned to the current `main` commit on the Mac physically paired with the Samsung S23 Ultra:
+
+```bash
+git pull --ff-only
+export CLIPMESH_ANDROID_ENDPOINT='<wireless-debugging-ip:port>'
+./dev-test-final.sh
+```
+
+The run must finish with:
+
+```text
+TOTAL FAILURES: 0
+ALL COMPREHENSIVE PHYSICAL CLIPMESH ACCEPTANCE TESTS PASSED
+```
+
+The matrix covers Android -> Mac and Mac -> Android text/image clipboard transfer, foreground/background/tray states, File Transfer visibility and exact-byte transfers in both directions, Shizuku background clipboard access, restart/redetection/persistence, macOS daemon recovery, Android background-service health, ANR/fatal scans, and final listener/process health.
+
+## After the physical run passes
+
+1. Record the exact tested Git SHA in `PHYSICAL_VERIFICATION.md` and update its matrix/date.
+2. Update `VERIFIED_PRODUCT_SHA` in `.github/workflows/release-v0.2.12.yml` to that exact tested SHA.
+3. From that point until release, change only release metadata/documentation/workflow files allowed by the release boundary guard. Do not change runtime/product reconstruction patches.
+4. Confirm the release boundary job passes, then publish `v0.2.12-alpha`.
+
+Do not call the release finalized before the current post-v038/v039/v040 product code has passed the real-device suite.
