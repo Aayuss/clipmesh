@@ -4,7 +4,6 @@
 from pathlib import Path
 import os
 import platform
-import re
 
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT = ROOT / "clipmesh"
@@ -69,87 +68,41 @@ settings_text = settings_text.replace(const_anchor, const_replacement, 1)
 settings.write_text(settings_text, encoding="utf-8")
 
 # ---------------------------------------------------------------------------
-# Extend the EXISTING receive duplicate-skip, after its ACK.
+# Extend the exact existing receive gate AFTER ACK.
 #
-# We intentionally do not rewrite the source expression that computes the
-# in-memory "is new" flag. Its exact formatting has changed across reconstructed
-# versions, but the protocol invariant is stable: CLIPBOARD branch -> messageId
-# putIfAbsent -> ACK -> `if (!isNew) continue` -> payload application.
+# Current reconstructed source is:
+#   duplicate = seen.putIfAbsent(messageId, now) != null
+#   send ACK
+#   if (!duplicate && receiveEnabled) apply payload
 #
-# By adding the durable ledger to that existing skip condition:
-# - in-memory duplicates are still ACKed and skipped exactly as before;
-# - a retry after the in-memory TTL/restart is ACKed, then rejected by the ledger;
-# - a genuinely new copy of identical bytes has a new messageId and is accepted.
+# Add the durable sender/message ledger between the duplicate check and the
+# receive-enabled check. Kotlin && evaluates left-to-right, so duplicates never
+# touch storage, every new message is durably recorded after its ACK is sent, and
+# receive-disabled messages are still consumed rather than resurfacing later.
+# A fresh copy of identical bytes has a fresh messageId and remains valid.
 # ---------------------------------------------------------------------------
 network_text = network.read_text(encoding="utf-8")
-
-
-def matching_brace(text: str, open_index: int) -> int:
-    depth = 0
-    for index in range(open_index, len(text)):
-        ch = text[index]
-        if ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0:
-                return index
-    raise SystemExit("Android CLIPBOARD branch closing brace was not found")
-
-
-branch_candidates = []
-for branch_match in re.finditer(r"\bCLIPBOARD\b\s*->\s*\{", network_text):
-    open_index = network_text.find("{", branch_match.start(), branch_match.end())
-    close_index = matching_brace(network_text, open_index)
-    branch = network_text[branch_match.start():close_index + 1]
-    msg_match = re.search(
-        r"\.putIfAbsent\(\s*(?P<frame>[A-Za-z_][A-Za-z0-9_]*)\.messageId\b",
-        branch,
-    )
-    if msg_match is not None and re.search(r"\bACK\b", branch):
-        branch_candidates.append((branch_match.start(), close_index + 1, branch, msg_match))
-
-if len(branch_candidates) != 1:
-    hints = []
-    for match in re.finditer(r"putIfAbsent", network_text):
-        start = max(0, match.start() - 220)
-        end = min(len(network_text), match.end() + 420)
-        hints.append(network_text[start:end].replace("\n", "\\n"))
+required_branch = '''                        Crypto.Kind.CLIPBOARD -> {
+                            val duplicate = seen.putIfAbsent(frame.messageId, System.currentTimeMillis()) != null
+                            val ack = Crypto.encryptFrame(masterKey, requireNotNull(settings.spaceId), Crypto.Kind.ACK, 0, settings.deviceId, frame.messageId, ByteArray(0))
+                            connection.send(ack)
+                            if (!duplicate && settings.receiveEnabled) {
+                                runCatching { ClipPayload.fromJsonBytes(frame.plaintext) }.getOrNull()?.let(onRemoteClip)
+                            }
+                        }'''
+replacement_branch = '''                        Crypto.Kind.CLIPBOARD -> {
+                            val duplicate = seen.putIfAbsent(frame.messageId, System.currentTimeMillis()) != null
+                            val ack = Crypto.encryptFrame(masterKey, requireNotNull(settings.spaceId), Crypto.Kind.ACK, 0, settings.deviceId, frame.messageId, ByteArray(0))
+                            connection.send(ack)
+                            if (!duplicate && settings.markClipboardMessageDelivered(peerId, frame.messageId) && settings.receiveEnabled) {
+                                runCatching { ClipPayload.fromJsonBytes(frame.plaintext) }.getOrNull()?.let(onRemoteClip)
+                            }
+                        }'''
+if network_text.count(required_branch) != 1:
     raise SystemExit(
-        "Android CLIPBOARD messageId branch: expected one candidate, found "
-        f"{len(branch_candidates)}; putIfAbsent snippets={hints[:4]}"
+        "Android exact CLIPBOARD receive branch changed; refusing to weaken once-delivery semantics"
     )
-
-branch_start, branch_end, branch, msg_match = branch_candidates[0]
-frame_var = msg_match.group("frame")
-ack_match = re.search(r"\bACK\b", branch)
-if ack_match is None:
-    raise SystemExit("Android CLIPBOARD ACK marker disappeared")
-
-# Find the existing duplicate continue AFTER ACK. Replace only its boolean
-# condition, preserving braces/formatting and therefore preserving ACK ordering.
-after_ack = branch[ack_match.end():]
-skip_pattern = re.compile(
-    r"if\s*\(\s*(?P<cond>!\s*(?P<flag>[A-Za-z_][A-Za-z0-9_]*))\s*\)"
-    r"\s*(?:\{\s*)?continue\b",
-    flags=re.S,
-)
-skip_match = skip_pattern.search(after_ack)
-if skip_match is None:
-    raise SystemExit(
-        "Android CLIPBOARD duplicate continue after ACK was not found; branch="
-        + branch[:2600].replace("\n", "\\n")
-    )
-
-flag = skip_match.group("flag")
-cond_rel_start = ack_match.end() + skip_match.start("cond")
-cond_rel_end = ack_match.end() + skip_match.end("cond")
-cond_abs_start = branch_start + cond_rel_start
-cond_abs_end = branch_start + cond_rel_end
-new_condition = (
-    f"!{flag} || !settings.markClipboardMessageDelivered(peerId, {frame_var}.messageId)"
-)
-network_text = network_text[:cond_abs_start] + new_condition + network_text[cond_abs_end:]
+network_text = network_text.replace(required_branch, replacement_branch, 1)
 network.write_text(network_text, encoding="utf-8")
 
 # ---------------------------------------------------------------------------
@@ -205,24 +158,21 @@ for needle in (
         raise SystemExit(f"Android durable message ledger guard missing: {needle}")
 
 final_network = network.read_text(encoding="utf-8")
-final_branch_match = re.search(r"\bCLIPBOARD\b\s*->\s*\{", final_network)
-if final_branch_match is None:
-    raise SystemExit("Android final CLIPBOARD branch guard missing")
-final_branch_open = final_network.find("{", final_branch_match.start(), final_branch_match.end())
-final_branch_close = matching_brace(final_network, final_branch_open)
-final_branch = final_network[final_branch_match.start():final_branch_close + 1]
 for needle in (
-    ".putIfAbsent(",
-    ".messageId",
-    "ACK",
-    "settings.markClipboardMessageDelivered(peerId,",
+    'val duplicate = seen.putIfAbsent(frame.messageId, System.currentTimeMillis()) != null',
+    'connection.send(ack)',
+    'if (!duplicate && settings.markClipboardMessageDelivered(peerId, frame.messageId) && settings.receiveEnabled)',
 ):
-    if needle not in final_branch:
+    if needle not in final_network:
         raise SystemExit(f"Android message-level once-delivery guard missing: {needle}")
-ack_pos = final_branch.find("ACK")
-durable_pos = final_branch.find("settings.markClipboardMessageDelivered(peerId,")
-if ack_pos < 0 or durable_pos < 0 or ack_pos > durable_pos:
-    raise SystemExit("Android duplicate ledger moved before ACK - refusing unsafe transport semantics")
+branch_start = final_network.index("Crypto.Kind.CLIPBOARD -> {")
+branch_end = final_network.index("\n                        }", branch_start) + len("\n                        }")
+final_branch = final_network[branch_start:branch_end]
+ack_pos = final_branch.find("connection.send(ack)")
+durable_pos = final_branch.find("settings.markClipboardMessageDelivered(peerId, frame.messageId)")
+apply_pos = final_branch.find("onRemoteClip")
+if ack_pos < 0 or durable_pos < 0 or apply_pos < 0 or not (ack_pos < durable_pos < apply_pos):
+    raise SystemExit("Android ACK/durable/apply ordering guard failed")
 
 final_bridge = bridge.read_text(encoding="utf-8")
 for forbidden in (
