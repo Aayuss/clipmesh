@@ -9,6 +9,8 @@ on:
       - 'ci/patch-v047-file-transfer-progress.py'
       - 'ci/patch-v048-release.py'
       - 'ci/v047_file_transfer_progress_selftest.py'
+      - 'dev/android/AcceptanceReceiver.kt'
+      - 'dev/android/AcceptanceReceiverV2.kt'
       - 'README.md'
 
 permissions:
@@ -34,7 +36,7 @@ jobs:
           mapfile -t changed < <(git diff --name-only "$PREVIOUS_RELEASE_SHA"..HEAD)
           printf 'Files changed since v0.2.15:\n'
           printf '  %s\n' "${changed[@]}"
-          allowed='^(README\.md|dev-test\.sh|ci/(android-v023-runtime-test\.sh|patch-v047-file-transfer-progress\.py|patch-v048-release\.py|reconstruct\.py|v032_release_signing_selftest\.py|v047_file_transfer_progress_selftest\.py)|\.github/workflows/(build\.yml|dev-harness\.yml|release-v0\.2\.(15|16)\.yml))$'
+          allowed='^(README\.md|dev-test\.sh|dev/android/AcceptanceReceiver(V2)?\.kt|ci/(android-v023-runtime-test\.sh|patch-v047-file-transfer-progress\.py|patch-v048-release\.py|reconstruct\.py|v032_release_signing_selftest\.py|v047_file_transfer_progress_selftest\.py)|\.github/workflows/(build\.yml|dev-harness\.yml|release-v0\.2\.(15|16)\.yml))$'
           bad=0
           for path in "${changed[@]}"; do
             if ! printf '%s\n' "$path" | grep -Eq "$allowed"; then

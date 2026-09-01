@@ -28,6 +28,8 @@ if system == "Linux":
     assert "{ done -> if (done) finish() }" not in (java / "FileShareActivity.kt").read_text(encoding="utf-8")
     require(java / "TransferNotifications.kt", '"File sending progress"', '.setProgress(100, percent.coerceIn(0, 100), false)', '"Saved automatically from $sender"', "FileShareActivity::class.java")
     require(root / "clipmesh/android/app/src/debug/java/dev/clipmesh/DevTestReceiver.kt", "{ _, _, _, _, _ -> }")
+    require(root / "dev/android/AcceptanceReceiver.kt", "{ _, _, _, _, _ -> }")
+    require(root / "dev/android/AcceptanceReceiverV2.kt", "{ _, _, _, _, _ -> }")
 elif system == "Darwin":
     require(root / "ci/ClipMeshTransfer.swift", "progressValue", "countOfBytesSent", "NSProgressIndicator", "self?.files.removeAll(); self?.refreshFiles()")
 elif system == "Windows":

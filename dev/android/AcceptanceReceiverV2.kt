@@ -216,7 +216,7 @@ class AcceptanceReceiver : BroadcastReceiver() {
                     port = LocalTransferEngine.PORT, deviceModel = "Mac", deviceType = "desktop",
                     lastSeenMs = System.currentTimeMillis()
                 )
-                LocalTransferEngine.sendUris(app, uris, target) { _, _, _ -> }
+                LocalTransferEngine.sendUris(app, uris, target) { _, _, _, _, _ -> }
                 result(app, buildString {
                     append("send_generated=PASS\n")
                     expected.forEach { (name, hash, bytes) -> append("file=").append(name).append('|').append(hash).append('|').append(bytes).append('\n') }

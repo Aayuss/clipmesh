@@ -228,7 +228,7 @@ class AcceptanceReceiver : BroadcastReceiver() {
                     deviceType = "desktop",
                     lastSeenMs = System.currentTimeMillis()
                 )
-                LocalTransferEngine.sendUris(app, uris, target) { _, _, _ -> }
+                LocalTransferEngine.sendUris(app, uris, target) { _, _, _, _, _ -> }
                 result(app, buildString {
                     append("send_generated=PASS\n")
                     expected.forEach { (name, hash, bytes) ->
