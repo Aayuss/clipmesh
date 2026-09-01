@@ -24,6 +24,7 @@ PIPELINES = {
         "patch-v043-desktop-image-echo.py",
         "patch-v044-image-provenance.py",
         "patch-v045-screenshot-adjacent-dedupe.py",
+        "patch-v047-file-transfer-progress.py",
     ],
     "Linux": [
         "patch-features.py", "patch-sync-fixes.py",
@@ -38,6 +39,7 @@ PIPELINES = {
         "patch-v042-android-once-delivery.py", "patch-v043-desktop-image-echo.py",
         "patch-v044-image-provenance.py",
         "patch-v045-screenshot-adjacent-dedupe.py",
+        "patch-v047-file-transfer-progress.py",
     ],
     "Windows": [
         "patch-features.py", "patch-sync-fixes.py", "patch-desktop.py", "patch-windows.py",
@@ -51,6 +53,7 @@ PIPELINES = {
         "patch-v043-desktop-image-echo.py",
         "patch-v044-image-provenance.py",
         "patch-v045-screenshot-adjacent-dedupe.py",
+        "patch-v047-file-transfer-progress.py",
     ],
 }
 

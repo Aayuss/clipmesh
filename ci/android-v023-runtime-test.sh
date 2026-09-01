@@ -190,8 +190,11 @@ sleep 2
 adb shell find /sdcard/Download/ClipMesh -type f -name 'ci-proof.txt' | tee /tmp/downloaded-files.txt
 grep -q 'ci-proof.txt' /tmp/downloaded-files.txt
 adb shell cat /sdcard/Download/ClipMesh/ci-proof.txt | tr -d '\r' | grep -qx 'hello'
+(adb shell dumpsys notification --noredact || adb shell dumpsys notification) > /tmp/favorite-notifications.txt
+grep -q 'Saved automatically from CI Favorite' /tmp/favorite-notifications.txt
+grep -q 'ci-proof.txt saved to Downloads/ClipMesh' /tmp/favorite-notifications.txt
 
-echo 'Android background favorite transfer persisted successfully'
+echo 'Android background favorite transfer persisted and published its automatic-save notification'
 
 # After outgoing capture, an unknown request, and a full trusted upload, the
 # service/listener must still be alive.

@@ -137,6 +137,7 @@ new_isolated_build_root(){
 say "Building macOS ClipMesh..."
 new_isolated_build_root; MAC_BUILD_ROOT="$BUILD_ROOT"
 python3 "$MAC_BUILD_ROOT/ci/reconstruct.py" --platform Darwin >> "$LOG" 2>&1
+CLIPMESH_PLATFORM=Darwin python3 "$MAC_BUILD_ROOT/ci/v047_file_transfer_progress_selftest.py" >> "$LOG" 2>&1
 CLIPMESH_PLATFORM=Darwin python3 "$MAC_BUILD_ROOT/ci/patch-v036-release.py" >> "$LOG" 2>&1
 ( cd "$MAC_BUILD_ROOT/clipmesh"; chmod +x scripts/build-macos.sh; ./scripts/build-macos.sh ) >> "$LOG" 2>&1
 BUILT_MAC="$MAC_BUILD_ROOT/clipmesh/dist/macos/ClipMesh.app"; [ -d "$BUILT_MAC" ] || die "Mac build missing."
@@ -154,6 +155,7 @@ say "Fixed Mac install: $INSTALL_APP"
 say "Building Android ClipMesh + foreground test driver..."
 new_isolated_build_root; ANDROID_BUILD_ROOT="$BUILD_ROOT"
 python3 "$ANDROID_BUILD_ROOT/ci/reconstruct.py" --platform Linux >> "$LOG" 2>&1
+CLIPMESH_PLATFORM=Linux python3 "$ANDROID_BUILD_ROOT/ci/v047_file_transfer_progress_selftest.py" >> "$LOG" 2>&1
 CLIPMESH_PLATFORM=Linux python3 "$ANDROID_BUILD_ROOT/ci/patch-v036-release.py" >> "$LOG" 2>&1
 ( cd "$ANDROID_BUILD_ROOT/clipmesh/android"; chmod +x gradlew; ./gradlew :app:assembleDebug :devdriver:assembleDebug --no-daemon ) >> "$LOG" 2>&1
 APP_DEBUG="$ANDROID_BUILD_ROOT/clipmesh/android/app/build/outputs/apk/debug/app-debug.apk"; DRIVER_DEBUG="$ANDROID_BUILD_ROOT/clipmesh/android/devdriver/build/outputs/apk/debug/devdriver-debug.apk"
