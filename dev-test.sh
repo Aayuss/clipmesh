@@ -137,14 +137,15 @@ new_isolated_build_root(){
 say "Building macOS ClipMesh..."
 new_isolated_build_root; MAC_BUILD_ROOT="$BUILD_ROOT"
 python3 "$MAC_BUILD_ROOT/ci/reconstruct.py" --platform Darwin >> "$LOG" 2>&1
+CLIPMESH_PLATFORM=Darwin python3 "$MAC_BUILD_ROOT/ci/patch-v036-release.py" >> "$LOG" 2>&1
 ( cd "$MAC_BUILD_ROOT/clipmesh"; chmod +x scripts/build-macos.sh; ./scripts/build-macos.sh ) >> "$LOG" 2>&1
 BUILT_MAC="$MAC_BUILD_ROOT/clipmesh/dist/macos/ClipMesh.app"; [ -d "$BUILT_MAC" ] || die "Mac build missing."
 sign_mac "$BUILT_MAC" >> "$LOG" 2>&1
 INSTALL_ROOT="${CLIPMESH_INSTALL_DIR:-/Applications}"; if [ ! -w "$INSTALL_ROOT" ]; then INSTALL_ROOT="$HOME/Applications"; mkdir -p "$INSTALL_ROOT"; fi
 INSTALL_APP="$INSTALL_ROOT/ClipMesh.app"; APP_EXE="$INSTALL_APP/Contents/MacOS/ClipMesh"; CLI_EXE="$INSTALL_APP/Contents/MacOS/clipmesh-bin"
 pkill -x ClipMesh >/dev/null 2>&1 || true; pkill -x clipmesh-bin >/dev/null 2>&1 || true; sleep .4
-rm -rf "$INSTALL_APP"; ditto "$BUILT_MAC" "$INSTALL_APP"; xattr -dr com.apple.quarantine "$INSTALL_APP" >/dev/null 2>&1 || true; codesign --verify --deep --strict "$INSTALL_APP"; open "$INSTALL_APP"
-wait_mac(){ i=0; while [ "$i" -lt 80 ]; do [ -x "$CLI_EXE" ] && "$CLI_EXE" status >/dev/null 2>&1 && lsof -nP -iTCP:41474 -sTCP:LISTEN >/dev/null 2>&1 && return 0; i=$((i+1)); sleep .25; done; return 1; }
+rm -rf "$INSTALL_APP"; ditto "$BUILT_MAC" "$INSTALL_APP"; xattr -dr com.apple.quarantine "$INSTALL_APP" >/dev/null 2>&1 || true; codesign --verify --deep --strict "$INSTALL_APP"; open -n "$INSTALL_APP"
+wait_mac(){ i=0; while [ "$i" -lt 160 ]; do if [ -x "$CLI_EXE" ]; then mac_listener_pid="$(lsof -nP -tiTCP:41474 -sTCP:LISTEN 2>/dev/null | head -n1)"; [ -n "$mac_listener_pid" ] && ps -p "$mac_listener_pid" -o command= 2>/dev/null | grep -Fq '/clipmesh-bin run' && return 0; fi; i=$((i+1)); sleep .25; done; return 1; }
 wait_mac || die "Installed Mac runtime did not start."
 PAIRING_URI="$($CLI_EXE pairing-uri)"; MAC_FP="$($APP_EXE --dev-test-transfer-fingerprint | tail -n1 | tr -d '\r')"
 [ -n "$PAIRING_URI" ] && [ -n "$MAC_FP" ] || die "Could not read Mac pairing/fingerprint state."
@@ -153,13 +154,14 @@ say "Fixed Mac install: $INSTALL_APP"
 say "Building Android ClipMesh + foreground test driver..."
 new_isolated_build_root; ANDROID_BUILD_ROOT="$BUILD_ROOT"
 python3 "$ANDROID_BUILD_ROOT/ci/reconstruct.py" --platform Linux >> "$LOG" 2>&1
+CLIPMESH_PLATFORM=Linux python3 "$ANDROID_BUILD_ROOT/ci/patch-v036-release.py" >> "$LOG" 2>&1
 ( cd "$ANDROID_BUILD_ROOT/clipmesh/android"; chmod +x gradlew; ./gradlew :app:assembleDebug :devdriver:assembleDebug --no-daemon ) >> "$LOG" 2>&1
 APP_DEBUG="$ANDROID_BUILD_ROOT/clipmesh/android/app/build/outputs/apk/debug/app-debug.apk"; DRIVER_DEBUG="$ANDROID_BUILD_ROOT/clipmesh/android/devdriver/build/outputs/apk/debug/devdriver-debug.apk"
 [ -s "$APP_DEBUG" ] && [ -s "$DRIVER_DEBUG" ] || die "Android build outputs missing."
 sign_apk(){ in="$1"; out="$2"; rm -f "$out"; "$APKSIGNER" sign --ks "$ANDROID_KEYSTORE" --ks-key-alias clipmesh-dev --ks-pass "pass:$ANDROID_PASS" --key-pass "pass:$ANDROID_PASS" --out "$out" "$in"; "$APKSIGNER" verify --print-certs "$out" >/dev/null; }
 SIGNED_APP="$STATE/ClipMesh-dev.apk"; SIGNED_DRIVER="$STATE/ClipMesh-e2e-driver.apk"; sign_apk "$APP_DEBUG" "$SIGNED_APP"; sign_apk "$DRIVER_DEBUG" "$SIGNED_DRIVER"
 "$APKSIGNER" verify --print-certs "$SIGNED_APP" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/{print $2}' > "$STATE/android-signing.sha256" || true
-install_apk(){ package="$1"; apk="$2"; set +e; out="$("${ADB[@]}" install -r -t "$apk" 2>&1)"; code=$?; set -e; printf '%s\n' "$out" >> "$LOG"; [ "$code" -eq 0 ] && return; if printf '%s' "$out" | grep -q INSTALL_FAILED_UPDATE_INCOMPATIBLE; then say "Migrating $package to permanent development signature..."; "${ADB[@]}" uninstall "$package" >/dev/null 2>&1 || true; "${ADB[@]}" install -t "$apk" >> "$LOG" 2>&1; else die "Install failed for $package."; fi; }
+install_apk(){ package="$1"; apk="$2"; set +e; out="$("${ADB[@]}" install -r -t "$apk" 2>&1)"; code=$?; set -e; printf '%s\n' "$out" >> "$LOG"; [ "$code" -eq 0 ] && return; if printf '%s' "$out" | grep -q INSTALL_FAILED_VERSION_DOWNGRADE; then say "Installing the debuggable $package build without deleting app data..."; "${ADB[@]}" install -r -t -d "$apk" >> "$LOG" 2>&1; elif printf '%s' "$out" | grep -q INSTALL_FAILED_UPDATE_INCOMPATIBLE; then say "Migrating $package to permanent development signature..."; "${ADB[@]}" uninstall "$package" >/dev/null 2>&1 || true; "${ADB[@]}" install -t "$apk" >> "$LOG" 2>&1; else die "Install failed for $package."; fi; }
 install_apk dev.clipmesh "$SIGNED_APP"; install_apk dev.clipmesh.testdriver "$SIGNED_DRIVER"
 "${ADB[@]}" shell pm grant dev.clipmesh android.permission.POST_NOTIFICATIONS >/dev/null 2>&1 || true
 "${ADB[@]}" shell pm grant dev.clipmesh moe.shizuku.manager.permission.API_V23 >/dev/null 2>&1 || true
@@ -185,10 +187,25 @@ if ! printf '%s\n' "$info" | grep -q shizuku_permission=true; then
   i=0; while [ "$i" -lt 30 ]; do sleep .35; info="$(refresh_info || true)"; printf '%s\n' "$info" | grep -q shizuku_permission=true && break; "${ADB[@]}" shell uiautomator dump /sdcard/clipmesh-uia.xml >/dev/null 2>&1 || true; xml="$("${ADB[@]}" shell cat /sdcard/clipmesh-uia.xml 2>/dev/null | tr -d '\r' || true)"; coords="$(printf '%s' "$xml" | python3 "$ROOT/dev/uia-find-allow.py" 2>/dev/null || true)"; if [ -n "$coords" ]; then "${ADB[@]}" shell input tap $(printf '%s' "$coords" | awk '{print $1,$2}') >/dev/null 2>&1 || true; fi; i=$((i+1)); done
 fi
 info="$(refresh_info || true)"; printf '%s\n' "$info" >> "$LOG"; printf '%s\n' "$info" | grep -q shizuku_available=true || die "ClipMesh cannot see Shizuku."; printf '%s\n' "$info" | grep -q shizuku_permission=true || die "Shizuku authorization could not be automated. Authorize ClipMesh once in Shizuku, then rerun."
+# A first install creates the clipboard runtime before the Shizuku grant exists.
+# Reconfigure once after the grant so the long-lived bridge binds its privileged
+# clipboard UserService instead of remaining on the foreground-only fallback.
+dev_broadcast dev.clipmesh.devtest.CONFIGURE --es pairing_b64 "$(b64 "$PAIRING_URI")" --es fingerprint "$MAC_FP"; sleep .75
+info="$(refresh_info || true)"; printf '%s\n' "$info" | grep -q shizuku_permission=true || die "Shizuku permission disappeared while restarting the clipboard runtime."
 
 "${ADB[@]}" shell am start -W -n dev.clipmesh/.MainActivity >/dev/null; sleep .8; "${ADB[@]}" shell input keyevent KEYCODE_HOME >/dev/null; sleep .5
 "${ADB[@]}" shell dumpsys accessibility | grep -F "$ACCESS" >/dev/null || die "Accessibility service is not active."
 "${ADB[@]}" shell dumpsys activity services dev.clipmesh | grep -q BackgroundService || die "Android BackgroundService is not running."
+ready=0; i=0
+while [ "$i" -lt 100 ]; do
+  info="$(refresh_info || true)"
+  peer_count="$(printf '%s\n' "$info" | sed -n 's/^clipboard_peer_count=//p' | tail -n1)"
+  shizuku_bound="$(printf '%s\n' "$info" | sed -n 's/^clipboard_shizuku_bound=//p' | tail -n1)"
+  case "$peer_count" in ''|*[!0-9]*) peer_count=0;; esac
+  [ "$peer_count" -gt 0 ] && [ "$shizuku_bound" = true ] && { ready=1; break; }
+  i=$((i+1)); sleep .25
+done
+[ "$ready" -eq 1 ] || die "Android clipboard runtime was not ready (peer_count=$peer_count shizuku_bound=$shizuku_bound)."
 ANDROID_IP="$("${ADB[@]}" shell ip route get 1.1.1.1 2>/dev/null | tr -d '\r' | sed -n 's/.* src \([0-9.][0-9.]*\).*/\1/p' | head -n1)"; [ -n "$ANDROID_IP" ] || die "Android LAN IP missing."
 MAC_IFACE="$(route -n get "$ANDROID_IP" 2>/dev/null | awk '/interface:/{print $2;exit}')"; MAC_IP="$(ipconfig getifaddr "$MAC_IFACE" 2>/dev/null || true)"; [ -n "$MAC_IP" ] || die "Mac LAN IP missing."
 say "Physical LAN: Mac $MAC_IP <-> Android $ANDROID_IP"
@@ -220,30 +237,84 @@ ok=0; i=0; while [ "$i" -lt 30 ]; do curl --fail --silent --max-time 2 http://12
 ANDROID_FP="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["fingerprint"])' "$STATE/android-transfer-info.json")"
 PASTE="$STATE/macos-pasteboard-helper"; swiftc "$ROOT/dev/macos-pasteboard-helper.swift" -o "$PASTE" >> "$LOG" 2>&1
 
-start_driver(){ mode="$1"; value="${2:-}"; "${ADB[@]}" shell am force-stop dev.clipmesh.testdriver >/dev/null 2>&1 || true; if [ -n "$value" ]; then "${ADB[@]}" shell am start -W -n dev.clipmesh.testdriver/.MainActivity --es mode "$mode" --es value_b64 "$(b64 "$value")" >/dev/null; else "${ADB[@]}" shell am start -W -n dev.clipmesh.testdriver/.MainActivity --es mode "$mode" >/dev/null; fi; }
+start_driver(){ local mode="$1" value="${2:-}"; "${ADB[@]}" shell am force-stop dev.clipmesh.testdriver >/dev/null 2>&1 || true; if [ -n "$value" ]; then "${ADB[@]}" shell am start -W -n dev.clipmesh.testdriver/.MainActivity --es mode "$mode" --es value_b64 "$(b64 "$value")" >/dev/null; else "${ADB[@]}" shell am start -W -n dev.clipmesh.testdriver/.MainActivity --es mode "$mode" >/dev/null; fi; }
 driver_result(){ "${ADB[@]}" shell run-as dev.clipmesh.testdriver cat files/result.txt 2>/dev/null | tr -d '\r'; }
-wait_driver(){ expected="$1"; i=0; while [ "$i" -lt 200 ]; do r="$(driver_result || true)"; case "$r" in "$expected"*) return 0;; FAIL*) return 1;; esac; i=$((i+1)); sleep .2; done; return 1; }
+wait_driver(){ local expected="$1" i=0 r; while [ "$i" -lt 200 ]; do r="$(driver_result || true)"; case "$r" in "$expected"*) return 0;; FAIL*) return 1;; esac; i=$((i+1)); sleep .2; done; return 1; }
+android_ci_value(){ local key="$1" value; value="$(refresh_info | sed -n "s/^${key}=//p" | tail -n1)"; case "$value" in ''|*[!0-9]*) die "Android CI counter $key is unavailable: $value";; esac; printf '%s' "$value"; }
 assert_hidden(){ "${ADB[@]}" shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' | grep -q 'dev\.clipmesh/' && die "ClipMesh became foreground during background clipboard test." || true; }
 NONCE="$(date +%s)-$$"; say "Running physical clipboard E2E..."
 
 A2M="clipmesh-android-to-mac-$NONCE"; start_driver set_text "$A2M"; assert_hidden; ok=0; i=0; while [ "$i" -lt 100 ]; do [ "$(pbpaste 2>/dev/null || true)" = "$A2M" ] && { ok=1; break; }; i=$((i+1)); sleep .2; done; [ "$ok" -eq 1 ] || die "Android -> Mac text failed."; say "PASS Android -> Mac text"; sleep 3 # Let the receiving app's callback queue settle before testing the reverse edge.
 mac_to_android_text(){
-  expected="$1"
-  start_driver wait_text "$expected"
+  local target="$1"
+  start_driver wait_text "$target"
   wait_driver READY_TEXT || return 1
   # The driver's local sentinel is a real clipboard event; drain it before
   # measuring the reverse edge so it cannot overwrite the Mac test value.
   sleep 3
-  printf '%s' "$expected" | pbcopy
+  printf '%s' "$target" | pbcopy
   wait_driver PASS_TEXT
 }
 M2A="clipmesh-mac-to-android-$NONCE"; if ! mac_to_android_text "$M2A"; then say "Retrying Mac -> Android text after first-run receiver warm-up..."; M2A="$M2A-retry"; mac_to_android_text "$M2A" || die "Mac -> Android text failed."; fi; assert_hidden; say "PASS Mac -> Android text"
-printf '%s' "image-sentinel-$NONCE" | pbcopy; start_driver set_image; assert_hidden; ok=0; i=0; while [ "$i" -lt 120 ]; do [ "$($PASTE image-info 2>/dev/null || true)" = 3x2 ] && { ok=1; break; }; i=$((i+1)); sleep .2; done; [ "$ok" -eq 1 ] || die "Android -> Mac image failed."; say "PASS Android -> Mac image"
-start_driver wait_image; wait_driver READY_IMAGE || die "Android image driver not ready."; "$PASTE" set-image >/dev/null; wait_driver PASS_IMAGE || die "Mac -> Android image failed."; assert_hidden; say "PASS Mac -> Android image"
+IMAGE_SENTINEL="image-sentinel-$NONCE"; mac_to_android_text "$IMAGE_SENTINEL" || die "Image echo barrier failed."
+sleep 1; a2m_outgoing_before="$(android_ci_value outgoing_clip_count)"; a2m_remote_before="$(android_ci_value remote_apply_count)"
+start_driver set_image; wait_driver SET_IMAGE || die "Android image driver could not set local image."; assert_hidden
+ok=0; i=0; while [ "$i" -lt 120 ]; do [ "$($PASTE image-info 2>/dev/null || true)" = 3x2 ] && { ok=1; break; }; i=$((i+1)); sleep .2; done; [ "$ok" -eq 1 ] || die "Android -> Mac image failed."
+a2m_mac_count="$($PASTE change-count)"; sleep 10
+a2m_outgoing_after="$(android_ci_value outgoing_clip_count)"; a2m_remote_after="$(android_ci_value remote_apply_count)"; a2m_mac_after="$($PASTE change-count)"
+[ "$a2m_outgoing_after" -eq $((a2m_outgoing_before + 1)) ] || die "Android image was emitted more than once: $a2m_outgoing_before -> $a2m_outgoing_after."
+[ "$a2m_remote_after" -eq "$a2m_remote_before" ] || die "Android -> Mac image echoed back to Android: remote applies $a2m_remote_before -> $a2m_remote_after."
+[ "$a2m_mac_after" -eq "$a2m_mac_count" ] || die "Android -> Mac image changed the Mac clipboard again: $a2m_mac_count -> $a2m_mac_after."
+say "PASS Android -> Mac image exactly once with no echo"
+
+ORIENTED_SENTINEL="oriented-image-sentinel-$NONCE"; mac_to_android_text "$ORIENTED_SENTINEL" || die "Oriented image barrier failed."
+start_driver set_oriented_image; wait_driver SET_ORIENTED_IMAGE || die "Android oriented image driver failed."
+ok=0; i=0; while [ "$i" -lt 120 ]; do [ "$($PASTE image-info 2>/dev/null || true)" = 3x2 ] && { ok=1; break; }; i=$((i+1)); sleep .2; done; [ "$ok" -eq 1 ] || die "Android EXIF-oriented image arrived sideways on Mac."
+say "PASS Android EXIF image orientation preserved"
+
+m2a_outgoing_before="$(android_ci_value outgoing_clip_count)"; m2a_remote_before="$(android_ci_value remote_apply_count)"
+start_driver wait_image; wait_driver READY_IMAGE || die "Android image driver not ready."; "$PASTE" set-image >/dev/null; m2a_mac_count="$($PASTE change-count)"
+wait_driver PASS_IMAGE || die "Mac -> Android image failed."; assert_hidden; sleep 10
+m2a_outgoing_after="$(android_ci_value outgoing_clip_count)"; m2a_remote_after="$(android_ci_value remote_apply_count)"; m2a_mac_after="$($PASTE change-count)"
+[ "$m2a_remote_after" -eq $((m2a_remote_before + 1)) ] || die "Mac image was not applied exactly once on Android: $m2a_remote_before -> $m2a_remote_after."
+[ "$m2a_outgoing_after" -eq "$m2a_outgoing_before" ] || die "Mac image was echoed from Android: outgoing sends $m2a_outgoing_before -> $m2a_outgoing_after."
+[ "$m2a_mac_after" -eq "$m2a_mac_count" ] || die "Mac image was written back to Mac: $m2a_mac_count -> $m2a_mac_after."
+say "PASS Mac -> Android image exactly once with no echo"
+
+# Samsung/Gboard imports new screenshots into keyboard history without changing
+# ClipboardManager.primaryClip. ClipMesh therefore watches the MediaStore
+# screenshot collection and sends that new image through the same one-shot path.
+SCREENSHOT_SENTINEL="screenshot-sentinel-$NONCE"; mac_to_android_text "$SCREENSHOT_SENTINEL" || die "Screenshot sync barrier failed."
+screenshot_outgoing_before="$(android_ci_value outgoing_clip_count)"; screenshot_remote_before="$(android_ci_value remote_apply_count)"; screenshot_send_before="$(android_ci_value screenshot_send_count)"
+"${ADB[@]}" shell input keyevent KEYCODE_HOME >/dev/null 2>&1; sleep .5; "${ADB[@]}" shell input keyevent 120 >/dev/null 2>&1
+ok=0; i=0; while [ "$i" -lt 100 ]; do screenshot_info="$($PASTE image-info 2>/dev/null || true)"; case "$screenshot_info" in *x*) ok=1; break;; esac; i=$((i+1)); sleep .2; done; [ "$ok" -eq 1 ] || die "Automatic Android screenshot was not sent to Mac."
+screenshot_mac_count="$($PASTE change-count)"; sleep 10
+screenshot_outgoing_after="$(android_ci_value outgoing_clip_count)"; screenshot_remote_after="$(android_ci_value remote_apply_count)"; screenshot_send_after="$(android_ci_value screenshot_send_count)"; screenshot_mac_after="$($PASTE change-count)"
+[ "$screenshot_send_after" -eq $((screenshot_send_before + 1)) ] || die "Automatic screenshot source did not emit exactly once: $screenshot_send_before -> $screenshot_send_after."
+[ "$screenshot_outgoing_after" -eq $((screenshot_outgoing_before + 1)) ] || die "Automatic screenshot transport emitted more than once: $screenshot_outgoing_before -> $screenshot_outgoing_after."
+[ "$screenshot_remote_after" -eq "$screenshot_remote_before" ] || die "Automatic screenshot echoed back to Android: $screenshot_remote_before -> $screenshot_remote_after."
+[ "$screenshot_mac_after" -eq "$screenshot_mac_count" ] || die "Automatic screenshot rewrote the Mac clipboard: $screenshot_mac_count -> $screenshot_mac_after."
+say "PASS automatic Android screenshot -> Mac exactly once"
+
+# Adjacent-content rule: A,A emits once; A,B,A emits all three distinct stack
+# positions. This exercises independent Android clipboard SET timestamps while
+# proving content dedupe does not become a permanent same-content ban.
+ADJ_SENTINEL="adjacent-sentinel-$NONCE"; mac_to_android_text "$ADJ_SENTINEL" || die "Adjacent duplicate barrier failed."
+adjacent_before="$(android_ci_value outgoing_clip_count)"; adjacent_suppressed_before="$(android_ci_value adjacent_duplicate_suppressed_count)"
+start_driver set_image; wait_driver SET_IMAGE || die "Adjacent image first SET failed."; ok=0; i=0; while [ "$i" -lt 100 ]; do [ "$($PASTE image-info 2>/dev/null || true)" = 3x2 ] && { ok=1; break; }; i=$((i+1)); sleep .2; done; [ "$ok" -eq 1 ] || die "Adjacent image first delivery failed."
+adjacent_mac_first="$($PASTE change-count)"; start_driver set_image; wait_driver SET_IMAGE || die "Adjacent image second SET failed."; sleep 3
+adjacent_middle="$(android_ci_value outgoing_clip_count)"; adjacent_suppressed_middle="$(android_ci_value adjacent_duplicate_suppressed_count)"; adjacent_mac_middle="$($PASTE change-count)"
+[ "$adjacent_middle" -eq $((adjacent_before + 1)) ] || die "Adjacent identical images were both transported: $adjacent_before -> $adjacent_middle."
+[ "$adjacent_suppressed_middle" -eq $((adjacent_suppressed_before + 1)) ] || die "Adjacent duplicate suppression counter did not advance: $adjacent_suppressed_before -> $adjacent_suppressed_middle."
+[ "$adjacent_mac_middle" -eq "$adjacent_mac_first" ] || die "Adjacent duplicate created a second Mac clipboard entry: $adjacent_mac_first -> $adjacent_mac_middle."
+ADJ_BREAK="adjacent-break-$NONCE"; start_driver set_text "$ADJ_BREAK"; wait_driver SET_TEXT || die "Separated recopy text SET failed."; ok=0; i=0; while [ "$i" -lt 100 ]; do [ "$(pbpaste 2>/dev/null || true)" = "$ADJ_BREAK" ] && { ok=1; break; }; i=$((i+1)); sleep .2; done; [ "$ok" -eq 1 ] || die "Separated recopy text delivery failed."
+start_driver set_image; wait_driver SET_IMAGE || die "Separated recopy image SET failed."; ok=0; i=0; while [ "$i" -lt 100 ]; do [ "$($PASTE image-info 2>/dev/null || true)" = 3x2 ] && { ok=1; break; }; i=$((i+1)); sleep .2; done; [ "$ok" -eq 1 ] || die "Separated same-image recopy was incorrectly suppressed."
+adjacent_after="$(android_ci_value outgoing_clip_count)"; [ "$adjacent_after" -eq $((adjacent_before + 3)) ] || die "A,A,B,A adjacent semantics were wrong: outgoing $adjacent_before -> $adjacent_after."
+say "PASS adjacent duplicate suppressed; separated same-content recopy allowed"
 
 say "Running physical file-transfer E2E..."
 dev_broadcast dev.clipmesh.devtest.FAVORITE --es fingerprint "$MAC_FP"; "$APP_EXE" --dev-test-favorite "$ANDROID_FP" >> "$LOG" 2>&1
-pkill -x ClipMesh >/dev/null 2>&1 || true; pkill -x clipmesh-bin >/dev/null 2>&1 || true; sleep .4; open "$INSTALL_APP"; wait_mac || die "Mac app restart failed."
+pkill -x ClipMesh >/dev/null 2>&1 || true; pkill -x clipmesh-bin >/dev/null 2>&1 || true; sleep .4; open -n "$INSTALL_APP"; wait_mac || die "Mac app restart failed."
 i=0; while [ "$i" -lt 40 ] && ! lsof -nP -iTCP:53421 -sTCP:LISTEN >/dev/null 2>&1; do i=$((i+1)); sleep .25; done; lsof -nP -iTCP:53421 -sTCP:LISTEN >/dev/null 2>&1 || die "Mac file receiver not listening."
 A2M_FILE="clipmesh-a2m-$NONCE.bin"; A2M_PAYLOAD="android-to-mac-$NONCE-$(openssl rand -hex 32)"; A2M_DEST="$HOME/Downloads/ClipMesh/$A2M_FILE"; rm -f "$A2M_DEST"
 dev_broadcast dev.clipmesh.devtest.SEND_FILE --es address "$MAC_IP" --es fingerprint "$MAC_FP" --es file_name "$A2M_FILE" --es payload_b64 "$(b64 "$A2M_PAYLOAD")"

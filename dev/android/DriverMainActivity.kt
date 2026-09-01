@@ -50,6 +50,7 @@ class MainActivity : Activity() {
             "set_text" -> setText(decode(intent.getStringExtra("value_b64")))
             "wait_text" -> waitText(decode(intent.getStringExtra("value_b64")))
             "set_image" -> setImage()
+            "set_oriented_image" -> setOrientedImage()
             "wait_image" -> waitImage()
             else -> write("FAIL unknown mode")
         }
@@ -84,6 +85,29 @@ class MainActivity : Activity() {
         val uri = Uri.parse("content://dev.clipmesh.testdriver.image/clipmesh-e2e-image.png")
         clipboard().setPrimaryClip(ClipData.newUri(contentResolver, "ClipMesh E2E image", uri))
         write("SET_IMAGE")
+    }
+
+    private fun setOrientedImage() {
+        // Store a portrait 2x3 JPEG whose EXIF says to rotate it clockwise.
+        // A consumer that honors orientation must therefore observe 3x2.
+        val bitmap = Bitmap.createBitmap(2, 3, Bitmap.Config.ARGB_8888)
+        bitmap.setPixels(
+            intArrayOf(Color.RED, Color.GREEN, Color.BLUE, Color.YELLOW, Color.MAGENTA, Color.CYAN),
+            0, 2, 0, 0, 2, 3
+        )
+        val file = File(cacheDir, "clipmesh-e2e-oriented.jpg")
+        file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 100, it) }
+        bitmap.recycle()
+        android.media.ExifInterface(file.absolutePath).apply {
+            setAttribute(
+                android.media.ExifInterface.TAG_ORIENTATION,
+                android.media.ExifInterface.ORIENTATION_ROTATE_90.toString()
+            )
+            saveAttributes()
+        }
+        val uri = Uri.parse("content://dev.clipmesh.testdriver.image/clipmesh-e2e-oriented.jpg")
+        clipboard().setPrimaryClip(ClipData.newUri(contentResolver, "ClipMesh E2E oriented image", uri))
+        write("SET_ORIENTED_IMAGE")
     }
 
     private fun waitImage() {

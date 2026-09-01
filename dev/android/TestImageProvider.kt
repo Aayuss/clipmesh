@@ -11,15 +11,21 @@ import java.io.File
 
 class TestImageProvider : ContentProvider() {
     override fun onCreate() = true
-    private fun image(): File = File(requireNotNull(context).cacheDir, "clipmesh-e2e-image.png")
-    override fun getType(uri: Uri): String = "image/png"
+    private fun image(uri: Uri): File {
+        val name = uri.lastPathSegment?.takeIf {
+            it == "clipmesh-e2e-image.png" || it == "clipmesh-e2e-oriented.jpg"
+        } ?: "clipmesh-e2e-image.png"
+        return File(requireNotNull(context).cacheDir, name)
+    }
+    override fun getType(uri: Uri): String =
+        if (uri.lastPathSegment?.endsWith(".jpg") == true) "image/jpeg" else "image/png"
     override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {
         require(mode == "r")
-        return ParcelFileDescriptor.open(image(), ParcelFileDescriptor.MODE_READ_ONLY)
+        return ParcelFileDescriptor.open(image(uri), ParcelFileDescriptor.MODE_READ_ONLY)
     }
     override fun query(uri: Uri, projection: Array<out String>?, selection: String?, selectionArgs: Array<out String>?, sortOrder: String?): Cursor =
         MatrixCursor(arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE)).apply {
-            val file = image()
+            val file = image(uri)
             addRow(arrayOf<Any?>(file.name, file.length()))
         }
     override fun insert(uri: Uri, values: ContentValues?): Uri? = throw UnsupportedOperationException()

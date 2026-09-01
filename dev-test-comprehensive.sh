@@ -325,7 +325,7 @@ android_background; "${ADB[@]}" shell rm -f "/sdcard/Download/ClipMesh/Images/$(
 
 section "RESTART, REDISCOVERY AND PERSISTENCE"
 set_android_favorite "$MAC_FP" true; set_mac_favorite "$ANDROID_FP" true
-pkill -x ClipMesh >/dev/null 2>&1 || true; pkill -x clipmesh-bin >/dev/null 2>&1 || true; sleep .6; open "$INSTALL_APP"
+pkill -x ClipMesh >/dev/null 2>&1 || true; pkill -x clipmesh-bin >/dev/null 2>&1 || true; sleep .6; open -n "$INSTALL_APP"
 i=0; while [ "$i" -lt 80 ] && ! lsof -nP -i4TCP:53421 -sTCP:LISTEN >/dev/null 2>&1; do i=$((i+1)); sleep .2; done
 lsof -nP -i4TCP:53421 -sTCP:LISTEN >/dev/null 2>&1 && pass "Mac restart restores IPv4 file receiver" || fail "Mac restart restores IPv4 file receiver"
 "${ADB[@]}" shell am force-stop dev.clipmesh >/dev/null 2>&1; sleep .5; android_main; android_background

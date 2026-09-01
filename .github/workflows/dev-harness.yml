@@ -19,12 +19,15 @@ on:
       - 'ci/patch-v038-file-transfer-visibility.py'
       - 'ci/patch-v039-lan-discovery.py'
       - 'ci/patch-v040-macos-resilience.py'
+      - 'ci/patch-v044-image-provenance.py'
+      - 'ci/patch-v045-screenshot-adjacent-dedupe.py'
       - 'ci/patch-acceptance-v4.py'
       - 'ci/patch-acceptance-v5.py'
       - 'ci/patch-acceptance-chain.py'
       - 'ci/finalize-comprehensive-runner.py'
       - 'ci/finalize-physical-v2.py'
       - 'ci/finalize-physical-v3.py'
+      - 'ci/finalize-physical-v4.py'
       - 'ci/v031_devtest_selftest.py'
       - 'ci/v032_release_signing_selftest.py'
       - 'ci/v033_ipv4_transfer_selftest.py'
@@ -49,12 +52,15 @@ on:
       - 'ci/patch-v038-file-transfer-visibility.py'
       - 'ci/patch-v039-lan-discovery.py'
       - 'ci/patch-v040-macos-resilience.py'
+      - 'ci/patch-v044-image-provenance.py'
+      - 'ci/patch-v045-screenshot-adjacent-dedupe.py'
       - 'ci/patch-acceptance-v4.py'
       - 'ci/patch-acceptance-v5.py'
       - 'ci/patch-acceptance-chain.py'
       - 'ci/finalize-comprehensive-runner.py'
       - 'ci/finalize-physical-v2.py'
       - 'ci/finalize-physical-v3.py'
+      - 'ci/finalize-physical-v4.py'
       - 'ci/v031_devtest_selftest.py'
       - 'ci/v032_release_signing_selftest.py'
       - 'ci/v033_ipv4_transfer_selftest.py'
@@ -79,17 +85,19 @@ jobs:
       - name: Validate harness scripts
         run: |
           set -euo pipefail
-          python -m py_compile ci/reconstruct.py ci/patch-v031-dev-test.py ci/patch-v032-release.py ci/patch-v033-ipv4-transfer.py ci/patch-v034-shizuku-clipboard.py ci/patch-v035-e2e-observability.py ci/patch-v038-file-transfer-visibility.py ci/patch-v039-lan-discovery.py ci/patch-v040-macos-resilience.py ci/patch-acceptance-v4.py ci/patch-acceptance-v5.py ci/patch-acceptance-chain.py ci/finalize-comprehensive-runner.py ci/finalize-physical-v2.py ci/finalize-physical-v3.py ci/v031_devtest_selftest.py ci/v032_release_signing_selftest.py ci/v033_ipv4_transfer_selftest.py ci/v034_shizuku_clipboard_selftest.py ci/v037_acceptance_selftest.py dev/uia-find-allow.py
+          python -m py_compile ci/reconstruct.py ci/patch-v031-dev-test.py ci/patch-v032-release.py ci/patch-v033-ipv4-transfer.py ci/patch-v034-shizuku-clipboard.py ci/patch-v035-e2e-observability.py ci/patch-v038-file-transfer-visibility.py ci/patch-v039-lan-discovery.py ci/patch-v040-macos-resilience.py ci/patch-v044-image-provenance.py ci/patch-v045-screenshot-adjacent-dedupe.py ci/patch-acceptance-v4.py ci/patch-acceptance-v5.py ci/patch-acceptance-chain.py ci/finalize-comprehensive-runner.py ci/finalize-physical-v2.py ci/finalize-physical-v3.py ci/finalize-physical-v4.py ci/v031_devtest_selftest.py ci/v032_release_signing_selftest.py ci/v033_ipv4_transfer_selftest.py ci/v034_shizuku_clipboard_selftest.py ci/v037_acceptance_selftest.py dev/uia-find-allow.py
           bash -n dev-test.sh
           bash -n dev-test-all.sh
           bash -n dev-test-final.sh
           python ci/finalize-comprehensive-runner.py dev-test-comprehensive.sh /tmp/clipmesh-final-v1.sh
           python ci/finalize-physical-v2.py /tmp/clipmesh-final-v1.sh /tmp/clipmesh-final-v2.sh
-          python ci/finalize-physical-v3.py /tmp/clipmesh-final-v2.sh /tmp/clipmesh-final-physical.sh
+          python ci/finalize-physical-v3.py /tmp/clipmesh-final-v2.sh /tmp/clipmesh-final-v3.sh
+          python ci/finalize-physical-v4.py /tmp/clipmesh-final-v3.sh /tmp/clipmesh-final-physical.sh
           bash -n /tmp/clipmesh-final-physical.sh
           grep -q 'FINAL_COMPREHENSIVE_RUNNER_AUDIT_V1' /tmp/clipmesh-final-physical.sh
           grep -q 'PHYSICAL_HARDENING_V2' /tmp/clipmesh-final-physical.sh
           grep -q 'PHYSICAL_HARDENING_V3' /tmp/clipmesh-final-physical.sh
+          grep -q 'PHYSICAL_HARDENING_V4_IMAGE_ECHO' /tmp/clipmesh-final-physical.sh
           grep -q 'CLIPMESH_CODESIGN_IDENTITY="-"' /tmp/clipmesh-final-physical.sh
           grep -q 'Mac restart restores clipboard daemon' /tmp/clipmesh-final-physical.sh
           swiftc dev/macos-pasteboard-helper.swift -o /tmp/clipmesh-pasteboard-helper
@@ -111,6 +119,7 @@ jobs:
           ! grep -q 'self.queue.asyncAfter' ci/ClipMeshTransfer.swift
           grep -q 'scheduleDaemonRestart' ci/ClipMeshApp.swift
           grep -q 'clipboardDaemonIsListening' ci/ClipMeshApp.swift
+          grep -Fq 'fn observation_fingerprint(payload: &ClipPayload)' clipmesh/apps/desktop/src/clipboard.rs
           python - <<'PY'
           import re
           from pathlib import Path
@@ -167,10 +176,18 @@ jobs:
           grep -q 'val clearInboundIdentity = methodName == "getPrimaryClip"' "$J/shizuku/ClipboardUserService.kt"
           grep -q 'Binder.clearCallingIdentity()' "$J/shizuku/ClipboardUserService.kt"
           grep -q 'if (clearInboundIdentity) Binder.restoreCallingIdentity(callingIdentity)' "$J/shizuku/ClipboardUserService.kt"
-          grep -q '\.version(6)' "$J/shizuku/ShizukuManager.kt"
+          grep -q '\.version(11)' "$J/shizuku/ShizukuManager.kt"
           grep -q 'last_remote_received_at' "$J/BackgroundRuntime.kt"
           grep -q 'debugPeerCount' "$J/BackgroundRuntime.kt"
           grep -q 'last_remote_shizuku_write_ok' "$J/clipboard/ClipboardBridge.kt"
+          grep -Fq 'if (clip.itemCount == 0 || isRemoteClip(clip)) return null' "$J/clipboard/ClipboardBridge.kt"
+          grep -Fq 'val remoteFingerprint = echoFingerprint(payload)' "$J/clipboard/ClipboardBridge.kt"
+          grep -Fq 'ExifInterface.TAG_ORIENTATION' "$J/clipboard/ClipboardBridge.kt"
+          grep -Fq 'incrementDebugCounter("outgoing_clip_count")' "$J/clipboard/ClipboardBridge.kt"
+          grep -Fq 'incrementDebugCounter("remote_apply_count")' "$J/clipboard/ClipboardBridge.kt"
+          grep -Fq 'registerContentObserver(' "$J/clipboard/ClipboardBridge.kt"
+          grep -Fq 'sourceApp = "android.screenshot"' "$J/clipboard/ClipboardBridge.kt"
+          grep -Fq 'adjacent_duplicate_suppressed_count' "$J/clipboard/ClipboardBridge.kt"
           grep -q 'val devices = runCatching { LocalTransferEngine.nearbyDevices() }.getOrDefault(emptyList())' "$J/fileshare/FileShareActivity.kt"
           ! grep -q 'nearbyDevices().filterNot' "$J/fileshare/FileShareActivity.kt"
           grep -q 'dev.clipmesh.action.CI_BACKGROUND_CAPTURE' "$DM"
@@ -179,6 +196,7 @@ jobs:
           grep -q 'wait_image' clipmesh/android/devdriver/src/main/java/dev/clipmesh/testdriver/MainActivity.kt
           grep -q 'OnPrimaryClipChangedListener' clipmesh/android/devdriver/src/main/java/dev/clipmesh/testdriver/MainActivity.kt
           grep -q 'pollCurrent = true' clipmesh/android/devdriver/src/main/java/dev/clipmesh/testdriver/MainActivity.kt
+          grep -q 'set_oriented_image' clipmesh/android/devdriver/src/main/java/dev/clipmesh/testdriver/MainActivity.kt
       - name: Compile ClipMesh and foreground clipboard driver
         run: |
           set -euo pipefail

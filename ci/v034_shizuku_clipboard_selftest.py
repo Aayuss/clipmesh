@@ -16,7 +16,7 @@ if system == "Linux":
     assert 'val clearInboundIdentity = methodName == "getPrimaryClip"' in service
     assert "val callingIdentity = if (clearInboundIdentity) Binder.clearCallingIdentity() else 0L" in service
     assert "if (clearInboundIdentity) Binder.restoreCallingIdentity(callingIdentity)" in service
-    assert ".version(6)" in manager
+    assert ".version(11)" in manager
     assert ".version(4)" not in manager
     assert ".version(5)" not in manager
 

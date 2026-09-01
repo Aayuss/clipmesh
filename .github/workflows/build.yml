@@ -176,7 +176,7 @@ jobs:
           python ci/v032_release_signing_selftest.py
           J=clipmesh/android/app/src/main/java/dev/clipmesh
           grep -q 'val clearInboundIdentity = methodName == "getPrimaryClip"' "$J/shizuku/ClipboardUserService.kt"
-          grep -q '\.version(6)' "$J/shizuku/ShizukuManager.kt"
+          grep -q '\.version(11)' "$J/shizuku/ShizukuManager.kt"
           grep -q 'versionCode = 22' clipmesh/android/app/build.gradle.kts
           grep -q 'versionName = "0.2.12"' clipmesh/android/app/build.gradle.kts
           grep -q '^version = "0.2.12"$' clipmesh/Cargo.toml
