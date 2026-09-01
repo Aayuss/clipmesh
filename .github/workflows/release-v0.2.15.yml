@@ -1,12 +1,12 @@
-name: Release ClipMesh v0.2.12
+name: Release ClipMesh v0.2.15
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/release-v0.2.12.yml'
-      - 'ci/patch-v036-release.py'
+      - '.github/workflows/release-v0.2.15.yml'
+      - 'ci/patch-v046-release.py'
       - 'PHYSICAL_VERIFICATION.md'
       - 'README.md'
 
@@ -14,9 +14,9 @@ permissions:
   contents: read
 
 env:
-  VERIFIED_PRODUCT_SHA: 9faf1b8b1baffa2c2a8aee78938ba9d9acf7fe74
-  RELEASE_VERSION: 0.2.12
-  RELEASE_TAG: v0.2.12-alpha
+  VERIFIED_PRODUCT_SHA: ce8dae678e8cd3f7bc40613c4ea317d9a9598ff4
+  RELEASE_VERSION: 0.2.15
+  RELEASE_TAG: v0.2.15-alpha
 
 jobs:
   verify-boundary:
@@ -33,7 +33,7 @@ jobs:
           mapfile -t changed < <(git diff --name-only "$VERIFIED_PRODUCT_SHA"..HEAD)
           printf 'Files changed after physical verification:\n'
           printf '  %s\n' "${changed[@]}"
-          allowed='^(ci/patch-v036-release\.py|PHYSICAL_VERIFICATION\.md|README\.md|\.github/workflows/release-v0\.2\.12\.yml)$'
+          allowed='^(ci/patch-v046-release\.py|ci/v032_release_signing_selftest\.py|PHYSICAL_VERIFICATION\.md|README\.md|\.github/workflows/build\.yml|\.github/workflows/dev-harness\.yml|\.github/workflows/release-v0\.2\.(12|15)\.yml)$'
           bad=0
           for path in "${changed[@]}"; do
             if ! printf '%s\n' "$path" | grep -Eq "$allowed"; then
@@ -42,12 +42,13 @@ jobs:
             fi
           done
           test "$bad" -eq 0
-          python -m py_compile ci/patch-v036-release.py
+          python -m py_compile ci/patch-v036-release.py ci/patch-v046-release.py
+          python ci/v032_release_signing_selftest.py
           grep -q "$VERIFIED_PRODUCT_SHA" PHYSICAL_VERIFICATION.md
           grep -q 'TOTAL FAILURES: 0' PHYSICAL_VERIFICATION.md
 
   macos:
-    name: macOS v0.2.12 DMG
+    name: macOS v0.2.15 DMG
     needs: verify-boundary
     runs-on: macos-14
     steps:
@@ -65,9 +66,10 @@ jobs:
           python ci/reconstruct.py --platform Darwin
           python ci/v033_ipv4_transfer_selftest.py
           python ci/patch-v036-release.py
-          grep -q 'CFBundleShortVersionString</key><string>0.2.12' clipmesh/scripts/build-macos.sh
-          grep -q 'CFBundleVersion</key><string>0.2.12' clipmesh/scripts/build-macos.sh
-          grep -q '^version = "0.2.12"$' clipmesh/Cargo.toml
+          python ci/patch-v046-release.py
+          grep -q 'CFBundleShortVersionString</key><string>0.2.15' clipmesh/scripts/build-macos.sh
+          grep -q 'CFBundleVersion</key><string>0.2.15' clipmesh/scripts/build-macos.sh
+          grep -q '^version = "0.2.15"$' clipmesh/Cargo.toml
           grep -q 'private let httpQueue' ci/ClipMeshTransfer.swift
           grep -q 'private let discoveryQueue' ci/ClipMeshTransfer.swift
           grep -q 'listener.start(queue: httpQueue)' ci/ClipMeshTransfer.swift
@@ -113,15 +115,15 @@ jobs:
           import plistlib
           from pathlib import Path
           info = plistlib.loads(Path('dist/macos/ClipMesh.app/Contents/Info.plist').read_bytes())
-          assert info['CFBundleShortVersionString'] == '0.2.12'
-          assert info['CFBundleVersion'] == '0.2.12'
-          print('macOS v0.2.12 metadata validated')
+          assert info['CFBundleShortVersionString'] == '0.2.15'
+          assert info['CFBundleVersion'] == '0.2.15'
+          print('macOS v0.2.15 metadata validated')
           PY
           codesign --verify --deep --strict --verbose=2 dist/macos/ClipMesh.app
           shasum -a 256 dist/macos/ClipMesh.dmg > dist/macos/SHA256SUMS.txt
       - uses: actions/upload-artifact@v7
         with:
-          name: ClipMesh-v0.2.12-macOS
+          name: ClipMesh-v0.2.15-macOS
           if-no-files-found: error
           path: |
             clipmesh/dist/macos/ClipMesh.dmg
@@ -132,7 +134,7 @@ jobs:
         run: bash ci/macos-release-signing.sh cleanup
 
   windows:
-    name: Windows v0.2.12 EXE
+    name: Windows v0.2.15 EXE
     needs: verify-boundary
     runs-on: windows-2025
     steps:
@@ -150,9 +152,10 @@ jobs:
           python ci/reconstruct.py --platform Windows; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/v033_ipv4_transfer_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/patch-v036-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/patch-v046-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $ui = Get-Content 'ci/ClipMeshWindows.cs' -Raw
-          if (-not $ui.Contains('private const string Version = "0.2.12";')) { throw 'Windows v0.2.12 runtime version missing' }
-          if (-not (Get-Content 'clipmesh/Cargo.toml' -Raw).Contains('version = "0.2.12"')) { throw 'Cargo v0.2.12 package version missing' }
+          if (-not $ui.Contains('private const string Version = "0.2.15";')) { throw 'Windows v0.2.15 runtime version missing' }
+          if (-not (Get-Content 'clipmesh/Cargo.toml' -Raw).Contains('version = "0.2.15"')) { throw 'Cargo v0.2.15 package version missing' }
       - name: Test protocol core and transport
         working-directory: clipmesh
         shell: pwsh
@@ -172,19 +175,19 @@ jobs:
           Remove-Item -Recurse -Force $roaming,$local -ErrorAction SilentlyContinue
           $process = Start-Process -FilePath '.\dist\windows\clipmesh.exe' -ArgumentList '--smoke-test' -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "Windows smoke test failed with exit code $($process.ExitCode)" }
-          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.2.12\clipmesh-bin.exe'))) { throw 'Windows v0.2.12 runtime missing' }
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.2.15\clipmesh-bin.exe'))) { throw 'Windows v0.2.15 runtime missing' }
           $hash = (Get-FileHash dist\windows\clipmesh.exe -Algorithm SHA256).Hash.ToLower()
           "$hash  clipmesh.exe" | Set-Content -Encoding ascii dist\windows\SHA256SUMS.txt
       - uses: actions/upload-artifact@v7
         with:
-          name: ClipMesh-v0.2.12-Windows
+          name: ClipMesh-v0.2.15-Windows
           if-no-files-found: error
           path: |
             clipmesh/dist/windows/clipmesh.exe
             clipmesh/dist/windows/SHA256SUMS.txt
 
   android:
-    name: Android v0.2.12 APK
+    name: Android v0.2.15 APK
     needs: verify-boundary
     runs-on: ubuntu-24.04
     steps:
@@ -207,9 +210,10 @@ jobs:
           grep -q 'val clearInboundIdentity = methodName == "getPrimaryClip"' "$J/shizuku/ClipboardUserService.kt"
           grep -q '\.version(11)' "$J/shizuku/ShizukuManager.kt"
           python ci/patch-v036-release.py
-          grep -q 'versionCode = 22' clipmesh/android/app/build.gradle.kts
-          grep -q 'versionName = "0.2.12"' clipmesh/android/app/build.gradle.kts
-          grep -q '^version = "0.2.12"$' clipmesh/Cargo.toml
+          python ci/patch-v046-release.py
+          grep -q 'versionCode = 25' clipmesh/android/app/build.gradle.kts
+          grep -q 'versionName = "0.2.15"' clipmesh/android/app/build.gradle.kts
+          grep -q '^version = "0.2.15"$' clipmesh/Cargo.toml
       - name: Install Android SDK and build debug APK
         run: |
           set -euo pipefail
@@ -219,8 +223,8 @@ jobs:
           ./scripts/build-android-debug.sh
           APK=dist/android/ClipMesh-debug.apk
           test -s "$APK"
-          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-name "$APK" | grep -qx '0.2.12'
-          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-code "$APK" | grep -qx '22'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-name "$APK" | grep -qx '0.2.15'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-code "$APK" | grep -qx '25'
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -242,19 +246,19 @@ jobs:
           CLIPMESH_ANDROID_KEY_PASSWORD: ${{ secrets.CLIPMESH_ANDROID_KEY_PASSWORD }}
           CLIPMESH_ANDROID_SIGNING_CERT_SHA256: ${{ vars.CLIPMESH_ANDROID_SIGNING_CERT_SHA256 }}
           CLIPMESH_ANDROID_EXPECTED_PACKAGE: dev.clipmesh
-          CLIPMESH_ANDROID_EXPECTED_VERSION_NAME: 0.2.12
-          CLIPMESH_ANDROID_EXPECTED_VERSION_CODE: '22'
+          CLIPMESH_ANDROID_EXPECTED_VERSION_NAME: 0.2.15
+          CLIPMESH_ANDROID_EXPECTED_VERSION_CODE: '25'
         run: bash ci/build-android-release.sh
       - uses: actions/upload-artifact@v7
         with:
-          name: ClipMesh-v0.2.12-Android
+          name: ClipMesh-v0.2.15-Android
           if-no-files-found: error
           path: |
             clipmesh/dist/android/ClipMesh-release.apk
             clipmesh/dist/android/SHA256SUMS.txt
 
   release:
-    name: Publish v0.2.12-alpha
+    name: Publish v0.2.15-alpha
     needs: [verify-boundary, macos, windows, android]
     runs-on: ubuntu-24.04
     permissions:
@@ -262,15 +266,15 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
-          name: ClipMesh-v0.2.12-macOS
+          name: ClipMesh-v0.2.15-macOS
           path: artifacts/macos
       - uses: actions/download-artifact@v8
         with:
-          name: ClipMesh-v0.2.12-Windows
+          name: ClipMesh-v0.2.15-Windows
           path: artifacts/windows
       - uses: actions/download-artifact@v8
         with:
-          name: ClipMesh-v0.2.12-Android
+          name: ClipMesh-v0.2.15-Android
           path: artifacts/android
       - name: Prepare and verify release assets
         run: |
@@ -300,7 +304,7 @@ jobs:
             echo "$tag already exists. Keeping its published assets immutable."
           else
             gh release create "$tag" "${assets[@]}" \
-              --title "ClipMesh v0.2.12-alpha" \
+              --title "ClipMesh v0.2.15-alpha" \
               --notes "Physically verified on Samsung Galaxy S23 Ultra and macOS. The full clipboard/image/file matrix passed with zero failures before this release metadata bump." \
               --target "$GITHUB_SHA" \
               --prerelease

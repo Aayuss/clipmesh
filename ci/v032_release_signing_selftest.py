@@ -5,6 +5,7 @@ import platform
 root = Path(__file__).resolve().parents[1]
 system = os.environ.get("CLIPMESH_PLATFORM", platform.system())
 workflow = (root / ".github/workflows/build.yml").read_text(encoding="utf-8")
+release_workflow = (root / ".github/workflows/release-v0.2.15.yml").read_text(encoding="utf-8")
 fixed_gradle = (root / "ci/android-app-build.gradle.kts.fixed").read_text(encoding="utf-8")
 android_script = (root / "ci/build-android-release.sh").read_text(encoding="utf-8")
 mac_script = (root / "ci/macos-release-signing.sh").read_text(encoding="utf-8")
@@ -14,13 +15,15 @@ readme = (root / "README.md").read_text(encoding="utf-8")
 setup_script = (root / "scripts/setup-android-release-signing.sh").read_text(encoding="utf-8")
 ignore_rules = (root / ".gitignore").read_text(encoding="utf-8")
 reconstruct = (root / "ci/reconstruct.py").read_text(encoding="utf-8")
-release_patch = (root / "ci/patch-v036-release.py").read_text(encoding="utf-8")
+release_patch = (root / "ci/patch-v046-release.py").read_text(encoding="utf-8")
 
-CURRENT_VERSION = "0.2.12"
-CURRENT_CODE = "22"
-CURRENT_TAG = "v0.2.12-alpha"
-VERIFIED_DEV_VERSION = "0.2.11"
-VERIFIED_DEV_CODE = "21"
+CURRENT_VERSION = "0.2.15"
+CURRENT_CODE = "25"
+CURRENT_TAG = "v0.2.15-alpha"
+BASE_VERSION = "0.2.11"
+BASE_CODE = "21"
+VERIFIED_PRODUCT_VERSION = "0.2.12"
+VERIFIED_PRODUCT_CODE = "22"
 
 # Android release signing must remain fail-closed and use the permanent key.
 for name in (
@@ -70,11 +73,19 @@ for forbidden_component in (
 for target in ("Darwin", "Windows", "Linux"):
     assert f"python ci/reconstruct.py --platform {target}" in workflow
 assert workflow.count("python ci/patch-v036-release.py") == 3
+assert workflow.count("python ci/patch-v046-release.py") == 3
 assert f"CLIPMESH_ANDROID_EXPECTED_VERSION_NAME: {CURRENT_VERSION}" in workflow
 assert f"CLIPMESH_ANDROID_EXPECTED_VERSION_CODE: '{CURRENT_CODE}'" in workflow
 assert f"versionCode = {CURRENT_CODE}" in workflow
 assert f'versionName = "{CURRENT_VERSION}"' in workflow
 assert f'^version = "{CURRENT_VERSION}"$' in workflow
+assert f"name: Release ClipMesh v{CURRENT_VERSION}" in release_workflow
+assert f"RELEASE_VERSION: {CURRENT_VERSION}" in release_workflow
+assert f"RELEASE_TAG: {CURRENT_TAG}" in release_workflow
+assert release_workflow.count("python ci/patch-v046-release.py") == 3
+assert f"versionCode = {CURRENT_CODE}" in release_workflow
+assert f'versionName = "{CURRENT_VERSION}"' in release_workflow
+assert "ce8dae678e8cd3f7bc40613c4ea317d9a9598ff4" in release_workflow
 
 # README download metadata must describe the immutable current release.
 assert readme.startswith(f"# ClipMesh v{CURRENT_VERSION}\n")
@@ -89,12 +100,14 @@ for asset_name in (
 assert f"publishes `{CURRENT_TAG}`" in download_section
 assert f"## What changed in v{CURRENT_VERSION}" in readme
 
-# Current release bump must be metadata-only on top of the physically verified v0.2.11 product code.
+# Current release bump must be metadata-only on top of the physically verified
+# v0.2.12 executable generation at ce8dae6.
 for value in (
-    '0.2.11',
     '0.2.12',
-    'versionCode = 21',
+    '0.2.15',
     'versionCode = 22',
+    'versionCode = 25',
+    'ce8dae678e8cd3f7bc40613c4ea317d9a9598ff4',
 ):
     assert value in release_patch
 
@@ -175,19 +188,23 @@ if system == "Linux" and generated_gradle.is_file():
     generated = generated_gradle.read_text(encoding="utf-8")
     assert "releaseTaskRequested" in generated
 
-    # reconstruct.py intentionally stops at the physically verified v0.2.11
-    # product generation. Canonical/release CI then applies patch-v036, which is
-    # metadata-only, to produce v0.2.12. Accept exactly either coherent state so
-    # the dev harness can validate the verified product boundary while release CI
-    # still validates the public version/code pair.
-    verified_dev_generation = (
-        f"versionCode = {VERIFIED_DEV_CODE}" in generated
-        and f'versionName = "{VERIFIED_DEV_VERSION}"' in generated
+    # reconstruct.py intentionally stops at the v0.2.11 product generation.
+    # patch-v036 produces the physically tested v0.2.12 executable generation,
+    # and patch-v046 changes metadata only to publish v0.2.15. Accept exactly one
+    # coherent stage so both development and release workflows can reuse this
+    # policy test without weakening version validation.
+    base_generation = (
+        f"versionCode = {BASE_CODE}" in generated
+        and f'versionName = "{BASE_VERSION}"' in generated
+    )
+    verified_product_generation = (
+        f"versionCode = {VERIFIED_PRODUCT_CODE}" in generated
+        and f'versionName = "{VERIFIED_PRODUCT_VERSION}"' in generated
     )
     current_release_generation = (
         f"versionCode = {CURRENT_CODE}" in generated
         and f'versionName = "{CURRENT_VERSION}"' in generated
     )
-    assert verified_dev_generation ^ current_release_generation
+    assert sum((base_generation, verified_product_generation, current_release_generation)) == 1
 
 print(f"ClipMesh v{CURRENT_VERSION} release-signing policy self-test passed")

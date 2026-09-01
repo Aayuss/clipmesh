@@ -21,6 +21,7 @@ on:
       - 'ci/patch-v040-macos-resilience.py'
       - 'ci/patch-v044-image-provenance.py'
       - 'ci/patch-v045-screenshot-adjacent-dedupe.py'
+      - 'ci/patch-v046-release.py'
       - 'ci/patch-acceptance-v4.py'
       - 'ci/patch-acceptance-v5.py'
       - 'ci/patch-acceptance-chain.py'
@@ -54,6 +55,7 @@ on:
       - 'ci/patch-v040-macos-resilience.py'
       - 'ci/patch-v044-image-provenance.py'
       - 'ci/patch-v045-screenshot-adjacent-dedupe.py'
+      - 'ci/patch-v046-release.py'
       - 'ci/patch-acceptance-v4.py'
       - 'ci/patch-acceptance-v5.py'
       - 'ci/patch-acceptance-chain.py'
@@ -85,7 +87,7 @@ jobs:
       - name: Validate harness scripts
         run: |
           set -euo pipefail
-          python -m py_compile ci/reconstruct.py ci/patch-v031-dev-test.py ci/patch-v032-release.py ci/patch-v033-ipv4-transfer.py ci/patch-v034-shizuku-clipboard.py ci/patch-v035-e2e-observability.py ci/patch-v038-file-transfer-visibility.py ci/patch-v039-lan-discovery.py ci/patch-v040-macos-resilience.py ci/patch-v044-image-provenance.py ci/patch-v045-screenshot-adjacent-dedupe.py ci/patch-acceptance-v4.py ci/patch-acceptance-v5.py ci/patch-acceptance-chain.py ci/finalize-comprehensive-runner.py ci/finalize-physical-v2.py ci/finalize-physical-v3.py ci/finalize-physical-v4.py ci/v031_devtest_selftest.py ci/v032_release_signing_selftest.py ci/v033_ipv4_transfer_selftest.py ci/v034_shizuku_clipboard_selftest.py ci/v037_acceptance_selftest.py dev/uia-find-allow.py
+          python -m py_compile ci/reconstruct.py ci/patch-v031-dev-test.py ci/patch-v032-release.py ci/patch-v033-ipv4-transfer.py ci/patch-v034-shizuku-clipboard.py ci/patch-v035-e2e-observability.py ci/patch-v038-file-transfer-visibility.py ci/patch-v039-lan-discovery.py ci/patch-v040-macos-resilience.py ci/patch-v044-image-provenance.py ci/patch-v045-screenshot-adjacent-dedupe.py ci/patch-v046-release.py ci/patch-acceptance-v4.py ci/patch-acceptance-v5.py ci/patch-acceptance-chain.py ci/finalize-comprehensive-runner.py ci/finalize-physical-v2.py ci/finalize-physical-v3.py ci/finalize-physical-v4.py ci/v031_devtest_selftest.py ci/v032_release_signing_selftest.py ci/v033_ipv4_transfer_selftest.py ci/v034_shizuku_clipboard_selftest.py ci/v037_acceptance_selftest.py dev/uia-find-allow.py
           bash -n dev-test.sh
           bash -n dev-test-all.sh
           bash -n dev-test-final.sh

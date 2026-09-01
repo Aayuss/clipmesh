@@ -1,4 +1,4 @@
-# ClipMesh v0.2.12
+# ClipMesh v0.2.15
 
 ClipMesh provides encrypted clipboard sync and direct nearby file transfer across macOS, Windows, and Android.
 
@@ -6,14 +6,24 @@ ClipMesh provides encrypted clipboard sync and direct nearby file transfer acros
 
 Download the current installers directly - there is no need to browse the Releases page:
 
-- [Download ClipMesh for macOS](https://github.com/Aayuss/clipmesh/releases/download/v0.2.12-alpha/ClipMesh-macOS.dmg)
-- [Download ClipMesh for Windows](https://github.com/Aayuss/clipmesh/releases/download/v0.2.12-alpha/ClipMesh-Windows.exe)
-- [Download ClipMesh for Android](https://github.com/Aayuss/clipmesh/releases/download/v0.2.12-alpha/ClipMesh-Android.apk)
-- [Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.12-alpha/SHA256SUMS.txt)
+- [Download ClipMesh for macOS](https://github.com/Aayuss/clipmesh/releases/download/v0.2.15-alpha/ClipMesh-macOS.dmg)
+- [Download ClipMesh for Windows](https://github.com/Aayuss/clipmesh/releases/download/v0.2.15-alpha/ClipMesh-Windows.exe)
+- [Download ClipMesh for Android](https://github.com/Aayuss/clipmesh/releases/download/v0.2.15-alpha/ClipMesh-Android.apk)
+- [Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.15-alpha/SHA256SUMS.txt)
 
-These links become live after the dedicated `Release ClipMesh v0.2.12` GitHub Action completes and publishes `v0.2.12-alpha`.
+These links become live after the dedicated `Release ClipMesh v0.2.15` GitHub Action completes and publishes `v0.2.15-alpha`.
 
 Release signing setup and the audited v0.2.9 Android migration are documented in [RELEASE_SIGNING.md](RELEASE_SIGNING.md). Official Android publication fails closed unless the permanent keystore and expected certificate fingerprint are configured; pull-request and local development builds continue to use separate debug/development identities.
+
+## What changed in v0.2.15
+
+- Stops cross-device image ping-pong by carrying remote-image provenance and comparing a stable perceptual identity across PNG/container re-encoding and platform color conversion.
+- Prevents adjacent duplicate clipboard writes on both platforms while still allowing the same content to be copied again after a different intervening clipboard event.
+- Preserves Android JPEG EXIF orientation when images arrive on macOS, preventing portrait/gallery images from appearing sideways.
+- Detects Samsung screenshots added directly to MediaStore even when Gboard receives them without Android's primary clipboard changing, then sends each new screenshot to the paired desktop exactly once.
+- Adds physical regression coverage for Android-to-Mac and Mac-to-Android image exact-once delivery, automatic screenshot delivery, orientation, and `A,A,B,A` adjacent-deduplication semantics.
+- Physically verified on a Samsung Galaxy S23 Ultra and macOS: all clipboard directions, image echo stability, automatic screenshot sync, adjacent-only deduplication, orientation, and file transfer passed.
+- Increments Android to `versionName 0.2.15` and `versionCode 25`, with matching macOS, Windows, and Rust package metadata while retaining the established permanent Android release-signing identity.
 
 ## What changed in v0.2.12
 
