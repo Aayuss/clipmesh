@@ -41,9 +41,12 @@ if SYSTEM == "Linux":
     runtime.write_text(rt, encoding="utf-8")
 
     st = service.read_text(encoding="utf-8")
+    # UserHandle.myUserId() is hidden from the public Android SDK. Shizuku's
+    # UserService UID is still encoded with Android's stable per-user UID range,
+    # so derive the current user directly without reflection/hidden API calls.
     st = st.replace(
         "UserHandle.myUserId()",
-        "UserHandle.getUserHandleForUid(android.os.Process.myUid()).identifier",
+        "(android.os.Process.myUid() / 100000)",
     )
     st, field_count = re.subn(
         r'''    private val clipboardEventExecutor = Executors\.newSingleThreadExecutor \{ task ->\n        Thread\(task, "ClipMesh-ClipboardEvent"\)\.apply \{ isDaemon = true \}\n    \}\n''',
@@ -66,10 +69,12 @@ if SYSTEM == "Linux":
     st = st.replace("        clipboardEventExecutor.shutdownNow()\n", "", 1)
     if "Executors." not in st:
         st = st.replace("import java.util.concurrent.Executors\n", "")
+    if "UserHandle." not in st:
+        st = st.replace("import android.os.UserHandle\n", "")
     if "clipboardEventExecutor" in st:
         raise SystemExit("Android service-side idle clipboard executor survived")
-    if "UserHandle.myUserId()" in st:
-        raise SystemExit("Android hidden UserHandle API survived")
+    if "UserHandle.myUserId()" in st or ".identifier" in st:
+        raise SystemExit("Android hidden/incompatible user-id API survived")
     service.write_text(st, encoding="utf-8")
 
     mt = manager.read_text(encoding="utf-8")
@@ -182,4 +187,4 @@ elif SYSTEM == "Windows":
 else:
     raise SystemExit(f"unsupported platform: {SYSTEM}")
 
-print(f"Applied ClipMesh v050 ultra-idle/runtime fixes on {SYSTEM}")
+print(f"Applied ClipMesh v050 ultra-idle/runtime fixes on {SYSTEM})")
