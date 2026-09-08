@@ -26,6 +26,7 @@ PIPELINES = {
         "patch-v045-screenshot-adjacent-dedupe.py",
         "patch-v047-file-transfer-progress.py",
         "patch-v049-event-driven-performance.py",
+        "patch-v050-ultra-idle.py",
     ],
     "Linux": [
         "patch-features.py", "patch-sync-fixes.py",
@@ -42,6 +43,7 @@ PIPELINES = {
         "patch-v045-screenshot-adjacent-dedupe.py",
         "patch-v047-file-transfer-progress.py",
         "patch-v049-event-driven-performance.py",
+        "patch-v050-ultra-idle.py",
     ],
     "Windows": [
         "patch-features.py", "patch-sync-fixes.py", "patch-desktop.py", "patch-windows.py",
@@ -57,6 +59,7 @@ PIPELINES = {
         "patch-v045-screenshot-adjacent-dedupe.py",
         "patch-v047-file-transfer-progress.py",
         "patch-v049-event-driven-performance.py",
+        "patch-v050-ultra-idle.py",
     ],
 }
 

@@ -16,6 +16,7 @@ if system == "Darwin":
     assert "NWListener(using: parameters" in transfer
 
     # Blocking multicast discovery must never share the HTTP callback queue.
+    # Discovery is edge-triggered (startup/server-ready/UI rescan), never a repeating timer.
     for required in (
         'private let httpQueue = DispatchQueue(label: "dev.clipmesh.fileshare.http"',
         'private let discoveryQueue = DispatchQueue(label: "dev.clipmesh.fileshare.discovery"',
@@ -23,7 +24,6 @@ if system == "Darwin":
         'private let sendQueue = DispatchQueue(label: "dev.clipmesh.fileshare.send"',
         'discoveryQueue.async {',
         'sendQueue.async {',
-        'DispatchSource.makeTimerSource(queue: announceQueue)',
         'func discoverNow()',
         'announceQueue.async { [weak self] in',
         'self.announceQueue.asyncAfter',
@@ -38,6 +38,8 @@ if system == "Darwin":
         'connection.start(queue: queue)',
         'func discoverNow() { queue.async',
         'self.queue.asyncAfter',
+        'DispatchSource.makeTimerSource',
+        'startAnnouncer()',
     ):
         assert forbidden not in transfer, forbidden
 
@@ -45,14 +47,20 @@ if system == "Darwin":
     assert "CFBundleShortVersionString</key><string>0.2.11" in build
 elif system == "Linux":
     gradle = (root / "clipmesh/android/app/build.gradle.kts").read_text(encoding="utf-8")
+    transfer = (root / "clipmesh/android/app/src/main/java/dev/clipmesh/fileshare/LocalTransferEngine.kt").read_text(encoding="utf-8")
     assert "versionCode = 21" in gradle
     assert 'versionName = "0.2.11"' in gradle
+    assert "runAnnouncer" not in transfer
+    assert "fun discoverNow()" in transfer
     # build.yml invokes this v033 self-test, so transitively require the v034
     # Shizuku repair even in the legacy explicit release workflow.
     runpy.run_path(str(root / "ci/v034_shizuku_clipboard_selftest.py"), run_name="__main__")
 elif system == "Windows":
     ui = (root / "ci/ClipMeshWindows.cs").read_text(encoding="utf-8")
+    transfer = (root / "ci/ClipMeshTransfer.cs").read_text(encoding="utf-8")
     assert 'private const string Version = "0.2.11";' in ui
+    assert "AnnounceLoop" not in transfer
+    assert "DiscoverNow()" in transfer
 else:
     raise AssertionError(f"unsupported platform: {system}")
 

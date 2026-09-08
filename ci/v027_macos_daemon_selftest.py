@@ -22,6 +22,7 @@ assert not listed(False, False, False)
 if system == "Darwin":
     app = (root / "ci/ClipMeshApp.swift").read_text(encoding="utf-8")
     transfer = (root / "ci/ClipMeshTransfer.swift").read_text(encoding="utf-8")
+    clipboard = (root / "clipmesh/apps/desktop/src/clipboard.rs").read_text(encoding="utf-8")
     build = (root / "clipmesh/scripts/build-macos.sh").read_text(encoding="utf-8")
     assert 'static func acquireInstanceLock() throws -> Int32?' in app
     assert 'Darwin.lockf(descriptor, F_TLOCK, 0)' in app
@@ -47,6 +48,10 @@ if system == "Darwin":
     assert 'guard isRunning && isServerReady else' in transfer
     assert 'listener.stateUpdateHandler' in transfer
     assert '.filter { visibleDevices.contains($0.fingerprint) || favorites.contains($0.fingerprint) }' not in transfer
+    assert 'clipmesh-macos-pasteboard-fallback' not in clipboard
+    assert 'Duration::from_millis(350)' not in clipboard
+    assert 'startAnnouncer()' not in transfer
+    assert 'DispatchSource.makeTimerSource' not in transfer
     assert 'CFBundleShortVersionString</key><string>0.2.11' in build
 elif system == "Windows":
     ui = (root / "ci/ClipMeshWindows.cs").read_text(encoding="utf-8")
@@ -59,6 +64,8 @@ elif system == "Windows":
     assert '/api/clipmesh/v1/register' in transfer
     assert 'if (!serverReady) return;' in transfer
     assert '!IsFavorite(d.Fingerprint) && !visibleDevices.Contains(d.Fingerprint)' not in transfer
+    assert 'AnnounceLoop' not in transfer
+    assert 'using System.Runtime.InteropServices;' in transfer
 elif system == "Linux":
     gradle = (root / "clipmesh/android/app/build.gradle.kts").read_text(encoding="utf-8")
     runtime = (root / "clipmesh/android/app/src/main/java/dev/clipmesh/BackgroundRuntime.kt").read_text(encoding="utf-8")
@@ -72,10 +79,10 @@ elif system == "Linux":
     ci_receiver = ci_receiver_path.read_text(encoding="utf-8")
     assert 'versionCode = 21' in gradle
     assert 'versionName = "0.2.11"' in gradle
-    assert 'ClipMesh-ClipboardWatch' in runtime
-    assert '650L' in runtime
-    assert 'shizuku.hasPermission()' in runtime
-    assert 'bridge.captureNowForForeground()' in runtime
+    assert 'ClipMesh-ClipboardWatch' not in runtime
+    assert '650L' not in runtime
+    assert 'scheduleWithFixedDelay' not in runtime
+    assert 'sh.setClipboardChangeListener { bridge.captureNowForForeground() }' in runtime
     assert 'fun captureAccessibility' in runtime
     assert 'last_outgoing_at' in runtime
     assert 'private fun stopClipboardRuntime()' in runtime
@@ -98,6 +105,7 @@ elif system == "Linux":
     assert 'serverReady.set(true)' in engine
     assert 'if (!serverReady.get()) return' in engine
     assert '.filter { it.visible || isFavorite(requireContext(), it.fingerprint) }' not in engine
+    assert 'runAnnouncer' not in engine
     assert '\\1        if (BuildConfig.DEBUG)' not in main
     assert main.count('override fun onCreate(savedInstanceState: Bundle?) {') == 1
     assert 'clipmesh_ci_favorite' in main
