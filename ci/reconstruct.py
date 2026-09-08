@@ -25,7 +25,7 @@ PIPELINES = {
         "patch-v044-image-provenance.py",
         "patch-v045-screenshot-adjacent-dedupe.py",
         "patch-v047-file-transfer-progress.py",
-        "patch-v049-event-driven-performance.py",
+        "patch-v050-event-driven-mobile-macos.py",
     ],
     "Linux": [
         "patch-features.py", "patch-sync-fixes.py",
@@ -41,7 +41,7 @@ PIPELINES = {
         "patch-v044-image-provenance.py",
         "patch-v045-screenshot-adjacent-dedupe.py",
         "patch-v047-file-transfer-progress.py",
-        "patch-v049-event-driven-performance.py",
+        "patch-v050-event-driven-mobile-macos.py",
     ],
     "Windows": [
         "patch-features.py", "patch-sync-fixes.py", "patch-desktop.py", "patch-windows.py",
