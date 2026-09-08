@@ -187,4 +187,4 @@ elif SYSTEM == "Windows":
 else:
     raise SystemExit(f"unsupported platform: {SYSTEM}")
 
-print(f"Applied ClipMesh v050 ultra-idle/runtime fixes on {SYSTEM})")
+print(f"Applied ClipMesh v050 ultra-idle/runtime fixes on {SYSTEM}")
