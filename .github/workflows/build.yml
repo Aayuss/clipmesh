@@ -33,6 +33,7 @@ jobs:
           python ci/reconstruct.py --platform Darwin
           python ci/v033_ipv4_transfer_selftest.py
           CLIPMESH_PLATFORM=Darwin python ci/v047_file_transfer_progress_selftest.py
+          CLIPMESH_PLATFORM=Darwin python ci/v049_event_driven_performance_selftest.py
           python ci/patch-v036-release.py
           python ci/patch-v046-release.py
           python ci/patch-v048-release.py
@@ -123,6 +124,7 @@ jobs:
           python ci/v033_ipv4_transfer_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $env:CLIPMESH_PLATFORM = 'Windows'
           python ci/v047_file_transfer_progress_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/v049_event_driven_performance_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/patch-v036-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/patch-v046-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/patch-v048-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
@@ -179,6 +181,7 @@ jobs:
           python ci/reconstruct.py --platform Linux
           python ci/v033_ipv4_transfer_selftest.py
           CLIPMESH_PLATFORM=Linux python ci/v047_file_transfer_progress_selftest.py
+          CLIPMESH_PLATFORM=Linux python ci/v049_event_driven_performance_selftest.py
           python ci/v034_shizuku_clipboard_selftest.py
           python ci/patch-v036-release.py
           python ci/patch-v046-release.py
@@ -186,7 +189,7 @@ jobs:
           python ci/v032_release_signing_selftest.py
           J=clipmesh/android/app/src/main/java/dev/clipmesh
           grep -q 'val clearInboundIdentity = methodName == "getPrimaryClip"' "$J/shizuku/ClipboardUserService.kt"
-          grep -q '\.version(11)' "$J/shizuku/ShizukuManager.kt"
+          grep -q '\.version(12)' "$J/shizuku/ShizukuManager.kt"
           grep -q 'versionCode = 26' clipmesh/android/app/build.gradle.kts
           grep -q 'versionName = "0.2.16"' clipmesh/android/app/build.gradle.kts
           grep -q '^version = "0.2.16"$' clipmesh/Cargo.toml
