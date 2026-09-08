@@ -71,10 +71,10 @@ elif system == "Linux":
     settings = (root / "clipmesh/android/settings.gradle.kts").read_text(encoding="utf-8")
     assert 'versionCode = 21' in gradle
     assert 'versionName = "0.2.11"' in gradle
-    assert 'ClipMesh-ClipboardWatch' in runtime
-    assert '650L' in runtime
-    assert 'shizuku.hasPermission()' in runtime
-    assert 'bridge.captureNowForForeground()' in runtime
+    assert 'ClipMesh-ClipboardWatch' not in runtime
+    assert '650L' not in runtime
+    assert 'scheduleWithFixedDelay' not in runtime
+    assert 'sh.setClipboardChangeListener { bridge.captureNowForForeground() }' in runtime
     assert 'fun captureAccessibility' in runtime
     assert 'last_outgoing_at' in runtime
     assert 'private fun stopClipboardRuntime()' in runtime
@@ -98,6 +98,7 @@ elif system == "Linux":
     assert 'serverReady.set(true)' in engine
     assert 'if (!serverReady.get()) return' in engine
     assert '.filter { it.visible || isFavorite(requireContext(), it.fingerprint) }' not in engine
+    assert 'runAnnouncer' not in engine
     assert main.count('override fun onCreate(savedInstanceState: Bundle?) {') == 1
     assert 'clipmesh_ci_favorite' in main
 elif system == "Windows":
@@ -105,6 +106,8 @@ elif system == "Windows":
     transfer = (root / "ci/ClipMeshTransfer.cs").read_text(encoding="utf-8")
     assert 'private const string Version = "0.2.11";' in ui
     assert '/api/clipmesh/v1/register' in transfer
+    assert 'AnnounceLoop' not in transfer
+    assert 'using System.Runtime.InteropServices;' in transfer
 else:
     raise AssertionError(f"unsupported platform {system}")
 
