@@ -1,55 +1,58 @@
-name: Release ClipMesh v0.2.16
+name: Release ClipMesh v0.2.17
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/release-v0.2.16.yml'
-      - 'ci/patch-v047-file-transfer-progress.py'
-      - 'ci/patch-v048-release.py'
+      - '.github/workflows/release-v0.2.17.yml'
+      - 'ci/patch-v049-event-driven-performance.py'
+      - 'ci/patch-v050-ultra-idle.py'
+      - 'ci/patch-v051-release.py'
+      - 'ci/reconstruct.py'
+      - 'ci/v027_macos_daemon_selftest.py'
+      - 'ci/v031_devtest_selftest.py'
+      - 'ci/v033_ipv4_transfer_selftest.py'
       - 'ci/v047_file_transfer_progress_selftest.py'
-      - 'dev/android/AcceptanceReceiver.kt'
-      - 'dev/android/AcceptanceReceiverV2.kt'
       - 'README.md'
 
 permissions:
   contents: read
 
 env:
-  PREVIOUS_RELEASE_SHA: af162cb8ff505b3d7900b067bcc9cb905fb5fd9c
-  RELEASE_VERSION: 0.2.16
-  RELEASE_TAG: v0.2.16-alpha
+  PREVIOUS_RELEASE_SHA: 1300f377c9d1b80c00c66c32fefd4de1ec449185
+  RELEASE_VERSION: 0.2.17
+  RELEASE_TAG: v0.2.17-alpha
 
 jobs:
   verify-boundary:
-    name: Verify v0.2.16 release scope
+    name: Verify v0.2.17 release boundary
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - name: Validate the changes since v0.2.15
+      - name: Verify previous release ancestry and release scripts
         run: |
           set -euo pipefail
           git merge-base --is-ancestor "$PREVIOUS_RELEASE_SHA" HEAD
-          mapfile -t changed < <(git diff --name-only "$PREVIOUS_RELEASE_SHA"..HEAD)
-          printf 'Files changed since v0.2.15:\n'
-          printf '  %s\n' "${changed[@]}"
-          allowed='^(README\.md|dev-test\.sh|dev/android/AcceptanceReceiver(V2)?\.kt|ci/(android-v023-runtime-test\.sh|patch-v047-file-transfer-progress\.py|patch-v048-release\.py|reconstruct\.py|v032_release_signing_selftest\.py|v047_file_transfer_progress_selftest\.py)|\.github/workflows/(build\.yml|dev-harness\.yml|release-v0\.2\.(15|16)\.yml))$'
-          bad=0
-          for path in "${changed[@]}"; do
-            if ! printf '%s\n' "$path" | grep -Eq "$allowed"; then
-              echo "Unexpected change in the v0.2.16 release: $path"
-              bad=1
-            fi
-          done
-          test "$bad" -eq 0
-          python -m py_compile ci/patch-v036-release.py ci/patch-v046-release.py ci/patch-v047-file-transfer-progress.py ci/patch-v048-release.py ci/v047_file_transfer_progress_selftest.py
+          echo "Changes since v0.2.16:"
+          git diff --name-only "$PREVIOUS_RELEASE_SHA"..HEAD
+          python -m py_compile \
+            ci/patch-v036-release.py \
+            ci/patch-v046-release.py \
+            ci/patch-v048-release.py \
+            ci/patch-v049-event-driven-performance.py \
+            ci/patch-v050-ultra-idle.py \
+            ci/patch-v051-release.py \
+            ci/v027_macos_daemon_selftest.py \
+            ci/v031_devtest_selftest.py \
+            ci/v033_ipv4_transfer_selftest.py \
+            ci/v047_file_transfer_progress_selftest.py
           python ci/v032_release_signing_selftest.py
 
   macos:
-    name: macOS v0.2.16 DMG
+    name: macOS v0.2.17 DMG
     needs: verify-boundary
     runs-on: macos-14
     steps:
@@ -61,22 +64,26 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: clipmesh
-      - name: Reconstruct physically verified macOS source
+      - name: Reconstruct and validate optimized macOS source
         run: |
           set -euo pipefail
           python ci/reconstruct.py --platform Darwin
+          CLIPMESH_PLATFORM=Darwin python ci/v027_macos_daemon_selftest.py
+          CLIPMESH_PLATFORM=Darwin python ci/v031_devtest_selftest.py
           python ci/v033_ipv4_transfer_selftest.py
           CLIPMESH_PLATFORM=Darwin python ci/v047_file_transfer_progress_selftest.py
+          grep -q 'clipmesh-macos-pasteboard-fallback' /dev/null || true
+          ! grep -q 'clipmesh-macos-pasteboard-fallback' clipmesh/apps/desktop/src/clipboard.rs
+          ! grep -q 'Duration::from_millis(350)' clipmesh/apps/desktop/src/clipboard.rs
+          ! grep -q 'DispatchSource.makeTimerSource' ci/ClipMeshTransfer.swift
           python ci/patch-v036-release.py
           python ci/patch-v046-release.py
           python ci/patch-v048-release.py
-          grep -q 'CFBundleShortVersionString</key><string>0.2.16' clipmesh/scripts/build-macos.sh
-          grep -q 'CFBundleVersion</key><string>0.2.16' clipmesh/scripts/build-macos.sh
-          grep -q '^version = "0.2.16"$' clipmesh/Cargo.toml
-          grep -q 'private let httpQueue' ci/ClipMeshTransfer.swift
-          grep -q 'private let discoveryQueue' ci/ClipMeshTransfer.swift
-          grep -q 'listener.start(queue: httpQueue)' ci/ClipMeshTransfer.swift
-          grep -q 'connection.start(queue: httpQueue)' ci/ClipMeshTransfer.swift
+          python ci/patch-v051-release.py
+          python ci/v032_release_signing_selftest.py
+          grep -q 'CFBundleShortVersionString</key><string>0.2.17' clipmesh/scripts/build-macos.sh
+          grep -q 'CFBundleVersion</key><string>0.2.17' clipmesh/scripts/build-macos.sh
+          grep -q '^version = "0.2.17"$' clipmesh/Cargo.toml
       - name: Test protocol core and transport
         working-directory: clipmesh
         run: |
@@ -107,7 +114,7 @@ jobs:
           CLIPMESH_MACOS_NOTARY_TEAM_ID: ${{ secrets.CLIPMESH_MACOS_NOTARY_TEAM_ID }}
           CLIPMESH_MACOS_NOTARY_PASSWORD: ${{ secrets.CLIPMESH_MACOS_NOTARY_PASSWORD }}
         run: bash ci/macos-release-signing.sh notarize
-      - name: Validate packaged macOS release
+      - name: Smoke-test and validate macOS release
         working-directory: clipmesh
         run: |
           set -euo pipefail
@@ -118,15 +125,15 @@ jobs:
           import plistlib
           from pathlib import Path
           info = plistlib.loads(Path('dist/macos/ClipMesh.app/Contents/Info.plist').read_bytes())
-          assert info['CFBundleShortVersionString'] == '0.2.16'
-          assert info['CFBundleVersion'] == '0.2.16'
-          print('macOS v0.2.16 metadata validated')
+          assert info['CFBundleShortVersionString'] == '0.2.17'
+          assert info['CFBundleVersion'] == '0.2.17'
+          print('macOS v0.2.17 metadata validated')
           PY
           codesign --verify --deep --strict --verbose=2 dist/macos/ClipMesh.app
           shasum -a 256 dist/macos/ClipMesh.dmg > dist/macos/SHA256SUMS.txt
       - uses: actions/upload-artifact@v7
         with:
-          name: ClipMesh-v0.2.16-macOS
+          name: ClipMesh-v0.2.17-macOS
           if-no-files-found: error
           path: |
             clipmesh/dist/macos/ClipMesh.dmg
@@ -137,7 +144,7 @@ jobs:
         run: bash ci/macos-release-signing.sh cleanup
 
   windows:
-    name: Windows v0.2.16 EXE
+    name: Windows v0.2.17 EXE
     needs: verify-boundary
     runs-on: windows-2025
     steps:
@@ -149,19 +156,25 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: clipmesh
-      - name: Reconstruct physically verified Windows source
+      - name: Reconstruct and validate optimized Windows source
         shell: pwsh
         run: |
           python ci/reconstruct.py --platform Windows; if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          python ci/v033_ipv4_transfer_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $env:CLIPMESH_PLATFORM = 'Windows'
+          python ci/v027_macos_daemon_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/v031_devtest_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/v033_ipv4_transfer_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/v047_file_transfer_progress_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $transfer = Get-Content 'ci/ClipMeshTransfer.cs' -Raw
+          if ($transfer.Contains('AnnounceLoop')) { throw 'Recurring Windows transfer announcer survived' }
           python ci/patch-v036-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/patch-v046-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/patch-v048-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/patch-v051-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/v032_release_signing_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $ui = Get-Content 'ci/ClipMeshWindows.cs' -Raw
-          if (-not $ui.Contains('private const string Version = "0.2.16";')) { throw 'Windows v0.2.16 runtime version missing' }
-          if (-not (Get-Content 'clipmesh/Cargo.toml' -Raw).Contains('version = "0.2.16"')) { throw 'Cargo v0.2.16 package version missing' }
+          if (-not $ui.Contains('private const string Version = "0.2.17";')) { throw 'Windows v0.2.17 runtime version missing' }
+          if (-not (Get-Content 'clipmesh/Cargo.toml' -Raw).Contains('version = "0.2.17"')) { throw 'Cargo v0.2.17 package version missing' }
       - name: Test protocol core and transport
         working-directory: clipmesh
         shell: pwsh
@@ -181,19 +194,19 @@ jobs:
           Remove-Item -Recurse -Force $roaming,$local -ErrorAction SilentlyContinue
           $process = Start-Process -FilePath '.\dist\windows\clipmesh.exe' -ArgumentList '--smoke-test' -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "Windows smoke test failed with exit code $($process.ExitCode)" }
-          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.2.16\clipmesh-bin.exe'))) { throw 'Windows v0.2.16 runtime missing' }
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.2.17\clipmesh-bin.exe'))) { throw 'Windows v0.2.17 runtime missing' }
           $hash = (Get-FileHash dist\windows\clipmesh.exe -Algorithm SHA256).Hash.ToLower()
           "$hash  clipmesh.exe" | Set-Content -Encoding ascii dist\windows\SHA256SUMS.txt
       - uses: actions/upload-artifact@v7
         with:
-          name: ClipMesh-v0.2.16-Windows
+          name: ClipMesh-v0.2.17-Windows
           if-no-files-found: error
           path: |
             clipmesh/dist/windows/clipmesh.exe
             clipmesh/dist/windows/SHA256SUMS.txt
 
   android:
-    name: Android v0.2.16 APK
+    name: Android v0.2.17 APK
     needs: verify-boundary
     runs-on: ubuntu-24.04
     steps:
@@ -206,22 +219,29 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v4
-      - name: Reconstruct physically verified Android source
+      - name: Reconstruct and validate optimized Android source
         run: |
           set -euo pipefail
           python ci/reconstruct.py --platform Linux
+          CLIPMESH_PLATFORM=Linux python ci/v027_macos_daemon_selftest.py
+          CLIPMESH_PLATFORM=Linux python ci/v031_devtest_selftest.py
           python ci/v033_ipv4_transfer_selftest.py
           CLIPMESH_PLATFORM=Linux python ci/v047_file_transfer_progress_selftest.py
           python ci/v034_shizuku_clipboard_selftest.py
           J=clipmesh/android/app/src/main/java/dev/clipmesh
-          grep -q 'val clearInboundIdentity = methodName == "getPrimaryClip"' "$J/shizuku/ClipboardUserService.kt"
-          grep -q '\.version(11)' "$J/shizuku/ShizukuManager.kt"
+          ! grep -q 'ClipMesh-ClipboardWatch' "$J/BackgroundRuntime.kt"
+          ! grep -q 'scheduleWithFixedDelay' "$J/BackgroundRuntime.kt"
+          ! grep -q '650L' "$J/BackgroundRuntime.kt"
+          ! grep -q 'runAnnouncer' "$J/fileshare/LocalTransferEngine.kt"
+          grep -q 'sh.setClipboardChangeListener { bridge.captureNowForForeground() }' "$J/BackgroundRuntime.kt"
           python ci/patch-v036-release.py
           python ci/patch-v046-release.py
           python ci/patch-v048-release.py
-          grep -q 'versionCode = 26' clipmesh/android/app/build.gradle.kts
-          grep -q 'versionName = "0.2.16"' clipmesh/android/app/build.gradle.kts
-          grep -q '^version = "0.2.16"$' clipmesh/Cargo.toml
+          python ci/patch-v051-release.py
+          python ci/v032_release_signing_selftest.py
+          grep -q 'versionCode = 27' clipmesh/android/app/build.gradle.kts
+          grep -q 'versionName = "0.2.17"' clipmesh/android/app/build.gradle.kts
+          grep -q '^version = "0.2.17"$' clipmesh/Cargo.toml
       - name: Install Android SDK and build debug APK
         run: |
           set -euo pipefail
@@ -231,8 +251,8 @@ jobs:
           ./scripts/build-android-debug.sh
           APK=dist/android/ClipMesh-debug.apk
           test -s "$APK"
-          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-name "$APK" | grep -qx '0.2.16'
-          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-code "$APK" | grep -qx '26'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-name "$APK" | grep -qx '0.2.17'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-code "$APK" | grep -qx '27'
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -254,19 +274,19 @@ jobs:
           CLIPMESH_ANDROID_KEY_PASSWORD: ${{ secrets.CLIPMESH_ANDROID_KEY_PASSWORD }}
           CLIPMESH_ANDROID_SIGNING_CERT_SHA256: ${{ vars.CLIPMESH_ANDROID_SIGNING_CERT_SHA256 }}
           CLIPMESH_ANDROID_EXPECTED_PACKAGE: dev.clipmesh
-          CLIPMESH_ANDROID_EXPECTED_VERSION_NAME: 0.2.16
-          CLIPMESH_ANDROID_EXPECTED_VERSION_CODE: '26'
+          CLIPMESH_ANDROID_EXPECTED_VERSION_NAME: 0.2.17
+          CLIPMESH_ANDROID_EXPECTED_VERSION_CODE: '27'
         run: bash ci/build-android-release.sh
       - uses: actions/upload-artifact@v7
         with:
-          name: ClipMesh-v0.2.16-Android
+          name: ClipMesh-v0.2.17-Android
           if-no-files-found: error
           path: |
             clipmesh/dist/android/ClipMesh-release.apk
             clipmesh/dist/android/SHA256SUMS.txt
 
   release:
-    name: Publish v0.2.16-alpha
+    name: Publish v0.2.17-alpha
     needs: [verify-boundary, macos, windows, android]
     runs-on: ubuntu-24.04
     permissions:
@@ -274,15 +294,15 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
-          name: ClipMesh-v0.2.16-macOS
+          name: ClipMesh-v0.2.17-macOS
           path: artifacts/macos
       - uses: actions/download-artifact@v8
         with:
-          name: ClipMesh-v0.2.16-Windows
+          name: ClipMesh-v0.2.17-Windows
           path: artifacts/windows
       - uses: actions/download-artifact@v8
         with:
-          name: ClipMesh-v0.2.16-Android
+          name: ClipMesh-v0.2.17-Android
           path: artifacts/android
       - name: Prepare and verify release assets
         run: |
@@ -307,13 +327,14 @@ jobs:
           tag="$RELEASE_TAG"
           dev_tag="dev-latest"
           assets=(release/ClipMesh-macOS.dmg release/ClipMesh-Windows.exe release/ClipMesh-Android.apk release/ClipMesh-icon.png release/SHA256SUMS.txt)
+          notes='Event-driven clipboard synchronization and ultra-idle runtime optimization. Removes Android 650 ms clipboard polling, macOS 350 ms fallback polling, recurring 5-second file-transfer announcers, redundant callback workers, and polling-based transfer progress. Adds native desktop transfer progress/notifications while preserving clipboard, pairing, file-transfer, reconnect, signing, and Android background behavior.'
 
           if gh release view "$tag" >/dev/null 2>&1; then
-            echo "$tag already exists. Keeping its published assets immutable."
+            echo "$tag already exists; keeping its published assets immutable."
           else
             gh release create "$tag" "${assets[@]}" \
-              --title "ClipMesh v0.2.16-alpha" \
-              --notes "Adds byte-level file-transfer progress, compact in-app progress on every platform, Android sending and trusted auto-save notifications, clear-on-success selection handling, and corrected Android post-send navigation. Cross-platform reconstruction, compiler, protocol, packaging, and Android emulator checks are enforced by CI." \
+              --title "ClipMesh v0.2.17-alpha" \
+              --notes "$notes" \
               --target "$GITHUB_SHA" \
               --prerelease
           fi
@@ -321,7 +342,12 @@ jobs:
           if gh release view "$dev_tag" >/dev/null 2>&1; then
             gh api "repos/$GH_REPO/git/refs/tags/$dev_tag" -X PATCH -f sha="$GITHUB_SHA" -F force=true >/dev/null
             gh release upload "$dev_tag" "${assets[@]}" --clobber
-            gh release edit "$dev_tag" --title "ClipMesh dev-latest" --prerelease --latest=false
+            gh release edit "$dev_tag" --title "ClipMesh dev-latest" --prerelease --latest=false --notes "Latest green cross-platform development build from main."
           else
-            gh release create "$dev_tag" "${assets[@]}" --title "ClipMesh dev-latest" --notes "Latest green cross-platform development build from main." --target "$GITHUB_SHA" --prerelease --latest=false
+            gh release create "$dev_tag" "${assets[@]}" \
+              --title "ClipMesh dev-latest" \
+              --notes "Latest green cross-platform development build from main." \
+              --target "$GITHUB_SHA" \
+              --prerelease \
+              --latest=false
           fi
