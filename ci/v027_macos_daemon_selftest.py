@@ -30,7 +30,8 @@ if system == "Darwin":
     assert 'return commandMatches && executableMatches' in app
     assert 'ClipMesh left that process untouched' in app
     assert 'try Runtime.reclaimStaleDaemonListener()' in app
-    assert 'guard process.isRunning else' in app
+    # Later resilience patches gate daemon readiness as well as process liveness.
+    assert 'guard ready, process.isRunning else' in app
     assert '--reclaim-stale-daemon-test' in app
     assert '--clipboard-preview-self-test' in app
     assert 'enum CMClipboardSnapshot' in app
