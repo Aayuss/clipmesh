@@ -16,7 +16,7 @@ if system == "Linux":
     assert 'val clearInboundIdentity = methodName == "getPrimaryClip"' in service
     assert "val callingIdentity = if (clearInboundIdentity) Binder.clearCallingIdentity() else 0L" in service
     assert "if (clearInboundIdentity) Binder.restoreCallingIdentity(callingIdentity)" in service
-    assert ".version(11)" in manager
+    assert ".version(12)" in manager
     assert ".version(4)" not in manager
     assert ".version(5)" not in manager
 
@@ -29,5 +29,12 @@ if system == "Linux":
     # The regression guard is the conditional itself: setPrimaryClip must not
     # unconditionally clear the caller identity that worked on the physical S23.
     assert "val callingIdentity = Binder.clearCallingIdentity()" not in service
+
+    # v049 background observation is callback-driven from the shell-identity
+    # UserService. Keep this in the same Binder identity regression test so a
+    # future Shizuku refactor cannot silently reintroduce periodic reads.
+    assert "registerClipboardChangeCallback" in service
+    assert "addPrimaryClipChangedListener" in service
+    assert "RemoteCallbackList<IClipboardChangeCallback>" in service
 
 print(f"ClipMesh Shizuku background-read Binder-identity self-test passed on {system}")
