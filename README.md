@@ -12,7 +12,7 @@ ClipMesh is a private, cross-platform clipboard and file-transfer suite for macO
 | Windows | [Download EXE](https://github.com/Aayuss/clipmesh/releases/download/v0.2.17-alpha/ClipMesh-Windows.exe) |
 | Android | [Download APK](https://github.com/Aayuss/clipmesh/releases/download/v0.2.17-alpha/ClipMesh-Android.apk) |
 
-[Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.17-alpha/SHA256SUMS.txt) to verify the installers.
+[Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.17-alpha/SHA256SUMS.txt) to verify the installers. Release assets are built from the same `main` commit and are published only after the platform build, smoke/runtime, signing, and package-validation jobs pass.
 
 For the newest fully green build from `main`, including changes newer than the current immutable release, use the continuously refreshed [`dev-latest` release](https://github.com/Aayuss/clipmesh/releases/tag/dev-latest): [macOS DMG](https://github.com/Aayuss/clipmesh/releases/download/dev-latest/ClipMesh-macOS.dmg) · [Windows EXE](https://github.com/Aayuss/clipmesh/releases/download/dev-latest/ClipMesh-Windows.exe) · [Android APK](https://github.com/Aayuss/clipmesh/releases/download/dev-latest/ClipMesh-Android.apk).
 
