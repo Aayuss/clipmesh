@@ -8,12 +8,19 @@ on:
       - '.github/workflows/release-v0.2.17.yml'
       - 'ci/patch-v049-event-driven-performance.py'
       - 'ci/patch-v050-ultra-idle.py'
+      - 'ci/patch-v052-android-clipboard-runtime.py'
+      - 'ci/patch-v053-second-pass-runtime.py'
+      - 'ci/patch-v054-resource-finalization.py'
+      - 'ci/V054_RESOURCE_AUDIT.md'
       - 'ci/patch-v051-release.py'
       - 'ci/reconstruct.py'
       - 'ci/v027_macos_daemon_selftest.py'
       - 'ci/v031_devtest_selftest.py'
       - 'ci/v033_ipv4_transfer_selftest.py'
       - 'ci/v047_file_transfer_progress_selftest.py'
+      - 'ci/v052_android_clipboard_runtime_selftest.py'
+      - 'ci/v053_second_pass_selftest.py'
+      - 'ci/v054_resource_finalization_selftest.py'
       - 'README.md'
 
 permissions:
@@ -46,13 +53,15 @@ jobs:
             ci/patch-v050-ultra-idle.py \
             ci/patch-v052-android-clipboard-runtime.py \
             ci/patch-v053-second-pass-runtime.py \
+            ci/patch-v054-resource-finalization.py \
             ci/patch-v051-release.py \
             ci/v027_macos_daemon_selftest.py \
             ci/v031_devtest_selftest.py \
             ci/v033_ipv4_transfer_selftest.py \
             ci/v047_file_transfer_progress_selftest.py \
             ci/v052_android_clipboard_runtime_selftest.py \
-            ci/v053_second_pass_selftest.py
+            ci/v053_second_pass_selftest.py \
+            ci/v054_resource_finalization_selftest.py
           python ci/v032_release_signing_selftest.py
 
   macos:
@@ -77,6 +86,7 @@ jobs:
           python ci/v033_ipv4_transfer_selftest.py
           CLIPMESH_PLATFORM=Darwin python ci/v047_file_transfer_progress_selftest.py
           CLIPMESH_PLATFORM=Darwin python ci/v053_second_pass_selftest.py
+          CLIPMESH_PLATFORM=Darwin python ci/v054_resource_finalization_selftest.py
           grep -q 'clipmesh-macos-pasteboard-fallback' /dev/null || true
           ! grep -q 'clipmesh-macos-pasteboard-fallback' clipmesh/apps/desktop/src/clipboard.rs
           ! grep -q 'Duration::from_millis(350)' clipmesh/apps/desktop/src/clipboard.rs
@@ -171,6 +181,7 @@ jobs:
           python ci/v033_ipv4_transfer_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/v047_file_transfer_progress_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/v053_second_pass_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/v054_resource_finalization_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $transfer = Get-Content 'ci/ClipMeshTransfer.cs' -Raw
           if ($transfer.Contains('AnnounceLoop')) { throw 'Recurring Windows transfer announcer survived' }
           python ci/patch-v036-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
@@ -236,6 +247,7 @@ jobs:
           python ci/v034_shizuku_clipboard_selftest.py
           python ci/v052_android_clipboard_runtime_selftest.py
           python ci/v053_second_pass_selftest.py
+          python ci/v054_resource_finalization_selftest.py
           J=clipmesh/android/app/src/main/java/dev/clipmesh
           ! grep -q 'ClipMesh-ClipboardWatch' "$J/BackgroundRuntime.kt"
           ! grep -q 'scheduleWithFixedDelay' "$J/BackgroundRuntime.kt"

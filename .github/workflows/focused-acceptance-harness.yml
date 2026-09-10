@@ -14,8 +14,11 @@ on:
       - 'ci/patch-v045-screenshot-adjacent-dedupe.py'
       - 'ci/patch-v052-android-clipboard-runtime.py'
       - 'ci/patch-v053-second-pass-runtime.py'
+      - 'ci/patch-v054-resource-finalization.py'
+      - 'ci/V054_RESOURCE_AUDIT.md'
       - 'ci/v052_android_clipboard_runtime_selftest.py'
       - 'ci/v053_second_pass_selftest.py'
+      - 'ci/v054_resource_finalization_selftest.py'
       - 'ci/patch-acceptance-v5.py'
       - 'ci/focus-physical-failures.py'
       - 'ci/finalize-comprehensive-runner.py'
@@ -35,8 +38,11 @@ on:
       - 'ci/patch-v045-screenshot-adjacent-dedupe.py'
       - 'ci/patch-v052-android-clipboard-runtime.py'
       - 'ci/patch-v053-second-pass-runtime.py'
+      - 'ci/patch-v054-resource-finalization.py'
+      - 'ci/V054_RESOURCE_AUDIT.md'
       - 'ci/v052_android_clipboard_runtime_selftest.py'
       - 'ci/v053_second_pass_selftest.py'
+      - 'ci/v054_resource_finalization_selftest.py'
       - 'ci/patch-acceptance-v5.py'
       - 'ci/focus-physical-failures.py'
       - 'ci/finalize-comprehensive-runner.py'
@@ -65,6 +71,7 @@ jobs:
             ci/patch-v045-screenshot-adjacent-dedupe.py \
             ci/patch-v052-android-clipboard-runtime.py \
             ci/patch-v053-second-pass-runtime.py \
+            ci/patch-v054-resource-finalization.py \
             ci/patch-acceptance-v5.py \
             ci/finalize-comprehensive-runner.py \
             ci/finalize-physical-v2.py \
@@ -72,7 +79,8 @@ jobs:
             ci/finalize-physical-v4.py \
             ci/focus-physical-failures.py \
             ci/v052_android_clipboard_runtime_selftest.py \
-            ci/v053_second_pass_selftest.py
+            ci/v053_second_pass_selftest.py \
+            ci/v054_resource_finalization_selftest.py
           bash -n dev-test-comprehensive.sh
           bash -n dev-test-final.sh
           bash -n dev-test-retry-failures.sh
@@ -93,7 +101,7 @@ jobs:
           git archive HEAD | tar -x -C /tmp/clipmesh-v044-linux
           python /tmp/clipmesh-v044-linux/ci/reconstruct.py --platform Linux
           AJ=/tmp/clipmesh-v044-linux/clipmesh/android/app/src/main/java/dev/clipmesh
-          grep -Fq 'if (clip.itemCount == 0 || isRemoteClip(clip)) return null' "$AJ/clipboard/ClipboardBridge.kt"
+          grep -Fq 'if (isRemoteClip(clip)) {' "$AJ/clipboard/ClipboardBridge.kt"
           grep -Fq 'val remoteFingerprint = echoFingerprint(payload)' "$AJ/clipboard/ClipboardBridge.kt"
           grep -Fq 'ExifInterface.TAG_ORIENTATION' "$AJ/clipboard/ClipboardBridge.kt"
           grep -Fq 'incrementDebugCounter("outgoing_clip_count")' "$AJ/clipboard/ClipboardBridge.kt"
@@ -105,6 +113,7 @@ jobs:
           grep -Fq '.version(12)' "$AJ/shizuku/ShizukuManager.kt"
           python /tmp/clipmesh-v044-linux/ci/v052_android_clipboard_runtime_selftest.py
           python /tmp/clipmesh-v044-linux/ci/v053_second_pass_selftest.py
+          python /tmp/clipmesh-v044-linux/ci/v054_resource_finalization_selftest.py
 
           python ci/finalize-comprehensive-runner.py dev-test-comprehensive.sh /tmp/clipmesh-v1.sh
           python ci/finalize-physical-v2.py /tmp/clipmesh-v1.sh /tmp/clipmesh-v2.sh
