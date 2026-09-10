@@ -1,0 +1,257 @@
+package dev.clipmesh
+
+import android.content.Context
+import android.os.Build
+import org.json.JSONArray
+import org.json.JSONObject
+import java.util.UUID
+
+data class KnownPeer(
+    val deviceId: UUID,
+    val name: String,
+    val address: String,
+    val port: Int,
+    val lastSeenMs: Long
+)
+
+class SettingsStore(context: Context) {
+    private val prefs = context.getSharedPreferences("clipmesh_settings", Context.MODE_PRIVATE)
+
+    var deviceId: UUID
+        get() = UUID.fromString(prefs.getString("device_id", null) ?: UUID.randomUUID().also {
+            prefs.edit().putString("device_id", it.toString()).apply()
+        }.toString())
+        set(value) = prefs.edit().putString("device_id", value.toString()).apply()
+
+    var deviceName: String
+        get() = sanitizeDeviceName(prefs.getString("device_name", null) ?: (Build.MANUFACTURER + " " + Build.MODEL).trim())
+        set(value) = prefs.edit().putString("device_name", sanitizeDeviceName(value)).apply()
+
+    var spaceId: UUID?
+        get() = prefs.getString("space_id", null)?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+        set(value) {
+            val editor = prefs.edit()
+            if (value == null) editor.remove("space_id") else editor.putString("space_id", value.toString())
+            editor.apply()
+        }
+
+    var backgroundSync: Boolean
+        get() = prefs.getBoolean("background_sync", true)
+        set(value) = prefs.edit().putBoolean("background_sync", value).apply()
+
+    var sendEnabled: Boolean
+        get() = prefs.getBoolean("send_enabled", true)
+        set(value) = prefs.edit().putBoolean("send_enabled", value).apply()
+
+    var receiveEnabled: Boolean
+        get() = prefs.getBoolean("receive_enabled", true)
+        set(value) = prefs.edit().putBoolean("receive_enabled", value).apply()
+
+    var runAtBoot: Boolean
+        get() = prefs.getBoolean("run_at_boot", true)
+        set(value) = prefs.edit().putBoolean("run_at_boot", value).apply()
+
+    var syncText: Boolean
+        get() = prefs.getBoolean("sync_text", true)
+        set(value) = prefs.edit().putBoolean("sync_text", value).apply()
+
+    var syncImages: Boolean
+        get() = prefs.getBoolean("sync_images", true)
+        set(value) = prefs.edit().putBoolean("sync_images", value).apply()
+
+    var syncFiles: Boolean
+        get() = prefs.getBoolean("sync_files", true)
+        set(value) = prefs.edit().putBoolean("sync_files", value).apply()
+
+    var compatibilityWatchdog: Boolean
+        get() = prefs.getBoolean("compat_watchdog", false)
+        set(value) = prefs.edit().putBoolean("compat_watchdog", value).apply()
+
+    var showRemoteCopyOverlay: Boolean
+        get() = prefs.getBoolean("show_remote_copy_overlay", false)
+        set(value) = prefs.edit().putBoolean("show_remote_copy_overlay", value).apply()
+
+    var receiveFilesInBackground: Boolean
+        get() = prefs.getBoolean("receive_files_in_background", true)
+        set(value) = prefs.edit().putBoolean("receive_files_in_background", value).apply()
+
+    var autoAcceptFavoriteFiles: Boolean
+        get() = prefs.getBoolean("auto_accept_favorite_files", true)
+        set(value) = prefs.edit().putBoolean("auto_accept_favorite_files", value).apply()
+
+    var excludedPackages: Set<String>
+        get() = (prefs.getStringSet("excluded_packages", DEFAULT_EXCLUSIONS)?.toSet() ?: DEFAULT_EXCLUSIONS)
+            .filterNot { it.equals("dev.clipmesh", ignoreCase = true) }
+            .toSet()
+        set(value) = prefs.edit().putStringSet(
+            "excluded_packages",
+            value.map { it.trim() }
+                .filter { it.isNotBlank() && !it.equals("dev.clipmesh", ignoreCase = true) }
+                .toSet()
+        ).apply()
+
+    var blockedPeerIds: Set<String>
+        get() = prefs.getStringSet("blocked_peer_ids", emptySet())?.toSet() ?: emptySet()
+        private set(value) = prefs.edit().putStringSet("blocked_peer_ids", value).apply()
+
+    fun isPeerBlocked(deviceId: UUID) = blockedPeerIds.contains(deviceId.toString())
+
+    @Synchronized fun forgetPeer(deviceId: UUID) {
+        saveKnownPeers(parseKnownPeers().filterNot { it.deviceId == deviceId })
+        blockedPeerIds = blockedPeerIds + deviceId.toString()
+    }
+
+    private fun unblockPeer(deviceId: UUID) { blockedPeerIds = blockedPeerIds - deviceId.toString() }
+
+    var staticPeers: Set<String>
+        get() = prefs.getStringSet("static_peers", emptySet())?.toSet() ?: emptySet()
+        set(value) = prefs.edit().putStringSet("static_peers", value.map { it.trim() }.filter { it.isNotBlank() }.toSet()).apply()
+
+    @Synchronized
+    fun knownPeers(): List<KnownPeer> = parseKnownPeers()
+        .sortedWith(compareByDescending<KnownPeer> { it.lastSeenMs }.thenBy { it.name.lowercase() })
+
+    @Synchronized
+    fun clearKnownPeers() {
+        prefs.edit().remove("known_peers_json").apply()
+    }
+
+    @Synchronized
+    fun seedPeer(deviceId: UUID, name: String?) {
+        unblockPeer(deviceId)
+        val peers = parseKnownPeers().toMutableList()
+        val safeName = peerName(name, deviceId)
+        val index = peers.indexOfFirst { it.deviceId == deviceId }
+        if (index >= 0) {
+            val old = peers[index]
+            peers[index] = old.copy(name = safeName)
+        } else {
+            peers += KnownPeer(deviceId, safeName, "", 0, 0L)
+        }
+        saveKnownPeers(peers)
+    }
+
+    @Synchronized
+    fun rememberPeer(deviceId: UUID, name: String?, address: String, port: Int) {
+        if (isPeerBlocked(deviceId)) return
+        val peers = parseKnownPeers().toMutableList()
+        val safeName = peerName(name, deviceId)
+        val safeAddress = address.trim().take(128)
+        val index = peers.indexOfFirst { it.deviceId == deviceId }
+        if (index >= 0) {
+            val old = peers[index]
+            peers[index] = old.copy(
+                name = safeName,
+                address = safeAddress,
+                port = port.coerceIn(0, 65535)
+            )
+        } else {
+            peers += KnownPeer(deviceId, safeName, safeAddress, port.coerceIn(0, 65535), 0L)
+        }
+        saveKnownPeers(peers)
+    }
+
+    @Synchronized
+    fun touchPeer(deviceId: UUID, address: String) {
+        if (isPeerBlocked(deviceId)) return
+        val peers = parseKnownPeers().toMutableList()
+        val safeAddress = address.trim().take(128)
+        val now = System.currentTimeMillis()
+        val index = peers.indexOfFirst { it.deviceId == deviceId }
+        if (index >= 0) {
+            val old = peers[index]
+            peers[index] = old.copy(
+                address = if (safeAddress.isBlank()) old.address else safeAddress,
+                lastSeenMs = now
+            )
+        } else {
+            peers += KnownPeer(deviceId, deviceId.toString(), safeAddress, 0, now)
+        }
+        saveKnownPeers(peers)
+    }
+
+    private fun parseKnownPeers(): List<KnownPeer> {
+        val raw = prefs.getString("known_peers_json", null) ?: return emptyList()
+        return runCatching {
+            val array = JSONArray(raw)
+            buildList {
+                for (i in 0 until array.length()) {
+                    val item = array.optJSONObject(i) ?: continue
+                    val id = runCatching { UUID.fromString(item.optString("deviceId")) }.getOrNull() ?: continue
+                    add(
+                        KnownPeer(
+                            deviceId = id,
+                            name = peerName(item.optString("name"), id),
+                            address = item.optString("address").take(128),
+                            port = item.optInt("port", 0).coerceIn(0, 65535),
+                            lastSeenMs = item.optLong("lastSeenMs", 0L).coerceAtLeast(0L)
+                        )
+                    )
+                }
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    private fun saveKnownPeers(peers: List<KnownPeer>) {
+        val sorted = peers
+            .distinctBy { it.deviceId }
+            .sortedWith(compareByDescending<KnownPeer> { it.lastSeenMs }.thenBy { it.name.lowercase() })
+            .take(128)
+        val array = JSONArray()
+        sorted.forEach { peer ->
+            array.put(JSONObject().apply {
+                put("deviceId", peer.deviceId.toString())
+                put("name", peerName(peer.name, peer.deviceId))
+                put("address", peer.address.take(128))
+                put("port", peer.port.coerceIn(0, 65535))
+                put("lastSeenMs", peer.lastSeenMs.coerceAtLeast(0L))
+            })
+        }
+        prefs.edit().putString("known_peers_json", array.toString()).apply()
+    }
+
+    @Synchronized
+    fun markClipboardMessageDelivered(peerId: UUID, messageId: UUID): Boolean {
+        val key = "${peerId}|${messageId}"
+        val entries = prefs.getString(DELIVERED_CLIPBOARD_MESSAGES_KEY, "")
+            .orEmpty()
+            .lineSequence()
+            .filter { it.isNotBlank() }
+            .toMutableList()
+        if (entries.contains(key)) return false
+
+        entries += key
+        // Keep this bounded so normal clipboard use cannot grow preferences
+        // forever. 4096 IDs spans vastly more deliveries than the sender should
+        // ever retain pending while preserving restart/long-retry protection.
+        val bounded = entries.takeLast(MAX_DELIVERED_CLIPBOARD_MESSAGES)
+        prefs.edit()
+            .putString(DELIVERED_CLIPBOARD_MESSAGES_KEY, bounded.joinToString("\n"))
+            .commit()
+        return true
+    }
+
+    companion object {
+        private const val DELIVERED_CLIPBOARD_MESSAGES_KEY = "delivered_clipboard_messages_v1"
+        private const val MAX_DELIVERED_CLIPBOARD_MESSAGES = 4096
+        fun sanitizeDeviceName(value: String): String {
+            val cleaned = value.filterNot { it.isISOControl() }.trim().take(80)
+            return cleaned.ifBlank { "Android device" }
+        }
+
+        private fun peerName(value: String?, id: UUID): String {
+            val cleaned = value.orEmpty().filterNot { it.isISOControl() }.trim().take(80)
+            return cleaned.ifBlank { id.toString() }
+        }
+
+        val DEFAULT_EXCLUSIONS = setOf(
+            "com.onepassword.android",
+            "com.x8bit.bitwarden",
+            "com.keepass2android.keepass2android",
+            "com.proton.pass",
+            "com.lastpass.lpandroid",
+            "com.dashlane",
+            "com.enpass.mobile"
+        )
+    }
+}

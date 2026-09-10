@@ -1,0 +1,8 @@
+/target
+/dist
+**/.idea
+**/.gradle
+android/local.properties
+android/app/build
+.DS_Store
+*.log

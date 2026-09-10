@@ -1,0 +1,213 @@
+mod autostart;
+mod clipboard;
+mod config;
+mod exclusions;
+mod network;
+mod secrets;
+
+use anyhow::{bail, Result};
+use clap::{Parser, Subcommand};
+use clipmesh_core::MasterKey;
+use qrcode::{render::unicode, QrCode};
+use std::{net::SocketAddr, sync::Arc};
+use tokio::sync::mpsc;
+use tracing::info;
+
+use crate::{clipboard::ClipboardState, config::{sanitize_device_name, Config}};
+
+#[derive(Parser)]
+#[command(name="clipmesh",version,about="Private LAN-only encrypted clipboard mesh")]
+struct Cli { #[command(subcommand)] command: Command }
+
+#[derive(Subcommand)]
+enum Command {
+    Init { #[arg(long)] name: String },
+    Join {
+        uri: String,
+        #[arg(long)] name: String,
+        #[arg(long, default_value_t=false)] replace: bool,
+    },
+    NewSpace { #[arg(long)] name: String },
+    Reset { #[arg(long)] name: String },
+    SetName { #[arg(long)] name: String },
+    ForgetPeer { device_id: uuid::Uuid },
+    SetSync {
+        #[arg(long, action=clap::ArgAction::Set)] send: bool,
+        #[arg(long, action=clap::ArgAction::Set)] receive: bool,
+    },
+    UiState,
+    PairingCode,
+    PairingUri,
+    Run,
+    Status,
+    Exclude { #[command(subcommand)] command: ExcludeCommand },
+    Peer { #[command(subcommand)] command: PeerCommand },
+    Autostart { #[command(subcommand)] command: AutoCommand },
+}
+#[derive(Subcommand)] enum ExcludeCommand { List, Add{pattern:String}, Remove{pattern:String} }
+#[derive(Subcommand)] enum PeerCommand { List, Add{address:SocketAddr}, Remove{address:SocketAddr} }
+#[derive(Subcommand)] enum AutoCommand { Install, Uninstall }
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env().add_directive("clipmesh=info".parse()?)).init();
+    match Cli::parse().command {
+        Command::Init{name} => init(name),
+        Command::Join{uri,name,replace} => join(uri,name,replace),
+        Command::NewSpace{name} => new_space(name),
+        Command::Reset{name} => reset_identity(name),
+        Command::SetName{name} => set_name(name),
+        Command::ForgetPeer{device_id} => forget_peer(device_id),
+        Command::SetSync{send,receive} => set_sync(send,receive),
+        Command::UiState => ui_state(),
+        Command::PairingCode => pairing_code(),
+        Command::PairingUri => pairing_uri(),
+        Command::Run => run().await,
+        Command::Status => status(),
+        Command::Exclude{command} => exclusions_cmd(command),
+        Command::Peer{command} => peers_cmd(command),
+        Command::Autostart{command} => match command { AutoCommand::Install=>autostart::install(), AutoCommand::Uninstall=>autostart::uninstall() },
+    }
+}
+
+fn init(name:String)->Result<()> {
+    if Config::path()?.exists() { bail!("ClipMesh is already initialized; remove config intentionally before reinitializing"); }
+    let cfg=Config::new(name); let key=MasterKey::generate(); secrets::save(cfg.space_id,&key)?; cfg.save()?;
+    Config::clear_known_peers()?;
+    println!("Initialized device {} in space {}",cfg.device_id,cfg.space_id);
+    println!("Run `clipmesh pairing-code` on this machine to add another device."); Ok(())
+}
+
+fn join(uri:String,name:String,replace:bool)->Result<()> {
+    let pairing=Config::parse_pairing_uri(&uri)?;
+    let existing = if Config::path()?.exists() { Some(Config::load()?) } else { None };
+    if existing.is_some() && !replace { bail!("ClipMesh is already initialized on this device"); }
+
+    let old_space=existing.as_ref().map(|cfg|cfg.space_id);
+    let mut cfg=existing.unwrap_or_else(||Config::joined(name.clone(),pairing.space_id));
+    cfg.device_name=sanitize_device_name(&name);
+    cfg.space_id=pairing.space_id;
+    if let Some(source)=pairing.source_device_id { cfg.blocked_devices.retain(|id| *id != source); }
+
+    secrets::save(cfg.space_id,&pairing.key)?;
+    if let Err(error)=cfg.save() {
+        if old_space!=Some(cfg.space_id) { let _=secrets::delete(cfg.space_id); }
+        return Err(error);
+    }
+    Config::clear_known_peers()?;
+    if let Some(source)=pairing.source_device_id.filter(|id|*id!=cfg.device_id) {
+        let source_name=pairing.source_name.as_deref().unwrap_or("Paired device");
+        Config::seed_peer(cfg.space_id,source,source_name)?;
+    }
+    if let Some(old)=old_space.filter(|old|*old!=cfg.space_id) { let _=secrets::delete(old); }
+    println!("Joined private space {} as {}",cfg.space_id,cfg.device_id); Ok(())
+}
+
+fn new_space(name:String)->Result<()> {
+    let existing = if Config::path()?.exists() { Some(Config::load()?) } else { None };
+    let old_space=existing.as_ref().map(|cfg|cfg.space_id);
+    let mut cfg=existing.unwrap_or_else(||Config::new(name.clone()));
+    cfg.device_name=sanitize_device_name(&name);
+    cfg.space_id=uuid::Uuid::new_v4();
+    let key=MasterKey::generate();
+    secrets::save(cfg.space_id,&key)?;
+    if let Err(error)=cfg.save() {
+        let _=secrets::delete(cfg.space_id);
+        return Err(error);
+    }
+    Config::clear_known_peers()?;
+    if let Some(old)=old_space.filter(|old|*old!=cfg.space_id) { let _=secrets::delete(old); }
+    println!("Created new private space {}",cfg.space_id); Ok(())
+}
+
+fn reset_identity(name:String)->Result<()> {
+    let existing = if Config::path()?.exists() { Some(Config::load()?) } else { None };
+    let old_space=existing.as_ref().map(|cfg|cfg.space_id);
+    let cfg=Config::new(sanitize_device_name(&name));
+    let key=MasterKey::generate();
+    secrets::save(cfg.space_id,&key)?;
+    if let Err(error)=cfg.save() {
+        let _=secrets::delete(cfg.space_id);
+        return Err(error);
+    }
+    Config::clear_known_peers()?;
+    if let Some(old)=old_space.filter(|old|*old!=cfg.space_id) { let _=secrets::delete(old); }
+    println!("Reset ClipMesh identity. New device {} in space {}",cfg.device_id,cfg.space_id);
+    Ok(())
+}
+
+fn forget_peer(device_id:uuid::Uuid)->Result<()> {
+    let mut cfg=Config::load()?;
+    if device_id==cfg.device_id { bail!("cannot remove this device"); }
+    if !cfg.blocked_devices.contains(&device_id) { cfg.blocked_devices.push(device_id); }
+    cfg.save()?; Config::forget_peer(cfg.space_id,device_id)?;
+    println!("Removed paired device {device_id}"); Ok(())
+}
+
+fn set_name(name:String)->Result<()> {
+    let mut cfg=Config::load()?;
+    cfg.device_name=sanitize_device_name(&name);
+    cfg.save()?;
+    println!("Device name updated");
+    Ok(())
+}
+
+fn set_sync(send:bool,receive:bool)->Result<()> {
+    let mut cfg=Config::load()?;
+    cfg.send_enabled=send;
+    cfg.receive_enabled=receive;
+    cfg.save()?;
+    println!("Sync settings updated");
+    Ok(())
+}
+
+fn ui_state()->Result<()> {
+    let cfg=Config::load()?;
+    let _=secrets::load(cfg.space_id)?;
+    println!("DEVICE\t{}\t{}",cfg.device_id,sanitize_device_name(&cfg.device_name));
+    println!("SPACE\t{}",cfg.space_id);
+    println!("SYNC\t{}\t{}",cfg.send_enabled,cfg.receive_enabled);
+    for peer in Config::load_known_peers(cfg.space_id)? {
+        println!("PEER\t{}\t{}\t{}",peer.device_id,peer.last_seen_ms,sanitize_device_name(&peer.name));
+    }
+    Ok(())
+}
+
+fn pairing_code()->Result<()> {
+    let cfg=Config::load()?; let key=secrets::load(cfg.space_id)?; let uri=cfg.pairing_uri(&key);
+    println!("WARNING: this provisioning code contains your space secret. Keep it private.\n");
+    if let Ok(code)=QrCode::new(uri.as_bytes()) { let img=code.render::<unicode::Dense1x2>().quiet_zone(true).build(); println!("{img}"); }
+    println!("{uri}"); Ok(())
+}
+fn pairing_uri()->Result<()> {
+    let cfg=Config::load()?; let key=secrets::load(cfg.space_id)?;
+    println!("{}",cfg.pairing_uri(&key)); Ok(())
+}
+fn status()->Result<()> {
+    let cfg=Config::load()?; let _=secrets::load(cfg.space_id)?;
+    println!("device: {} ({})",cfg.device_name,cfg.device_id); println!("space: {}",cfg.space_id); println!("tcp: {}",cfg.tcp_port);
+    println!("send: {} receive: {} max_payload: {} MiB",cfg.send_enabled,cfg.receive_enabled,cfg.max_payload_bytes/1024/1024); Ok(())
+}
+fn exclusions_cmd(cmd:ExcludeCommand)->Result<()> { let mut cfg=Config::load()?; match cmd {
+    ExcludeCommand::List=>for e in &cfg.exclusions{println!("{e}")},
+    ExcludeCommand::Add{pattern}=>{if !cfg.exclusions.iter().any(|x|x.eq_ignore_ascii_case(&pattern)){cfg.exclusions.push(pattern);cfg.save()?;}},
+    ExcludeCommand::Remove{pattern}=>{cfg.exclusions.retain(|x|!x.eq_ignore_ascii_case(&pattern));cfg.save()?;},
+}; Ok(()) }
+fn peers_cmd(cmd:PeerCommand)->Result<()> { let mut cfg=Config::load()?; match cmd {
+    PeerCommand::List=>for p in &cfg.static_peers{println!("{p}")},
+    PeerCommand::Add{address}=>{if !network::is_lan_ip(address.ip()){bail!("refusing non-LAN peer address");} if !cfg.static_peers.contains(&address){cfg.static_peers.push(address);cfg.save()?;}},
+    PeerCommand::Remove{address}=>{cfg.static_peers.retain(|x|x!=&address);cfg.save()?;},
+}; Ok(()) }
+
+async fn run()->Result<()> {
+    let cfg=Config::load()?; let key=secrets::load(cfg.space_id)?;
+    let state=Arc::new(ClipboardState::new());
+    let (local_tx,local_rx)=mpsc::unbounded_channel(); let (remote_tx,mut remote_rx)=mpsc::unbounded_channel();
+    clipboard::spawn_watcher(cfg.clone(),state.clone(),local_tx)?;
+    let network_cfg=cfg.clone(); let network_task=tokio::spawn(async move { network::run(network_cfg,key,local_rx,remote_tx).await });
+    info!(device=%cfg.device_id,"ClipMesh running");
+    while let Some((msg_id,payload))=remote_rx.recv().await {
+        if let Err(e)=clipboard::apply_remote(&payload,&cfg,&state,msg_id){tracing::warn!(error=%e,"failed to apply remote clipboard");}
+    }
+    network_task.await??; Ok(())
+}

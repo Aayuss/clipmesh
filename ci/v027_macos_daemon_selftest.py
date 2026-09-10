@@ -83,11 +83,12 @@ elif system == "Linux":
     assert 'ClipMesh-ClipboardWatch' not in runtime
     assert '650L' not in runtime
     assert 'scheduleWithFixedDelay' not in runtime
-    assert 'sh.setClipboardChangeListener { bridge.captureNowForForeground() }' in runtime
-    assert 'fun captureAccessibility' in runtime
+    assert 'sh.setClipboardChangeListener(' in runtime
+    assert 'listener = { bridge.captureNowForSystemEvent() }' in runtime
+    assert '@Synchronized fun captureAccessibility()' in runtime
     assert 'last_outgoing_at' in runtime
     assert 'private fun stopClipboardRuntime()' in runtime
-    assert 'private object ClipMeshUiVisibility' in runtime
+    assert 'internal object ClipMeshUiVisibility' in runtime
     assert 'Application.ActivityLifecycleCallbacks' in runtime
     assert 'IdentityHashMap<android.app.Activity, Boolean>()' in runtime
     assert 'ClipMeshUiVisibility.install(context)' in runtime
@@ -97,8 +98,8 @@ elif system == "Linux":
     assert 'LocalTransferEngine.setUiVisible(true)' in runtime
     assert 'LocalTransferEngine.setUiVisible(false)' in runtime
     assert '350L' in runtime
-    assert 'BackgroundRuntime.captureAccessibility(clip)' in access
-    assert 'BackgroundRuntime.captureAccessibility' in ci_receiver
+    assert 'BackgroundRuntime.captureAccessibility()' in access
+    assert 'BackgroundRuntime.captureInjectedForTest' in ci_receiver
     assert 'LocalTransferEngine.setUiVisible(' not in incoming
     assert 'val visible: Boolean = true' in engine
     assert 'put("visible", uiVisible)' in engine

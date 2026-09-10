@@ -1,0 +1,4 @@
+-keep class rikka.shizuku.** { *; }
+-keep class dev.clipmesh.shizuku.** { *; }
+-keep interface dev.clipmesh.shizuku.** { *; }
+-dontwarn rikka.shizuku.**

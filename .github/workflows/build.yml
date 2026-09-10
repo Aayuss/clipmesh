@@ -182,6 +182,7 @@ jobs:
           python ci/v033_ipv4_transfer_selftest.py
           CLIPMESH_PLATFORM=Linux python ci/v047_file_transfer_progress_selftest.py
           python ci/v034_shizuku_clipboard_selftest.py
+          python ci/v052_android_clipboard_runtime_selftest.py
           python ci/patch-v036-release.py
           python ci/patch-v046-release.py
           python ci/patch-v048-release.py
@@ -189,7 +190,7 @@ jobs:
           python ci/v032_release_signing_selftest.py
           J=clipmesh/android/app/src/main/java/dev/clipmesh
           grep -q 'val clearInboundIdentity = methodName == "getPrimaryClip"' "$J/shizuku/ClipboardUserService.kt"
-          grep -q '\.version(11)' "$J/shizuku/ShizukuManager.kt"
+          grep -q '\.version(12)' "$J/shizuku/ShizukuManager.kt"
           grep -q 'versionCode = 27' clipmesh/android/app/build.gradle.kts
           grep -q 'versionName = "0.2.17"' clipmesh/android/app/build.gradle.kts
           grep -q '^version = "0.2.17"$' clipmesh/Cargo.toml

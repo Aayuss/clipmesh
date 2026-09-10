@@ -74,20 +74,22 @@ elif system == "Linux":
     assert 'ClipMesh-ClipboardWatch' not in runtime
     assert '650L' not in runtime
     assert 'scheduleWithFixedDelay' not in runtime
-    assert 'sh.setClipboardChangeListener { bridge.captureNowForForeground() }' in runtime
-    assert 'fun captureAccessibility' in runtime
+    assert 'sh.setClipboardChangeListener(' in runtime
+    assert 'listener = { bridge.captureNowForSystemEvent() }' in runtime
+    assert '@Synchronized fun captureAccessibility()' in runtime
     assert 'last_outgoing_at' in runtime
     assert 'private fun stopClipboardRuntime()' in runtime
-    assert 'private object ClipMeshUiVisibility' in runtime
+    assert 'internal object ClipMeshUiVisibility' in runtime
     assert 'Application.ActivityLifecycleCallbacks' in runtime
-    assert 'BackgroundRuntime.captureAccessibility(clip)' in access
-    assert 'BackgroundRuntime.captureAccessibility' in ci_receiver
+    assert 'BackgroundRuntime.captureAccessibility()' in access
+    assert 'BackgroundRuntime.captureInjectedForTest' in ci_receiver
     assert not main_ci_path.exists()
     assert '.CiBackgroundCaptureReceiver' in debug_manifest
     assert '.DevTestReceiver' in debug_manifest
     assert 'android.permission.DUMP' in debug_manifest
     assert 'ACTION_SEND_FILE' in dev_receiver
-    assert 'ShizukuManager(app)' in dev_receiver
+    assert 'ShizukuManager.forTest(app)' in dev_receiver
+    assert 'awaitConnectedForTest()' in dev_receiver
     assert 'include(":devdriver")' in settings
     assert 'dev.clipmesh.testdriver' in driver
     assert 'wait_image' in driver and 'wait_text' in driver

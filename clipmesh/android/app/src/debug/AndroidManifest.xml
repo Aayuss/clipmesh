@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <receiver android:name=".CiBackgroundCaptureReceiver" android:enabled="true" android:exported="true" android:permission="android.permission.DUMP">
+            <intent-filter><action android:name="dev.clipmesh.action.CI_BACKGROUND_CAPTURE" /></intent-filter>
+        </receiver>
+        <receiver android:name=".DevTestReceiver" android:enabled="true" android:exported="true" android:permission="android.permission.DUMP">
+            <intent-filter>
+                <action android:name="dev.clipmesh.devtest.CONFIGURE" />
+                <action android:name="dev.clipmesh.devtest.INFO" />
+                <action android:name="dev.clipmesh.devtest.FAVORITE" />
+                <action android:name="dev.clipmesh.devtest.REQUEST_SHIZUKU" />
+                <action android:name="dev.clipmesh.devtest.SEND_FILE" />
+            </intent-filter>
+        </receiver>
+        <provider android:name=".DevTestFileProvider" android:authorities="${applicationId}.devtest" android:enabled="true" android:exported="false" android:grantUriPermissions="true" />
+    </application>
+</manifest>
