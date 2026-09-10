@@ -31,6 +31,7 @@ jobs:
         run: |
           set -euo pipefail
           python ci/reconstruct.py --platform Darwin
+          CLIPMESH_PLATFORM=Darwin python ci/v053_second_pass_selftest.py
           python ci/v033_ipv4_transfer_selftest.py
           CLIPMESH_PLATFORM=Darwin python ci/v047_file_transfer_progress_selftest.py
           python ci/patch-v036-release.py
@@ -121,6 +122,7 @@ jobs:
         shell: pwsh
         run: |
           python ci/reconstruct.py --platform Windows; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $env:CLIPMESH_PLATFORM='Windows'; python ci/v053_second_pass_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/v033_ipv4_transfer_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $env:CLIPMESH_PLATFORM = 'Windows'
           python ci/v047_file_transfer_progress_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
@@ -183,6 +185,7 @@ jobs:
           CLIPMESH_PLATFORM=Linux python ci/v047_file_transfer_progress_selftest.py
           python ci/v034_shizuku_clipboard_selftest.py
           python ci/v052_android_clipboard_runtime_selftest.py
+          python ci/v053_second_pass_selftest.py
           python ci/patch-v036-release.py
           python ci/patch-v046-release.py
           python ci/patch-v048-release.py
@@ -200,6 +203,7 @@ jobs:
           sdkmanager "platforms;android-36" "build-tools;35.0.0" "platform-tools"
           cd clipmesh
           chmod +x android/gradlew scripts/build-android-debug.sh
+          (cd android && ./gradlew :app:testDebugUnitTest)
           ./scripts/build-android-debug.sh
           APK=dist/android/ClipMesh-debug.apk
           test -s "$APK"

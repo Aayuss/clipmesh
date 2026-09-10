@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">ClipMesh</string>
-    <string name="exclusion_service_description">Tracks only the currently foreground app package so ClipMesh can skip clipboard synchronization for excluded apps. It does not inspect window text or content.</string>
-    <string name="exclusion_service_label">ClipMesh app exclusions</string>
-</resources>

@@ -3,3 +3,5 @@
 *.p12
 *.pfx
 .clipmesh-release-signing/
+/clipmesh/
+/ci/clipmesh-source.tar.xz

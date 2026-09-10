@@ -21,6 +21,7 @@ on:
       - 'ci/patch-v044-image-provenance.py'
       - 'ci/patch-v045-screenshot-adjacent-dedupe.py'
       - 'ci/patch-v052-android-clipboard-runtime.py'
+      - 'ci/patch-v053-second-pass-runtime.py'
       - 'ci/patch-acceptance-v2.py'
       - 'ci/patch-acceptance-v3.py'
       - 'ci/patch-acceptance-v4.py'
@@ -32,6 +33,7 @@ on:
       - 'ci/finalize-physical-v4.py'
       - 'ci/v037_acceptance_selftest.py'
       - 'ci/v052_android_clipboard_runtime_selftest.py'
+      - 'ci/v053_second_pass_selftest.py'
       - 'ci/build-android-release.sh'
       - '.github/workflows/acceptance-harness.yml'
       - '.github/workflows/dev-harness.yml'
@@ -54,6 +56,7 @@ on:
       - 'ci/patch-v044-image-provenance.py'
       - 'ci/patch-v045-screenshot-adjacent-dedupe.py'
       - 'ci/patch-v052-android-clipboard-runtime.py'
+      - 'ci/patch-v053-second-pass-runtime.py'
       - 'ci/patch-acceptance-v2.py'
       - 'ci/patch-acceptance-v3.py'
       - 'ci/patch-acceptance-v4.py'
@@ -65,6 +68,7 @@ on:
       - 'ci/finalize-physical-v4.py'
       - 'ci/v037_acceptance_selftest.py'
       - 'ci/v052_android_clipboard_runtime_selftest.py'
+      - 'ci/v053_second_pass_selftest.py'
       - 'ci/build-android-release.sh'
       - '.github/workflows/acceptance-harness.yml'
       - '.github/workflows/dev-harness.yml'
@@ -85,7 +89,7 @@ jobs:
       - name: Validate acceptance sources and final runner
         run: |
           set -euo pipefail
-          python -m py_compile ci/patch-v033-ipv4-transfer.py ci/patch-v038-file-transfer-visibility.py ci/patch-v039-lan-discovery.py ci/patch-v040-macos-resilience.py ci/patch-v044-image-provenance.py ci/patch-v045-screenshot-adjacent-dedupe.py ci/patch-v052-android-clipboard-runtime.py ci/patch-acceptance-v2.py ci/patch-acceptance-v3.py ci/patch-acceptance-v4.py ci/patch-acceptance-v5.py ci/patch-acceptance-chain.py ci/finalize-comprehensive-runner.py ci/finalize-physical-v2.py ci/finalize-physical-v3.py ci/finalize-physical-v4.py ci/v037_acceptance_selftest.py ci/v052_android_clipboard_runtime_selftest.py
+          python -m py_compile ci/patch-v033-ipv4-transfer.py ci/patch-v038-file-transfer-visibility.py ci/patch-v039-lan-discovery.py ci/patch-v040-macos-resilience.py ci/patch-v044-image-provenance.py ci/patch-v045-screenshot-adjacent-dedupe.py ci/patch-v052-android-clipboard-runtime.py ci/patch-v053-second-pass-runtime.py ci/patch-acceptance-v2.py ci/patch-acceptance-v3.py ci/patch-acceptance-v4.py ci/patch-acceptance-v5.py ci/patch-acceptance-chain.py ci/finalize-comprehensive-runner.py ci/finalize-physical-v2.py ci/finalize-physical-v3.py ci/finalize-physical-v4.py ci/v037_acceptance_selftest.py ci/v052_android_clipboard_runtime_selftest.py ci/v053_second_pass_selftest.py
           bash -n dev-test-comprehensive.sh
           bash -n dev-test-final.sh
           python ci/finalize-comprehensive-runner.py dev-test-comprehensive.sh /tmp/clipmesh-final-v1.sh
@@ -120,6 +124,7 @@ jobs:
         run: |
           set -euo pipefail
           python ci/reconstruct.py --platform Darwin
+          CLIPMESH_PLATFORM=Darwin python ci/v053_second_pass_selftest.py
           grep -q 'SO_BROADCAST' ci/ClipMeshTransfer.swift
           grep -q '255.255.255.255' ci/ClipMeshTransfer.swift
           grep -q 'scheduleDaemonRestart' ci/ClipMeshApp.swift
@@ -188,9 +193,10 @@ jobs:
       - name: Reconstruct and instrument Android
         run: |
           set -euo pipefail
-          python -m py_compile ci/patch-v033-ipv4-transfer.py ci/patch-v038-file-transfer-visibility.py ci/patch-v039-lan-discovery.py ci/patch-v040-macos-resilience.py ci/patch-v044-image-provenance.py ci/patch-v045-screenshot-adjacent-dedupe.py ci/patch-v052-android-clipboard-runtime.py ci/patch-acceptance-v2.py ci/patch-acceptance-v3.py ci/patch-acceptance-v4.py ci/patch-acceptance-v5.py ci/patch-acceptance-chain.py ci/finalize-comprehensive-runner.py ci/finalize-physical-v2.py ci/finalize-physical-v3.py ci/finalize-physical-v4.py ci/v037_acceptance_selftest.py ci/v052_android_clipboard_runtime_selftest.py
+          python -m py_compile ci/patch-v033-ipv4-transfer.py ci/patch-v038-file-transfer-visibility.py ci/patch-v039-lan-discovery.py ci/patch-v040-macos-resilience.py ci/patch-v044-image-provenance.py ci/patch-v045-screenshot-adjacent-dedupe.py ci/patch-v052-android-clipboard-runtime.py ci/patch-v053-second-pass-runtime.py ci/patch-acceptance-v2.py ci/patch-acceptance-v3.py ci/patch-acceptance-v4.py ci/patch-acceptance-v5.py ci/patch-acceptance-chain.py ci/finalize-comprehensive-runner.py ci/finalize-physical-v2.py ci/finalize-physical-v3.py ci/finalize-physical-v4.py ci/v037_acceptance_selftest.py ci/v052_android_clipboard_runtime_selftest.py ci/v053_second_pass_selftest.py
           python ci/reconstruct.py --platform Linux
           python ci/v052_android_clipboard_runtime_selftest.py
+          python ci/v053_second_pass_selftest.py
           J=clipmesh/android/app/src/main/java/dev/clipmesh
           grep -q 'val devices = runCatching { LocalTransferEngine.nearbyDevices() }.getOrDefault(emptyList())' "$J/fileshare/FileShareActivity.kt"
           ! grep -q 'nearbyDevices().filterNot' "$J/fileshare/FileShareActivity.kt"
@@ -224,7 +230,7 @@ jobs:
           sdkmanager "platforms;android-36" "build-tools;35.0.0" "platform-tools"
           cd clipmesh/android
           chmod +x gradlew
-          ./gradlew :app:assembleDebug :devdriver:assembleDebug --no-daemon
+          ./gradlew :app:testDebugUnitTest :app:assembleDebug :devdriver:assembleDebug --no-daemon
           test -s app/build/outputs/apk/debug/app-debug.apk
           test -s devdriver/build/outputs/apk/debug/devdriver-debug.apk
           "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest print app/build/outputs/apk/debug/app-debug.apk > /tmp/acceptance-manifest.xml

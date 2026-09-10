@@ -19,7 +19,6 @@ aidl_dir = PROJECT / "android/app/src/main/aidl/dev/clipmesh/shizuku"
 
 paths = {
     "runtime": java / "BackgroundRuntime.kt",
-    "sync": java / "SyncService.kt",
     "bridge": java / "clipboard/ClipboardBridge.kt",
     "manager": java / "shizuku/ShizukuManager.kt",
     "service": java / "shizuku/ClipboardUserService.kt",
@@ -35,7 +34,7 @@ for label, path in paths.items():
 
 text = {label: path.read_text(encoding="utf-8") for label, path in paths.items()}
 
-polling_scope = "\n".join(text[name] for name in ("runtime", "sync", "bridge", "manager"))
+polling_scope = "\n".join(text[name] for name in ("runtime", "bridge", "manager"))
 for forbidden in (
     "scheduleAtFixedRate",
     "scheduleWithFixedDelay",
@@ -67,14 +66,12 @@ required = {
     ),
     "bridge": (
         "private val captureInFlight = AtomicBoolean(false)",
-        "private val capturePending = AtomicBoolean(false)",
         "Thread(r, \"ClipMesh-ClipboardCapture\")",
         "shizuku.readSnapshotJson()",
         "if (!ClipMeshUiVisibility.isForeground()) return null",
         "suppressedFingerprint.compareAndSet(fp, null)",
         "lastObservedClipboardEvent.get() == eventKey",
         "registerContentObserver(",
-        "captureLatestScreenshot(attempt + 1)",
     ),
     "manager": (
         ".daemon(false)",
@@ -111,14 +108,23 @@ for label, needles in required.items():
         if needle not in text[label]:
             raise SystemExit(f"v052 {label} guard missing: {needle}")
 
+if not any(value in text["bridge"] for value in (
+    "private val capturePending = AtomicBoolean(false)",
+    "private val clipboardCapturePending = AtomicBoolean(false)",
+)):
+    raise SystemExit("v052 bridge guard missing a bounded clipboard pending flag")
+
+if not any(value in text["bridge"] for value in (
+    "captureLatestScreenshot(attempt + 1)",
+    "copyScreenshotCandidate(candidate, attempt + 1)",
+)):
+    raise SystemExit("v052 bridge guard missing bounded screenshot retry")
+
 if "primaryClip" in text["accessibility"] or "getPrimaryClip" in text["accessibility"]:
     raise SystemExit("v052 AccessibilityService still reads the normal app clipboard")
 
 if "ShizukuManager(" in text["settings"]:
     raise SystemExit("v052 SettingsActivity still creates a UserService owner")
-
-if "ShizukuManager(" in text["sync"] or "while (isActive)" in text["sync"]:
-    raise SystemExit("v052 legacy SyncService still owns Shizuku or a recurring loop")
 
 if "clipboard.primaryClip" not in text["bridge"]:
     raise SystemExit("v052 foreground-only normal clipboard fallback unexpectedly removed")

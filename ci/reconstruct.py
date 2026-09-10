@@ -27,6 +27,7 @@ PIPELINES = {
         "patch-v047-file-transfer-progress.py",
         "patch-v049-event-driven-performance.py",
         "patch-v050-ultra-idle.py",
+        "patch-v053-second-pass-runtime.py",
     ],
     "Linux": [
         "patch-features.py", "patch-sync-fixes.py",
@@ -45,6 +46,7 @@ PIPELINES = {
         "patch-v049-event-driven-performance.py",
         "patch-v050-ultra-idle.py",
         "patch-v052-android-clipboard-runtime.py",
+        "patch-v053-second-pass-runtime.py",
     ],
     "Windows": [
         "patch-features.py", "patch-sync-fixes.py", "patch-desktop.py", "patch-windows.py",
@@ -61,6 +63,7 @@ PIPELINES = {
         "patch-v047-file-transfer-progress.py",
         "patch-v049-event-driven-performance.py",
         "patch-v050-ultra-idle.py",
+        "patch-v053-second-pass-runtime.py",
     ],
 }
 
