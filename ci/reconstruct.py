@@ -29,6 +29,9 @@ PIPELINES = {
         "patch-v050-ultra-idle.py",
         "patch-v053-second-pass-runtime.py",
         "patch-v054-resource-finalization.py",
+        "patch-v055-pairing-core.py",
+        "patch-v055-macos-pairing.py",
+        "patch-v055-macos-storage.py",
     ],
     "Linux": [
         "patch-features.py", "patch-sync-fixes.py",
@@ -49,6 +52,10 @@ PIPELINES = {
         "patch-v052-android-clipboard-runtime.py",
         "patch-v053-second-pass-runtime.py",
         "patch-v054-resource-finalization.py",
+        "patch-v055-pairing-core.py",
+        "patch-v055-android-pairing.py",
+        "patch-v055-android-storage.py",
+        "patch-v055-android-storage-ui.py",
     ],
     "Windows": [
         "patch-features.py", "patch-sync-fixes.py", "patch-desktop.py", "patch-windows.py",
@@ -67,6 +74,9 @@ PIPELINES = {
         "patch-v050-ultra-idle.py",
         "patch-v053-second-pass-runtime.py",
         "patch-v054-resource-finalization.py",
+        "patch-v055-pairing-core.py",
+        "patch-v055-windows-pairing.py",
+        "patch-v055-windows-storage.py",
     ],
 }
 
