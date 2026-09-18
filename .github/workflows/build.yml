@@ -33,6 +33,7 @@ jobs:
           python ci/reconstruct.py --platform Darwin
           CLIPMESH_PLATFORM=Darwin python ci/v053_second_pass_selftest.py
           CLIPMESH_PLATFORM=Darwin python ci/v054_resource_finalization_selftest.py
+          CLIPMESH_PLATFORM=Darwin python ci/v055_pairing_storage_selftest.py
           python ci/v033_ipv4_transfer_selftest.py
           CLIPMESH_PLATFORM=Darwin python ci/v047_file_transfer_progress_selftest.py
           python ci/patch-v036-release.py
@@ -125,6 +126,7 @@ jobs:
           python ci/reconstruct.py --platform Windows; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $env:CLIPMESH_PLATFORM='Windows'; python ci/v053_second_pass_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $env:CLIPMESH_PLATFORM='Windows'; python ci/v054_resource_finalization_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $env:CLIPMESH_PLATFORM='Windows'; python ci/v055_pairing_storage_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/v033_ipv4_transfer_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $env:CLIPMESH_PLATFORM = 'Windows'
           python ci/v047_file_transfer_progress_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
@@ -189,6 +191,7 @@ jobs:
           python ci/v052_android_clipboard_runtime_selftest.py
           python ci/v053_second_pass_selftest.py
           python ci/v054_resource_finalization_selftest.py
+          CLIPMESH_PLATFORM=Linux python ci/v055_pairing_storage_selftest.py
           python ci/patch-v036-release.py
           python ci/patch-v046-release.py
           python ci/patch-v048-release.py

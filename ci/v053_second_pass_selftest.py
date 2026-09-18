@@ -108,12 +108,14 @@ elif SYSTEM == "Darwin":
         "onProgress: @escaping (Int) -> Void",
         "publishIncomingProgress(session: session",
         "refreshDownloadsFolderRecency()",
-        ".ClipMesh-recency-",
+        "let folder = TransferPrefs.outputFolder",
         ".modificationDate: Date()",
         "publishIncomingFailure(session: session",
         "percent - session.lastNotifiedPercent >= 10",
         "identifier: \"clipmesh-receive-",
     )
+    if ".ClipMesh-recency-" in transfer or "moveItem(at:" in transfer[transfer.index("private func refreshDownloadsFolderRecency"):transfer.index("private func destinationURL")]:
+        raise SystemExit("v053/v055 macOS recency must be metadata-only")
     require(app, "showIncomingTransferProgress", "fraction < 0", "NSStatusItem.variableLength", "Receiving \\(file) from \\(sender)")
 
 elif SYSTEM == "Windows":
