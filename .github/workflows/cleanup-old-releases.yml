@@ -1,0 +1,86 @@
+name: Cleanup old ClipMesh releases
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/cleanup-old-releases.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    name: Keep latest five versioned releases
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Delete versioned releases older than the latest five
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          keep=(
+            v0.2.20-alpha
+            v0.2.17-alpha
+            v0.2.16-alpha
+            v0.2.15-alpha
+            v0.2.12-alpha
+          )
+
+          delete=(
+            v0.2.11-alpha
+            v0.2.10-alpha
+            v0.2.9-alpha
+            v0.2.8-alpha
+            v0.2.5-alpha
+            v0.2.4-alpha
+            v0.2.3-alpha
+            v0.2.2-alpha
+            v0.2.1-alpha
+            v0.2.0-alpha
+            v0.1.9-alpha
+            v0.1.8-alpha
+            v0.1.7-alpha
+            v0.1.6-alpha
+            v0.1.5-alpha
+            v0.1.4-alpha
+            v0.1.3-alpha
+            v0.1.2-alpha
+            v0.1.1-alpha
+            v0.1.0-alpha
+          )
+
+          echo "Keeping dev-latest plus these five versioned releases:"
+          printf '  %s\n' "${keep[@]}"
+
+          for tag in "${delete[@]}"; do
+            if gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
+              echo "Deleting release $tag"
+              gh release delete "$tag" --repo "$GH_REPO" --yes
+            else
+              echo "Release $tag is already absent"
+            fi
+          done
+
+          echo "Verifying remaining versioned releases..."
+          mapfile -t remaining < <(
+            gh api --paginate "repos/$GH_REPO/releases?per_page=100"               --jq '.[] | select(.tag_name | startswith("v")) | .tag_name'
+          )
+
+          if [ "${#remaining[@]}" -ne 5 ]; then
+            printf 'Unexpected remaining versioned releases:\n'
+            printf '  %s\n' "${remaining[@]}"
+            exit 1
+          fi
+
+          for tag in "${keep[@]}"; do
+            printf '%s\n' "${remaining[@]}" | grep -Fxq "$tag" || {
+              echo "Expected release missing after cleanup: $tag"
+              exit 1
+            }
+          done
+
+          gh release view dev-latest --repo "$GH_REPO" >/dev/null
+          echo "Cleanup complete. dev-latest preserved and exactly five versioned releases remain."
