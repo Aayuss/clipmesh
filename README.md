@@ -4,30 +4,29 @@ ClipMesh is a private, cross-platform clipboard and file-transfer suite for macO
 
 ## Download
 
-### Current release - `v0.2.17-alpha`
+### Current release - `v0.2.20-alpha`
 
 | Platform | Installer |
 | --- | --- |
-| macOS | [Download DMG](https://github.com/Aayuss/clipmesh/releases/download/v0.2.17-alpha/ClipMesh-macOS.dmg) |
-| Windows | [Download EXE](https://github.com/Aayuss/clipmesh/releases/download/v0.2.17-alpha/ClipMesh-Windows.exe) |
-| Android | [Download APK](https://github.com/Aayuss/clipmesh/releases/download/v0.2.17-alpha/ClipMesh-Android.apk) |
+| macOS | [Download DMG](https://github.com/Aayuss/clipmesh/releases/download/v0.2.20-alpha/ClipMesh-macOS.dmg) |
+| Windows | [Download EXE](https://github.com/Aayuss/clipmesh/releases/download/v0.2.20-alpha/ClipMesh-Windows.exe) |
+| Android | [Download APK](https://github.com/Aayuss/clipmesh/releases/download/v0.2.20-alpha/ClipMesh-Android.apk) |
 
-[Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.17-alpha/SHA256SUMS.txt) to verify the installers. Release assets are built from the same `main` commit and are published only after the platform build, smoke/runtime, signing, and package-validation jobs pass.
+[Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.20-alpha/SHA256SUMS.txt) to verify the installers. Release assets are built from the same `main` commit and are published only after the platform build, smoke/runtime, signing, and package-validation jobs pass.
 
 For the newest fully green build from `main`, including changes newer than the current immutable release, use the continuously refreshed [`dev-latest` release](https://github.com/Aayuss/clipmesh/releases/tag/dev-latest): [macOS DMG](https://github.com/Aayuss/clipmesh/releases/download/dev-latest/ClipMesh-macOS.dmg) · [Windows EXE](https://github.com/Aayuss/clipmesh/releases/download/dev-latest/ClipMesh-Windows.exe) · [Android APK](https://github.com/Aayuss/clipmesh/releases/download/dev-latest/ClipMesh-Android.apk).
 
-## What's new in v0.2.17-alpha
+## What's new in v0.2.20-alpha
 
-- Replaces Android's recurring 650 ms clipboard watchdog with event-driven Shizuku/Binder clipboard-change callbacks.
-- Removes the macOS 350 ms clipboard fallback polling loop.
-- Removes recurring 5-second file-transfer announcers on Android, macOS, and Windows; discovery/advertising now happens on meaningful runtime events.
-- Removes redundant clipboard callback worker threads while retaining serialized/coalesced clipboard capture.
-- Keeps clipboard echo/duplicate suppression so a remotely received clipboard write is not sent back again.
-- Uses callback-driven transfer byte progress instead of progress polling.
-- Shows transfer progress inside the application on all platforms, with macOS Dock progress, Windows taskbar progress, and native completion/failure notifications where supported.
-- Preserves low-frequency connection health/recovery behavior needed for sleep/wake, network changes, peer restarts, and reconnect reliability.
-
-The optimization target is near-zero unnecessary idle CPU wakeups and minimal background pressure while keeping ClipMesh immediately responsive to real clipboard, network, and transfer events.
+- Fixes asymmetric re-pairing after a device has previously been removed, so both devices persist and unblock each other after six-digit verification.
+- Refreshes paired-device state automatically on both sides when pairing succeeds; manual Refresh/Rescan is no longer required to finish pairing.
+- Makes the six-digit verification code substantially larger and easier to read on macOS, Windows, and Android.
+- Adds a persistent user-selectable receive folder on macOS, Windows, and Android.
+- Stores received images in `images/`, videos in `video/`, and other files directly in the selected main receive folder.
+- Keeps `Downloads/ClipMesh` as the default receive folder when no custom folder is selected.
+- Updates the macOS receive folder's modification timestamp after a successful transfer so Finder's Date Modified sorting brings it forward without renaming, moving, or rewriting contained files.
+- Reduces nearby-pairing status polling while preserving the verification timeout window.
+- Retains the event-driven clipboard, transfer-progress, signing, runtime, and low-idle optimizations from v0.2.17.
 
 ## Capabilities
 
