@@ -37,6 +37,8 @@ on:
       - 'ci/v052_android_clipboard_runtime_selftest.py'
       - 'ci/v053_second_pass_selftest.py'
       - 'ci/v054_resource_finalization_selftest.py'
+      - 'ci/patch-v057-pairing-ux.py'
+      - 'ci/v057_pairing_ux_selftest.py'
       - 'ci/patch-v056-release.py'
       - 'ci/build-android-release.sh'
       - '.github/workflows/acceptance-harness.yml'
@@ -76,6 +78,8 @@ on:
       - 'ci/v052_android_clipboard_runtime_selftest.py'
       - 'ci/v053_second_pass_selftest.py'
       - 'ci/v054_resource_finalization_selftest.py'
+      - 'ci/patch-v057-pairing-ux.py'
+      - 'ci/v057_pairing_ux_selftest.py'
       - 'ci/patch-v056-release.py'
       - 'ci/build-android-release.sh'
       - '.github/workflows/acceptance-harness.yml'
@@ -134,6 +138,7 @@ jobs:
           python ci/reconstruct.py --platform Darwin
           CLIPMESH_PLATFORM=Darwin python ci/v053_second_pass_selftest.py
           CLIPMESH_PLATFORM=Darwin python ci/v054_resource_finalization_selftest.py
+          CLIPMESH_PLATFORM=Darwin python ci/v057_pairing_ux_selftest.py
           grep -q 'SO_BROADCAST' ci/ClipMeshTransfer.swift
           grep -q '255.255.255.255' ci/ClipMeshTransfer.swift
           grep -q 'scheduleDaemonRestart' ci/ClipMeshApp.swift
@@ -207,6 +212,7 @@ jobs:
           python ci/v052_android_clipboard_runtime_selftest.py
           python ci/v053_second_pass_selftest.py
           python ci/v054_resource_finalization_selftest.py
+          CLIPMESH_PLATFORM=Linux python ci/v057_pairing_ux_selftest.py
           J=clipmesh/android/app/src/main/java/dev/clipmesh
           grep -q 'val devices = runCatching { LocalTransferEngine.nearbyDevices() }.getOrDefault(emptyList())' "$J/fileshare/FileShareActivity.kt"
           ! grep -q 'nearbyDevices().filterNot' "$J/fileshare/FileShareActivity.kt"

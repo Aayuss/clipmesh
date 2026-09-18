@@ -32,6 +32,7 @@ PIPELINES = {
         "patch-v055-pairing-core.py",
         "patch-v055-macos-pairing.py",
         "patch-v055-macos-storage.py",
+        "patch-v057-pairing-ux.py",
     ],
     "Linux": [
         "patch-features.py", "patch-sync-fixes.py",
@@ -56,6 +57,7 @@ PIPELINES = {
         "patch-v055-android-pairing.py",
         "patch-v055-android-storage.py",
         "patch-v055-android-storage-ui.py",
+        "patch-v057-pairing-ux.py",
     ],
     "Windows": [
         "patch-features.py", "patch-sync-fixes.py", "patch-desktop.py", "patch-windows.py",
