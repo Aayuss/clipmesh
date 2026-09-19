@@ -39,8 +39,11 @@ on:
       - 'ci/v054_resource_finalization_selftest.py'
       - 'ci/patch-v057-pairing-ux.py'
       - 'ci/v057_pairing_ux_selftest.py'
+      - 'ci/patch-v059-finder-recency.py'
+      - 'ci/v059_finder_recency_selftest.py'
       - 'ci/patch-v056-release.py'
       - 'ci/patch-v058-release.py'
+      - 'ci/patch-v060-release.py'
       - 'ci/build-android-release.sh'
       - '.github/workflows/acceptance-harness.yml'
       - '.github/workflows/dev-harness.yml'
@@ -81,8 +84,11 @@ on:
       - 'ci/v054_resource_finalization_selftest.py'
       - 'ci/patch-v057-pairing-ux.py'
       - 'ci/v057_pairing_ux_selftest.py'
+      - 'ci/patch-v059-finder-recency.py'
+      - 'ci/v059_finder_recency_selftest.py'
       - 'ci/patch-v056-release.py'
       - 'ci/patch-v058-release.py'
+      - 'ci/patch-v060-release.py'
       - 'ci/build-android-release.sh'
       - '.github/workflows/acceptance-harness.yml'
       - '.github/workflows/dev-harness.yml'
@@ -103,7 +109,7 @@ jobs:
       - name: Validate acceptance sources and final runner
         run: |
           set -euo pipefail
-          python -m py_compile ci/patch-v033-ipv4-transfer.py ci/patch-v038-file-transfer-visibility.py ci/patch-v039-lan-discovery.py ci/patch-v040-macos-resilience.py ci/patch-v044-image-provenance.py ci/patch-v045-screenshot-adjacent-dedupe.py ci/patch-v052-android-clipboard-runtime.py ci/patch-v053-second-pass-runtime.py ci/patch-v054-resource-finalization.py ci/patch-acceptance-v2.py ci/patch-acceptance-v3.py ci/patch-acceptance-v4.py ci/patch-acceptance-v5.py ci/patch-acceptance-chain.py ci/finalize-comprehensive-runner.py ci/finalize-physical-v2.py ci/finalize-physical-v3.py ci/finalize-physical-v4.py ci/v037_acceptance_selftest.py ci/v052_android_clipboard_runtime_selftest.py ci/v053_second_pass_selftest.py ci/v054_resource_finalization_selftest.py
+          python -m py_compile ci/patch-v033-ipv4-transfer.py ci/patch-v038-file-transfer-visibility.py ci/patch-v039-lan-discovery.py ci/patch-v040-macos-resilience.py ci/patch-v044-image-provenance.py ci/patch-v045-screenshot-adjacent-dedupe.py ci/patch-v052-android-clipboard-runtime.py ci/patch-v053-second-pass-runtime.py ci/patch-v054-resource-finalization.py ci/patch-acceptance-v2.py ci/patch-acceptance-v3.py ci/patch-acceptance-v4.py ci/patch-acceptance-v5.py ci/patch-acceptance-chain.py ci/finalize-comprehensive-runner.py ci/finalize-physical-v2.py ci/finalize-physical-v3.py ci/finalize-physical-v4.py ci/v037_acceptance_selftest.py ci/v052_android_clipboard_runtime_selftest.py ci/v053_second_pass_selftest.py ci/v054_resource_finalization_selftest.py ci/patch-v059-finder-recency.py ci/v059_finder_recency_selftest.py
           bash -n dev-test-comprehensive.sh
           bash -n dev-test-final.sh
           python ci/finalize-comprehensive-runner.py dev-test-comprehensive.sh /tmp/clipmesh-final-v1.sh
@@ -141,6 +147,7 @@ jobs:
           CLIPMESH_PLATFORM=Darwin python ci/v053_second_pass_selftest.py
           CLIPMESH_PLATFORM=Darwin python ci/v054_resource_finalization_selftest.py
           CLIPMESH_PLATFORM=Darwin python ci/v057_pairing_ux_selftest.py
+          CLIPMESH_PLATFORM=Darwin python ci/v059_finder_recency_selftest.py
           grep -q 'SO_BROADCAST' ci/ClipMeshTransfer.swift
           grep -q '255.255.255.255' ci/ClipMeshTransfer.swift
           grep -q 'scheduleDaemonRestart' ci/ClipMeshApp.swift

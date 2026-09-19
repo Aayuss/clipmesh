@@ -114,8 +114,9 @@ elif SYSTEM == "Darwin":
         "percent - session.lastNotifiedPercent >= 10",
         "identifier: \"clipmesh-receive-",
     )
-    if ".ClipMesh-recency-" in transfer or "moveItem(at:" in transfer[transfer.index("private func refreshDownloadsFolderRecency"):transfer.index("private func destinationURL")]:
-        raise SystemExit("v053/v055 macOS recency must be metadata-only")
+    recency = transfer[transfer.index("private func refreshDownloadsFolderRecency"):transfer.index("private func destinationURL")]
+    if "copyItem(" in recency or "removeItem(" in recency or "contentsOfDirectory" in recency:
+        raise SystemExit("macOS recency refresh must never copy/remove/enumerate files inside the receive folder")
     require(app, "showIncomingTransferProgress", "fraction < 0", "NSStatusItem.variableLength", "Receiving \\(file) from \\(sender)")
 
 elif SYSTEM == "Windows":
