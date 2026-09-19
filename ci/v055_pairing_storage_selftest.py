@@ -53,8 +53,8 @@ if SYSTEM == "Darwin":
         ".modificationDate: Date()",
     )
     recency = transfer[transfer.index("private func refreshDownloadsFolderRecency"):transfer.index("private func destinationURL")]
-    if "moveItem(" in recency or ".ClipMesh-recency-" in recency:
-        raise SystemExit("v055 macOS recency still moves/renames the receive folder")
+    if "copyItem(" in recency or "removeItem(" in recency or "contentsOfDirectory" in recency:
+        raise SystemExit("macOS recency refresh must not copy/remove/enumerate receive-folder contents")
 
 elif SYSTEM == "Linux":
     java = PROJECT / "android/app/src/main/java/dev/clipmesh"
