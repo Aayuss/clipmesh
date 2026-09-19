@@ -81,17 +81,21 @@ private func clipmeshSetDateAddedNow(_ path: UnsafePointer<CChar>) -> Int32
 
     replace(
         build,
-        '''MAIN_SRC="$OUT/main.swift"
-cp "$LAUNCHER_SRC" "$MAIN_SRC"
-swiftc -O "$MAIN_SRC" "$TRANSFER_SRC" -o "$APP/Contents/MacOS/ClipMesh" -framework Cocoa -framework Network -framework UniformTypeIdentifiers
-rm -f "$MAIN_SRC"''',
-        '''MAIN_SRC="$OUT/main.swift"
-DATE_ADDED_OBJ="$OUT/ClipMeshDateAdded.o"
-cp "$LAUNCHER_SRC" "$MAIN_SRC"
-clang -O2 -c "$DATE_ADDED_SRC" -o "$DATE_ADDED_OBJ"
-swiftc -O "$MAIN_SRC" "$TRANSFER_SRC" "$DATE_ADDED_OBJ" -o "$APP/Contents/MacOS/ClipMesh" -framework Cocoa -framework Network -framework UniformTypeIdentifiers
-rm -f "$MAIN_SRC" "$DATE_ADDED_OBJ"''',
-        "macOS Date Added native helper link",
+        'MAIN_SRC="$OUT/main.swift"\ncp "$LAUNCHER_SRC" "$MAIN_SRC"',
+        'MAIN_SRC="$OUT/main.swift"\nDATE_ADDED_OBJ="$OUT/ClipMeshDateAdded.o"\ncp "$LAUNCHER_SRC" "$MAIN_SRC"\nclang -O2 -c "$DATE_ADDED_SRC" -o "$DATE_ADDED_OBJ"',
+        "macOS Date Added helper compile",
+    )
+    replace(
+        build,
+        'swiftc -O "$MAIN_SRC" "$TRANSFER_SRC"',
+        'swiftc -O "$MAIN_SRC" "$TRANSFER_SRC" "$DATE_ADDED_OBJ"',
+        "macOS Date Added helper link",
+    )
+    replace(
+        build,
+        'rm -f "$MAIN_SRC"',
+        'rm -f "$MAIN_SRC" "$DATE_ADDED_OBJ"',
+        "macOS Date Added helper cleanup",
     )
 
 print(f"Applied ClipMesh v061 direct Finder Date Added fix on {SYSTEM}")
