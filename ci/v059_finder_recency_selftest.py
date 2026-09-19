@@ -12,10 +12,6 @@ if SYSTEM == "Darwin":
         "TransferPrefs.outputFolder.standardizedFileURL",
         ".modificationDate: Date()",
         ".downloadsDirectory",
-        "Darwin.rename",
-        ".ClipMesh-recency-",
-        "for _ in 0..<5",
-        "manager.moveItem(at: temporary, to: folder)",
     ):
         assert needle in section, needle
     assert "copyItem(" not in section
@@ -27,4 +23,4 @@ elif SYSTEM in ("Linux","Windows"):
 else:
     raise SystemExit(f"Unsupported platform: {SYSTEM}")
 
-print(f"v059 Finder-recency self-test passed on {SYSTEM}")
+print(f"v059 Finder-recency compatibility self-test passed on {SYSTEM}")

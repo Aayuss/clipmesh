@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 env:
-  CLIPMESH_VERSION: 0.2.22
+  CLIPMESH_VERSION: 0.2.23
 
 jobs:
   macos:
@@ -36,6 +36,7 @@ jobs:
           CLIPMESH_PLATFORM=Darwin python ci/v055_pairing_storage_selftest.py
           CLIPMESH_PLATFORM=Darwin python ci/v057_pairing_ux_selftest.py
           CLIPMESH_PLATFORM=Darwin python ci/v059_finder_recency_selftest.py
+          CLIPMESH_PLATFORM=Darwin python ci/v061_finder_added_time_selftest.py
           python ci/v033_ipv4_transfer_selftest.py
           CLIPMESH_PLATFORM=Darwin python ci/v047_file_transfer_progress_selftest.py
           python ci/patch-v036-release.py
@@ -45,10 +46,11 @@ jobs:
           python ci/patch-v056-release.py
           python ci/patch-v058-release.py
           python ci/patch-v060-release.py
+          python ci/patch-v062-release.py
           python ci/v032_release_signing_selftest.py
-          grep -q 'CFBundleShortVersionString</key><string>0.2.22' clipmesh/scripts/build-macos.sh
-          grep -q 'CFBundleVersion</key><string>0.2.22' clipmesh/scripts/build-macos.sh
-          grep -q '^version = "0.2.22"$' clipmesh/Cargo.toml
+          grep -q 'CFBundleShortVersionString</key><string>0.2.23' clipmesh/scripts/build-macos.sh
+          grep -q 'CFBundleVersion</key><string>0.2.23' clipmesh/scripts/build-macos.sh
+          grep -q '^version = "0.2.23"$' clipmesh/Cargo.toml
           grep -q 'private let httpQueue' ci/ClipMeshTransfer.swift
           grep -q 'private let discoveryQueue' ci/ClipMeshTransfer.swift
           grep -q 'listener.start(queue: httpQueue)' ci/ClipMeshTransfer.swift
@@ -94,9 +96,9 @@ jobs:
           import plistlib
           from pathlib import Path
           info = plistlib.loads(Path('dist/macos/ClipMesh.app/Contents/Info.plist').read_bytes())
-          assert info['CFBundleShortVersionString'] == '0.2.22'
-          assert info['CFBundleVersion'] == '0.2.22'
-          print('macOS v0.2.22 metadata validated')
+          assert info['CFBundleShortVersionString'] == '0.2.23'
+          assert info['CFBundleVersion'] == '0.2.23'
+          print('macOS v0.2.23 metadata validated')
           PY
           codesign --verify --deep --strict --verbose=2 dist/macos/ClipMesh.app
           shasum -a 256 dist/macos/ClipMesh.dmg > dist/macos/SHA256SUMS.txt
@@ -143,10 +145,11 @@ jobs:
           python ci/patch-v056-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/patch-v058-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/patch-v060-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/patch-v062-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/v032_release_signing_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $ui = Get-Content 'ci/ClipMeshWindows.cs' -Raw
-          if (-not $ui.Contains('private const string Version = "0.2.22";')) { throw 'Windows v0.2.22 runtime version missing' }
-          if (-not (Get-Content 'clipmesh/Cargo.toml' -Raw).Contains('version = "0.2.22"')) { throw 'Cargo v0.2.22 package version missing' }
+          if (-not $ui.Contains('private const string Version = "0.2.23";')) { throw 'Windows v0.2.23 runtime version missing' }
+          if (-not (Get-Content 'clipmesh/Cargo.toml' -Raw).Contains('version = "0.2.23"')) { throw 'Cargo v0.2.23 package version missing' }
       - name: Test protocol core and transport
         working-directory: clipmesh
         shell: pwsh
@@ -166,7 +169,7 @@ jobs:
           Remove-Item -Recurse -Force $roaming,$local -ErrorAction SilentlyContinue
           $process = Start-Process -FilePath '.\dist\windows\clipmesh.exe' -ArgumentList '--smoke-test' -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "Windows smoke test failed with exit code $($process.ExitCode)" }
-          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.2.22\clipmesh-bin.exe'))) { throw 'Windows v0.2.22 runtime missing' }
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.2.23\clipmesh-bin.exe'))) { throw 'Windows v0.2.23 runtime missing' }
           $hash = (Get-FileHash dist\windows\clipmesh.exe -Algorithm SHA256).Hash.ToLower()
           "$hash  clipmesh.exe" | Set-Content -Encoding ascii dist\windows\SHA256SUMS.txt
       - uses: actions/upload-artifact@v7
@@ -209,13 +212,14 @@ jobs:
           python ci/patch-v056-release.py
           python ci/patch-v058-release.py
           python ci/patch-v060-release.py
+          python ci/patch-v062-release.py
           python ci/v032_release_signing_selftest.py
           J=clipmesh/android/app/src/main/java/dev/clipmesh
           grep -q 'val clearInboundIdentity = methodName == "getPrimaryClip"' "$J/shizuku/ClipboardUserService.kt"
           grep -q '\.version(12)' "$J/shizuku/ShizukuManager.kt"
-          grep -q 'versionCode = 32' clipmesh/android/app/build.gradle.kts
-          grep -q 'versionName = "0.2.22"' clipmesh/android/app/build.gradle.kts
-          grep -q '^version = "0.2.22"$' clipmesh/Cargo.toml
+          grep -q 'versionCode = 33' clipmesh/android/app/build.gradle.kts
+          grep -q 'versionName = "0.2.23"' clipmesh/android/app/build.gradle.kts
+          grep -q '^version = "0.2.23"$' clipmesh/Cargo.toml
       - name: Install Android SDK and build debug APK
         run: |
           set -euo pipefail
@@ -226,8 +230,8 @@ jobs:
           ./scripts/build-android-debug.sh
           APK=dist/android/ClipMesh-debug.apk
           test -s "$APK"
-          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-name "$APK" | grep -qx '0.2.22'
-          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-code "$APK" | grep -qx '32'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-name "$APK" | grep -qx '0.2.23'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-code "$APK" | grep -qx '33'
           sha256sum "$APK" > dist/android/SHA256SUMS.txt
       - name: Enable KVM
         run: |
@@ -251,8 +255,8 @@ jobs:
           CLIPMESH_ANDROID_KEY_PASSWORD: ${{ secrets.CLIPMESH_ANDROID_KEY_PASSWORD }}
           CLIPMESH_ANDROID_SIGNING_CERT_SHA256: ${{ vars.CLIPMESH_ANDROID_SIGNING_CERT_SHA256 }}
           CLIPMESH_ANDROID_EXPECTED_PACKAGE: dev.clipmesh
-          CLIPMESH_ANDROID_EXPECTED_VERSION_NAME: 0.2.22
-          CLIPMESH_ANDROID_EXPECTED_VERSION_CODE: '32'
+          CLIPMESH_ANDROID_EXPECTED_VERSION_NAME: 0.2.23
+          CLIPMESH_ANDROID_EXPECTED_VERSION_CODE: '33'
         run: bash ci/build-android-release.sh
       - uses: actions/upload-artifact@v7
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'

@@ -57,6 +57,10 @@ on:
       - 'ci/v057_pairing_ux_selftest.py'
       - 'ci/patch-v059-finder-recency.py'
       - 'ci/v059_finder_recency_selftest.py'
+      - 'ci/ClipMeshDateAdded.c'
+      - 'ci/patch-v061-finder-added-time.py'
+      - 'ci/v061_finder_added_time_selftest.py'
+      - 'ci/patch-v062-release.py'
       - 'ci/patch-v056-release.py'
       - 'ci/patch-v058-release.py'
       - 'ci/patch-v060-release.py'
@@ -117,6 +121,10 @@ on:
       - 'ci/v057_pairing_ux_selftest.py'
       - 'ci/patch-v059-finder-recency.py'
       - 'ci/v059_finder_recency_selftest.py'
+      - 'ci/ClipMeshDateAdded.c'
+      - 'ci/patch-v061-finder-added-time.py'
+      - 'ci/v061_finder_added_time_selftest.py'
+      - 'ci/patch-v062-release.py'
       - 'ci/patch-v056-release.py'
       - 'ci/patch-v058-release.py'
       - 'ci/patch-v060-release.py'
@@ -139,7 +147,7 @@ jobs:
       - name: Validate harness scripts
         run: |
           set -euo pipefail
-          python -m py_compile ci/reconstruct.py ci/patch-v031-dev-test.py ci/patch-v032-release.py ci/patch-v033-ipv4-transfer.py ci/patch-v034-shizuku-clipboard.py ci/patch-v035-e2e-observability.py ci/patch-v038-file-transfer-visibility.py ci/patch-v039-lan-discovery.py ci/patch-v040-macos-resilience.py ci/patch-v044-image-provenance.py ci/patch-v045-screenshot-adjacent-dedupe.py ci/patch-v046-release.py ci/patch-v047-file-transfer-progress.py ci/patch-v048-release.py ci/patch-v052-android-clipboard-runtime.py ci/patch-v053-second-pass-runtime.py ci/patch-v054-resource-finalization.py ci/patch-v055-pairing-core.py ci/patch-v055-macos-pairing.py ci/patch-v055-macos-storage.py ci/patch-v055-android-pairing.py ci/patch-v055-android-storage.py ci/patch-v055-android-storage-ui.py ci/patch-v055-windows-pairing.py ci/patch-v055-windows-storage.py ci/v055_pairing_storage_selftest.py ci/patch-v057-pairing-ux.py ci/v057_pairing_ux_selftest.py ci/patch-v059-finder-recency.py ci/v059_finder_recency_selftest.py ci/patch-v056-release.py ci/patch-v058-release.py ci/patch-v060-release.py ci/patch-acceptance-v4.py ci/patch-acceptance-v5.py ci/patch-acceptance-chain.py ci/finalize-comprehensive-runner.py ci/finalize-physical-v2.py ci/finalize-physical-v3.py ci/finalize-physical-v4.py ci/v031_devtest_selftest.py ci/v032_release_signing_selftest.py ci/v033_ipv4_transfer_selftest.py ci/v034_shizuku_clipboard_selftest.py ci/v037_acceptance_selftest.py ci/v047_file_transfer_progress_selftest.py ci/v052_android_clipboard_runtime_selftest.py ci/v053_second_pass_selftest.py ci/v054_resource_finalization_selftest.py dev/uia-find-allow.py
+          python -m py_compile ci/reconstruct.py ci/patch-v031-dev-test.py ci/patch-v032-release.py ci/patch-v033-ipv4-transfer.py ci/patch-v034-shizuku-clipboard.py ci/patch-v035-e2e-observability.py ci/patch-v038-file-transfer-visibility.py ci/patch-v039-lan-discovery.py ci/patch-v040-macos-resilience.py ci/patch-v044-image-provenance.py ci/patch-v045-screenshot-adjacent-dedupe.py ci/patch-v046-release.py ci/patch-v047-file-transfer-progress.py ci/patch-v048-release.py ci/patch-v052-android-clipboard-runtime.py ci/patch-v053-second-pass-runtime.py ci/patch-v054-resource-finalization.py ci/patch-v055-pairing-core.py ci/patch-v055-macos-pairing.py ci/patch-v055-macos-storage.py ci/patch-v055-android-pairing.py ci/patch-v055-android-storage.py ci/patch-v055-android-storage-ui.py ci/patch-v055-windows-pairing.py ci/patch-v055-windows-storage.py ci/v055_pairing_storage_selftest.py ci/patch-v057-pairing-ux.py ci/v057_pairing_ux_selftest.py ci/patch-v059-finder-recency.py ci/v059_finder_recency_selftest.py ci/ClipMeshDateAdded.c ci/patch-v061-finder-added-time.py ci/v061_finder_added_time_selftest.py ci/patch-v056-release.py ci/patch-v058-release.py ci/patch-v060-release.py ci/patch-v062-release.py ci/patch-acceptance-v4.py ci/patch-acceptance-v5.py ci/patch-acceptance-chain.py ci/finalize-comprehensive-runner.py ci/finalize-physical-v2.py ci/finalize-physical-v3.py ci/finalize-physical-v4.py ci/v031_devtest_selftest.py ci/v032_release_signing_selftest.py ci/v033_ipv4_transfer_selftest.py ci/v034_shizuku_clipboard_selftest.py ci/v037_acceptance_selftest.py ci/v047_file_transfer_progress_selftest.py ci/v052_android_clipboard_runtime_selftest.py ci/v053_second_pass_selftest.py ci/v054_resource_finalization_selftest.py dev/uia-find-allow.py
           bash -n dev-test.sh
           bash -n dev-test-all.sh
           bash -n dev-test-final.sh
@@ -165,6 +173,7 @@ jobs:
           CLIPMESH_PLATFORM=Darwin python ci/v055_pairing_storage_selftest.py
           CLIPMESH_PLATFORM=Darwin python ci/v057_pairing_ux_selftest.py
           CLIPMESH_PLATFORM=Darwin python ci/v059_finder_recency_selftest.py
+          CLIPMESH_PLATFORM=Darwin python ci/v061_finder_added_time_selftest.py
           python ci/v031_devtest_selftest.py
           python ci/v032_release_signing_selftest.py
           python ci/v033_ipv4_transfer_selftest.py
