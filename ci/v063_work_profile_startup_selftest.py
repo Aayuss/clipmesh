@@ -16,9 +16,9 @@ if SYSTEM == "Linux":
     service = (java / "BackgroundService.kt").read_text(encoding="utf-8")
 
     for needle in (
-        "fun isManagedProfile(context: Context): Boolean",
+        "private fun isManagedProfile(): Boolean",
         "android.os.UserManager::class.java",
-        'prefs.getBoolean("receive_files_in_background", !isManagedProfile(appContext))',
+        'prefs.getBoolean("receive_files_in_background", !isManagedProfile())',
     ):
         assert needle in store, needle
 
@@ -29,7 +29,8 @@ if SYSTEM == "Linux":
     assert "backgroundSettings.backgroundSync || backgroundSettings.receiveFilesInBackground" in share
 
     for needle in (
-        'runCatching {\n            promoteToForeground()',
+        "val promoted = runCatching",
+        "promoteToForeground()",
         '"Background service unavailable in this profile"',
         "if (!promoted) {",
         "stopSelf()",
@@ -37,11 +38,12 @@ if SYSTEM == "Linux":
     ):
         assert needle in service, needle
 
-    denied = service.split('fun start(context: Context, captureCurrent: Boolean = false)',1)[1]
-    assert "BackgroundRuntime.start(app)" not in denied.split("}",1)[0], "denied FGS path must not fake background runtime"
+    start_section = service.split("fun start(context: Context, captureCurrent: Boolean = false)",1)[1]
+    failure_section = start_section.split(".onFailure",1)[1].split("}",1)[0]
+    assert "BackgroundRuntime.start(app)" not in failure_section
 elif SYSTEM in ("Darwin", "Windows"):
     pass
 else:
-    raise SystemExit(f"Unsupported platform: {SYSTEM}")
+    raise SystemExit(f"Unsupported CLIPMESH_PLATFORM: {SYSTEM}")
 
 print(f"v063 work-profile startup self-test passed on {SYSTEM}")

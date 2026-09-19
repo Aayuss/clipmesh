@@ -25,17 +25,21 @@ if SYSTEM == "Linux":
     share = java / "fileshare/FileShareActivity.kt"
     service = java / "BackgroundService.kt"
 
-    # Work profiles are managed users. Samsung/Shelter may apply policy that
-    # rejects connectedDevice foreground services even though foreground LAN
-    # transfer remains usable. Fresh work-profile installs therefore default
-    # background receive OFF, while personal-profile behavior remains unchanged.
+    # Samsung/Shelter work profiles are managed Android users. Preserve the
+    # personal-profile default, but do not require a connected-device FGS merely
+    # to launch a fresh managed-profile copy of ClipMesh.
     replace(
         store,
         'class SettingsStore(context: Context) {\n    private val prefs = context.getSharedPreferences("clipmesh_settings", Context.MODE_PRIVATE)',
         '''class SettingsStore(context: Context) {
     private val appContext = context.applicationContext
-    private val prefs = appContext.getSharedPreferences("clipmesh_settings", Context.MODE_PRIVATE)''',
-        "Android SettingsStore retains application context",
+    private val prefs = appContext.getSharedPreferences("clipmesh_settings", Context.MODE_PRIVATE)
+
+    private fun isManagedProfile(): Boolean =
+        android.os.Build.VERSION.SDK_INT >= 24 && runCatching {
+            appContext.getSystemService(android.os.UserManager::class.java)?.isManagedProfile == true
+        }.getOrDefault(false)''',
+        "Android SettingsStore managed-profile context",
     )
     replace(
         store,
@@ -43,26 +47,13 @@ if SYSTEM == "Linux":
         get() = prefs.getBoolean("receive_files_in_background", true)
         set(value) = prefs.edit().putBoolean("receive_files_in_background", value).apply()''',
         '''    var receiveFilesInBackground: Boolean
-        get() = prefs.getBoolean("receive_files_in_background", !isManagedProfile(appContext))
+        get() = prefs.getBoolean("receive_files_in_background", !isManagedProfile())
         set(value) = prefs.edit().putBoolean("receive_files_in_background", value).apply()''',
         "managed-profile background receive default",
     )
-    replace(
-        store,
-        '''    companion object {
-        fun sanitizeDeviceName(value: String): String {''',
-        '''    companion object {
-        fun isManagedProfile(context: Context): Boolean =
-            android.os.Build.VERSION.SDK_INT >= 24 && runCatching {
-                context.getSystemService(android.os.UserManager::class.java)?.isManagedProfile == true
-            }.getOrDefault(false)
 
-        fun sanitizeDeviceName(value: String): String {''',
-        "managed-profile detector",
-    )
-
-    # Do not launch the connected-device FGS before settings are known. A fresh
-    # managed profile can use ClipMesh fully while visible without any FGS.
+    # v0.2.3 injected an unconditional persistent service start immediately after
+    # Activity creation. Move that decision until after settings are available.
     replace(
         main,
         '''        super.onCreate(savedInstanceState)
@@ -82,8 +73,9 @@ if SYSTEM == "Linux":
         "conditional MainActivity background startup",
     )
 
-    # File Transfer is foreground-capable through LocalTransferEngine.onResume;
-    # only start the persistent service when the user actually enabled it.
+    # File Transfer remains fully functional while visible through its existing
+    # LocalTransferEngine lifecycle. Start the persistent service only when the
+    # user actually enabled a background feature.
     replace(
         share,
         '''        super.onCreate(savedInstanceState)
@@ -96,10 +88,8 @@ if SYSTEM == "Linux":
         "conditional FileShareActivity background startup",
     )
 
-    # FGS promotion can be rejected by work-profile/Knox policy. Never let that
-    # exception terminate the ClipMesh process. Foreground activity discovery and
-    # transfers continue via LocalTransferEngine even when persistent background
-    # receiving is unavailable to the managed profile.
+    # A device-owner/profile-owner policy may reject connectedDevice foreground
+    # service promotion. That must not terminate ClipMesh.
     replace(
         service,
         '''        createChannel()
@@ -137,9 +127,9 @@ if SYSTEM == "Linux":
                 if (Build.VERSION.SDK_INT >= 26) app.startForegroundService(intent) else app.startService(intent)
             }.onFailure { error ->
                 android.util.Log.w("ClipMesh", "Foreground service start rejected", error)
-                // Do not emulate a persistent background service without an FGS.
-                // If an Activity/AccessibilityService is alive, their lifecycle
-                // already owns the event-driven runtime safely.
+                // Do not pretend to own a persistent background runtime when Android
+                // rejected its foreground-service owner. Foreground Activities and the
+                // AccessibilityService keep their own event-driven lifecycle safely.
                 if (captureCurrent) runCatching { BackgroundRuntime.captureNow() }
             }''',
         "safe denied-FGS fallback",
