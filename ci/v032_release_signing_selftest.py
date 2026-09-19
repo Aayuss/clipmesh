@@ -5,7 +5,7 @@ import platform
 root = Path(__file__).resolve().parents[1]
 system = os.environ.get("CLIPMESH_PLATFORM", platform.system())
 workflow = (root / ".github/workflows/build.yml").read_text(encoding="utf-8")
-release_workflow = (root / ".github/workflows/release-v0.2.23.yml").read_text(encoding="utf-8")
+release_workflow = (root / ".github/workflows/release-v0.2.24.yml").read_text(encoding="utf-8")
 fixed_gradle = (root / "ci/android-app-build.gradle.kts.fixed").read_text(encoding="utf-8")
 android_script = (root / "ci/build-android-release.sh").read_text(encoding="utf-8")
 mac_script = (root / "ci/macos-release-signing.sh").read_text(encoding="utf-8")
@@ -15,12 +15,12 @@ readme = (root / "README.md").read_text(encoding="utf-8")
 setup_script = (root / "scripts/setup-android-release-signing.sh").read_text(encoding="utf-8")
 ignore_rules = (root / ".gitignore").read_text(encoding="utf-8")
 reconstruct = (root / "ci/reconstruct.py").read_text(encoding="utf-8")
-previous_release_patch = (root / "ci/patch-v060-release.py").read_text(encoding="utf-8")
-release_patch = (root / "ci/patch-v062-release.py").read_text(encoding="utf-8")
+previous_release_patch = (root / "ci/patch-v062-release.py").read_text(encoding="utf-8")
+release_patch = (root / "ci/patch-v064-release.py").read_text(encoding="utf-8")
 
-CURRENT_VERSION = "0.2.23"
-CURRENT_CODE = "33"
-CURRENT_TAG = "v0.2.23-alpha"
+CURRENT_VERSION = "0.2.24"
+CURRENT_CODE = "34"
+CURRENT_TAG = "v0.2.24-alpha"
 BASE_VERSION = "0.2.11"
 BASE_CODE = "21"
 VERIFIED_PRODUCT_VERSION = "0.2.12"
@@ -81,6 +81,7 @@ assert workflow.count("python ci/patch-v056-release.py") == 3
 assert workflow.count("python ci/patch-v058-release.py") == 3
 assert workflow.count("python ci/patch-v060-release.py") == 3
 assert workflow.count("python ci/patch-v062-release.py") == 3
+assert workflow.count("python ci/patch-v064-release.py") == 3
 assert f"CLIPMESH_ANDROID_EXPECTED_VERSION_NAME: {CURRENT_VERSION}" in workflow
 assert f"CLIPMESH_ANDROID_EXPECTED_VERSION_CODE: '{CURRENT_CODE}'" in workflow
 assert f"versionCode = {CURRENT_CODE}" in workflow
@@ -97,9 +98,10 @@ assert release_workflow.count("python ci/patch-v056-release.py") == 3
 assert release_workflow.count("python ci/patch-v058-release.py") == 3
 assert release_workflow.count("python ci/patch-v060-release.py") == 3
 assert release_workflow.count("python ci/patch-v062-release.py") == 3
+assert release_workflow.count("python ci/patch-v064-release.py") == 3
 assert f"versionCode = {CURRENT_CODE}" in release_workflow
 assert f'versionName = "{CURRENT_VERSION}"' in release_workflow
-assert "2fd88a820195cfaaa26a16e2965a3db3f54fdbde" in release_workflow
+assert "4c645df7d5a462a2d321f7050bfafebd78a57493" in release_workflow
 
 # README download metadata must point at both the immutable current release and
 # the continuously refreshed green development release.
@@ -116,15 +118,15 @@ assert f"`{CURRENT_TAG}`" in download_section
 assert "releases/tag/dev-latest" in download_section
 assert f"## What's new in {CURRENT_TAG}" in readme
 
-# v0.2.23 advances metadata on top of the v0.2.22 product generation.
+# v0.2.24 advances metadata on top of the v0.2.23 product generation.
 for value in (
-    '0.2.22',
     '0.2.23',
-    'versionCode = 32',
+    '0.2.24',
     'versionCode = 33',
+    'versionCode = 34',
 ):
     assert value in release_patch
-for value in ('0.2.21', '0.2.22', 'versionCode = 31', 'versionCode = 32'):
+for value in ('0.2.22', '0.2.23', 'versionCode = 32', 'versionCode = 33'):
     assert value in previous_release_patch
 
 # macOS signing remains structured for Developer ID/notarization with ad-hoc fallback.
@@ -198,6 +200,7 @@ for patch in (
     "patch-v057-pairing-ux.py",
     "patch-v059-finder-recency.py",
     "patch-v061-direct-finder-date-added.py",
+    "patch-v063-work-profile-startup.py",
 ):
     assert patch in reconstruct
 
@@ -212,7 +215,7 @@ if system == "Linux" and generated_gradle.is_file():
 
     # reconstruct.py intentionally stops at the base product generation. Release
     # patch layers then advance the same verified product metadata through 0.2.12,
-    # 0.2.15, 0.2.16, 0.2.17, 0.2.20, 0.2.21, 0.2.22, and finally 0.2.23. Accept exactly one coherent stage so
+    # 0.2.15, 0.2.16, 0.2.17, 0.2.20, 0.2.21, 0.2.22, 0.2.23, and finally 0.2.24. Accept exactly one coherent stage so
     # development and release workflows can reuse this policy test.
     base_generation = (
         f"versionCode = {BASE_CODE}" in generated
@@ -246,10 +249,14 @@ if system == "Linux" and generated_gradle.is_file():
         "versionCode = 32" in generated
         and 'versionName = "0.2.22"' in generated
     )
+    v023_generation = (
+        "versionCode = 33" in generated
+        and 'versionName = "0.2.23"' in generated
+    )
     current_release_generation = (
         f"versionCode = {CURRENT_CODE}" in generated
         and f'versionName = "{CURRENT_VERSION}"' in generated
     )
-    assert sum((base_generation, verified_product_generation, v015_generation, v016_generation, v017_generation, v020_generation, v021_generation, v022_generation, current_release_generation)) == 1
+    assert sum((base_generation, verified_product_generation, v015_generation, v016_generation, v017_generation, v020_generation, v021_generation, v022_generation, v023_generation, current_release_generation)) == 1
 
 print(f"ClipMesh v{CURRENT_VERSION} release-signing policy self-test passed")

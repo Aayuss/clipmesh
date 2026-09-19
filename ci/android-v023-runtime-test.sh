@@ -202,4 +202,4 @@ curl --fail --silent --max-time 3 http://127.0.0.1:54321/api/clipmesh/v1/info > 
 adb shell dumpsys activity services dev.clipmesh > /tmp/services-after.txt
 grep -q 'BackgroundService' /tmp/services-after.txt
 
-echo "Android $EXPECTED_VERSION emulator runtime smoke test: PASS"
+echo "Android $EXPECTED_VERSION personal-profile runtime smoke test: PASS"\n\nbash ci/android-v064-work-profile-runtime-test.sh
