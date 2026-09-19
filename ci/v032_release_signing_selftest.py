@@ -15,8 +15,8 @@ readme = (root / "README.md").read_text(encoding="utf-8")
 setup_script = (root / "scripts/setup-android-release-signing.sh").read_text(encoding="utf-8")
 ignore_rules = (root / ".gitignore").read_text(encoding="utf-8")
 reconstruct = (root / "ci/reconstruct.py").read_text(encoding="utf-8")
-previous_release_patch = (root / "ci/patch-v060-release.py").read_text(encoding="utf-8")
-release_patch = (root / "ci/patch-v058-release.py").read_text(encoding="utf-8")
+previous_release_patch = (root / "ci/patch-v058-release.py").read_text(encoding="utf-8")
+release_patch = (root / "ci/patch-v060-release.py").read_text(encoding="utf-8")
 
 CURRENT_VERSION = "0.2.22"
 CURRENT_CODE = "32"
