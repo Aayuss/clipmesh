@@ -41,6 +41,10 @@ on:
       - 'ci/v057_pairing_ux_selftest.py'
       - 'ci/patch-v059-finder-recency.py'
       - 'ci/v059_finder_recency_selftest.py'
+      - 'ci/ClipMeshDateAdded.c'
+      - 'ci/patch-v061-finder-added-time.py'
+      - 'ci/v061_finder_added_time_selftest.py'
+      - 'ci/patch-v062-release.py'
       - 'ci/patch-v056-release.py'
       - 'ci/patch-v058-release.py'
       - 'ci/patch-v060-release.py'
@@ -86,6 +90,10 @@ on:
       - 'ci/v057_pairing_ux_selftest.py'
       - 'ci/patch-v059-finder-recency.py'
       - 'ci/v059_finder_recency_selftest.py'
+      - 'ci/ClipMeshDateAdded.c'
+      - 'ci/patch-v061-finder-added-time.py'
+      - 'ci/v061_finder_added_time_selftest.py'
+      - 'ci/patch-v062-release.py'
       - 'ci/patch-v056-release.py'
       - 'ci/patch-v058-release.py'
       - 'ci/patch-v060-release.py'
@@ -148,6 +156,7 @@ jobs:
           CLIPMESH_PLATFORM=Darwin python ci/v054_resource_finalization_selftest.py
           CLIPMESH_PLATFORM=Darwin python ci/v057_pairing_ux_selftest.py
           CLIPMESH_PLATFORM=Darwin python ci/v059_finder_recency_selftest.py
+          CLIPMESH_PLATFORM=Darwin python ci/v061_finder_added_time_selftest.py
           grep -q 'SO_BROADCAST' ci/ClipMeshTransfer.swift
           grep -q '255.255.255.255' ci/ClipMeshTransfer.swift
           grep -q 'scheduleDaemonRestart' ci/ClipMeshApp.swift

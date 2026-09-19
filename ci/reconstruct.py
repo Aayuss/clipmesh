@@ -34,6 +34,7 @@ PIPELINES = {
         "patch-v055-macos-storage.py",
         "patch-v057-pairing-ux.py",
         "patch-v059-finder-recency.py",
+        "patch-v061-finder-added-time.py",
     ],
     "Linux": [
         "patch-features.py", "patch-sync-fixes.py",
