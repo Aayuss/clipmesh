@@ -1,11 +1,11 @@
-name: Release ClipMesh v0.2.20
+name: Release ClipMesh v0.2.21
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/release-v0.2.20.yml'
+      - '.github/workflows/release-v0.2.21.yml'
       - 'ci/patch-v049-event-driven-performance.py'
       - 'ci/patch-v050-ultra-idle.py'
       - 'ci/patch-v052-android-clipboard-runtime.py'
@@ -25,6 +25,7 @@ on:
       - 'ci/patch-v057-pairing-ux.py'
       - 'ci/v057_pairing_ux_selftest.py'
       - 'ci/patch-v056-release.py'
+      - 'ci/patch-v058-release.py'
       - 'ci/reconstruct.py'
       - 'ci/v027_macos_daemon_selftest.py'
       - 'ci/v031_devtest_selftest.py'
@@ -39,13 +40,13 @@ permissions:
   contents: read
 
 env:
-  PREVIOUS_RELEASE_SHA: a373fba1f5a8753123f0fa96a5400f3838ae4eb6
-  RELEASE_VERSION: 0.2.20
-  RELEASE_TAG: v0.2.20-alpha
+  PREVIOUS_RELEASE_SHA: aeca2eb77ccf095c49b87d1ad22fde695d260492
+  RELEASE_VERSION: 0.2.21
+  RELEASE_TAG: v0.2.21-alpha
 
 jobs:
   verify-boundary:
-    name: Verify v0.2.20 release boundary
+    name: Verify v0.2.21 release boundary
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
@@ -55,7 +56,7 @@ jobs:
         run: |
           set -euo pipefail
           git merge-base --is-ancestor "$PREVIOUS_RELEASE_SHA" HEAD
-          echo "Changes since the v0.2.17 pairing/output-folder baseline:"
+          echo "Changes since the v0.2.20 product baseline:"
           git diff --name-only "$PREVIOUS_RELEASE_SHA"..HEAD
           python -m py_compile \
             ci/patch-v036-release.py \
@@ -75,6 +76,7 @@ jobs:
             ci/patch-v055-windows-pairing.py \
             ci/patch-v055-windows-storage.py \
             ci/patch-v056-release.py \
+            ci/patch-v058-release.py \
             ci/patch-v051-release.py \
             ci/v027_macos_daemon_selftest.py \
             ci/v031_devtest_selftest.py \
@@ -89,7 +91,7 @@ jobs:
           python ci/v032_release_signing_selftest.py
 
   macos:
-    name: macOS v0.2.20 DMG
+    name: macOS v0.2.21 DMG
     needs: verify-boundary
     runs-on: macos-14
     steps:
@@ -122,10 +124,11 @@ jobs:
           python ci/patch-v048-release.py
           python ci/patch-v051-release.py
           python ci/patch-v056-release.py
+          python ci/patch-v058-release.py
           python ci/v032_release_signing_selftest.py
-          grep -q 'CFBundleShortVersionString</key><string>0.2.20' clipmesh/scripts/build-macos.sh
-          grep -q 'CFBundleVersion</key><string>0.2.20' clipmesh/scripts/build-macos.sh
-          grep -q '^version = "0.2.20"$' clipmesh/Cargo.toml
+          grep -q 'CFBundleShortVersionString</key><string>0.2.21' clipmesh/scripts/build-macos.sh
+          grep -q 'CFBundleVersion</key><string>0.2.21' clipmesh/scripts/build-macos.sh
+          grep -q '^version = "0.2.21"$' clipmesh/Cargo.toml
       - name: Test protocol core and transport
         working-directory: clipmesh
         run: |
@@ -167,15 +170,15 @@ jobs:
           import plistlib
           from pathlib import Path
           info = plistlib.loads(Path('dist/macos/ClipMesh.app/Contents/Info.plist').read_bytes())
-          assert info['CFBundleShortVersionString'] == '0.2.20'
-          assert info['CFBundleVersion'] == '0.2.20'
-          print('macOS v0.2.20 metadata validated')
+          assert info['CFBundleShortVersionString'] == '0.2.21'
+          assert info['CFBundleVersion'] == '0.2.21'
+          print('macOS v0.2.21 metadata validated')
           PY
           codesign --verify --deep --strict --verbose=2 dist/macos/ClipMesh.app
           shasum -a 256 dist/macos/ClipMesh.dmg > dist/macos/SHA256SUMS.txt
       - uses: actions/upload-artifact@v7
         with:
-          name: ClipMesh-v0.2.20-macOS
+          name: ClipMesh-v0.2.21-macOS
           if-no-files-found: error
           path: |
             clipmesh/dist/macos/ClipMesh.dmg
@@ -186,7 +189,7 @@ jobs:
         run: bash ci/macos-release-signing.sh cleanup
 
   windows:
-    name: Windows v0.2.20 EXE
+    name: Windows v0.2.21 EXE
     needs: verify-boundary
     runs-on: windows-2025
     steps:
@@ -218,10 +221,11 @@ jobs:
           python ci/patch-v048-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/patch-v051-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/patch-v056-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/patch-v058-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/v032_release_signing_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $ui = Get-Content 'ci/ClipMeshWindows.cs' -Raw
-          if (-not $ui.Contains('private const string Version = "0.2.20";')) { throw 'Windows v0.2.20 runtime version missing' }
-          if (-not (Get-Content 'clipmesh/Cargo.toml' -Raw).Contains('version = "0.2.20"')) { throw 'Cargo v0.2.20 package version missing' }
+          if (-not $ui.Contains('private const string Version = "0.2.21";')) { throw 'Windows v0.2.21 runtime version missing' }
+          if (-not (Get-Content 'clipmesh/Cargo.toml' -Raw).Contains('version = "0.2.21"')) { throw 'Cargo v0.2.21 package version missing' }
       - name: Test protocol core and transport
         working-directory: clipmesh
         shell: pwsh
@@ -241,19 +245,19 @@ jobs:
           Remove-Item -Recurse -Force $roaming,$local -ErrorAction SilentlyContinue
           $process = Start-Process -FilePath '.\dist\windows\clipmesh.exe' -ArgumentList '--smoke-test' -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "Windows smoke test failed with exit code $($process.ExitCode)" }
-          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.2.20\clipmesh-bin.exe'))) { throw 'Windows v0.2.20 runtime missing' }
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.2.21\clipmesh-bin.exe'))) { throw 'Windows v0.2.21 runtime missing' }
           $hash = (Get-FileHash dist\windows\clipmesh.exe -Algorithm SHA256).Hash.ToLower()
           "$hash  clipmesh.exe" | Set-Content -Encoding ascii dist\windows\SHA256SUMS.txt
       - uses: actions/upload-artifact@v7
         with:
-          name: ClipMesh-v0.2.20-Windows
+          name: ClipMesh-v0.2.21-Windows
           if-no-files-found: error
           path: |
             clipmesh/dist/windows/clipmesh.exe
             clipmesh/dist/windows/SHA256SUMS.txt
 
   android:
-    name: Android v0.2.20 APK
+    name: Android v0.2.21 APK
     needs: verify-boundary
     runs-on: ubuntu-24.04
     steps:
@@ -292,10 +296,11 @@ jobs:
           python ci/patch-v048-release.py
           python ci/patch-v051-release.py
           python ci/patch-v056-release.py
+          python ci/patch-v058-release.py
           python ci/v032_release_signing_selftest.py
-          grep -q 'versionCode = 30' clipmesh/android/app/build.gradle.kts
-          grep -q 'versionName = "0.2.20"' clipmesh/android/app/build.gradle.kts
-          grep -q '^version = "0.2.20"$' clipmesh/Cargo.toml
+          grep -q 'versionCode = 31' clipmesh/android/app/build.gradle.kts
+          grep -q 'versionName = "0.2.21"' clipmesh/android/app/build.gradle.kts
+          grep -q '^version = "0.2.21"$' clipmesh/Cargo.toml
       - name: Install Android SDK and build debug APK
         run: |
           set -euo pipefail
@@ -306,8 +311,8 @@ jobs:
           ./scripts/build-android-debug.sh
           APK=dist/android/ClipMesh-debug.apk
           test -s "$APK"
-          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-name "$APK" | grep -qx '0.2.20'
-          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-code "$APK" | grep -qx '30'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-name "$APK" | grep -qx '0.2.21'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-code "$APK" | grep -qx '31'
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -329,19 +334,19 @@ jobs:
           CLIPMESH_ANDROID_KEY_PASSWORD: ${{ secrets.CLIPMESH_ANDROID_KEY_PASSWORD }}
           CLIPMESH_ANDROID_SIGNING_CERT_SHA256: ${{ vars.CLIPMESH_ANDROID_SIGNING_CERT_SHA256 }}
           CLIPMESH_ANDROID_EXPECTED_PACKAGE: dev.clipmesh
-          CLIPMESH_ANDROID_EXPECTED_VERSION_NAME: 0.2.20
-          CLIPMESH_ANDROID_EXPECTED_VERSION_CODE: '30'
+          CLIPMESH_ANDROID_EXPECTED_VERSION_NAME: 0.2.21
+          CLIPMESH_ANDROID_EXPECTED_VERSION_CODE: '31'
         run: bash ci/build-android-release.sh
       - uses: actions/upload-artifact@v7
         with:
-          name: ClipMesh-v0.2.20-Android
+          name: ClipMesh-v0.2.21-Android
           if-no-files-found: error
           path: |
             clipmesh/dist/android/ClipMesh-release.apk
             clipmesh/dist/android/SHA256SUMS.txt
 
   release:
-    name: Publish v0.2.20-alpha
+    name: Publish v0.2.21-alpha
     needs: [verify-boundary, macos, windows, android]
     runs-on: ubuntu-24.04
     permissions:
@@ -349,15 +354,15 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
-          name: ClipMesh-v0.2.20-macOS
+          name: ClipMesh-v0.2.21-macOS
           path: artifacts/macos
       - uses: actions/download-artifact@v8
         with:
-          name: ClipMesh-v0.2.20-Windows
+          name: ClipMesh-v0.2.21-Windows
           path: artifacts/windows
       - uses: actions/download-artifact@v8
         with:
-          name: ClipMesh-v0.2.20-Android
+          name: ClipMesh-v0.2.21-Android
           path: artifacts/android
       - name: Prepare and verify release assets
         run: |
@@ -382,13 +387,13 @@ jobs:
           tag="$RELEASE_TAG"
           dev_tag="dev-latest"
           assets=(release/ClipMesh-macOS.dmg release/ClipMesh-Windows.exe release/ClipMesh-Android.apk release/ClipMesh-icon.png release/SHA256SUMS.txt)
-          notes='ClipMesh v0.2.20 adds reliable bidirectional re-pairing after device removal, automatic paired-device refresh, larger six-digit verification UI, persistent custom receive folders on macOS/Windows/Android, images/video subfolders, metadata-only macOS receive-folder recency updates, and reduced pairing polling. It retains the event-driven clipboard and low-idle runtime improvements from v0.2.17.'
+          notes='ClipMesh v0.2.21 fixes the six-digit pairing experience: macOS now shows the complete code in a dedicated centered verification sheet, receiving-side placeholders are visually subdued, and Android automatically initializes its encrypted clipboard space on first use so Pair works immediately without a hidden create/join-space step. It retains the v0.2.20 re-pairing, receive-folder, file-organization, Finder-recency, and low-idle improvements.'
 
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "$tag already exists; keeping its published assets immutable."
           else
             gh release create "$tag" "${assets[@]}" \
-              --title "ClipMesh v0.2.20-alpha" \
+              --title "ClipMesh v0.2.21-alpha" \
               --notes "$notes" \
               --target "$GITHUB_SHA" \
               --prerelease

@@ -4,29 +4,25 @@ ClipMesh is a private, cross-platform clipboard and file-transfer suite for macO
 
 ## Download
 
-### Current release - `v0.2.20-alpha`
+### Current release - `v0.2.21-alpha`
 
 | Platform | Installer |
 | --- | --- |
-| macOS | [Download DMG](https://github.com/Aayuss/clipmesh/releases/download/v0.2.20-alpha/ClipMesh-macOS.dmg) |
-| Windows | [Download EXE](https://github.com/Aayuss/clipmesh/releases/download/v0.2.20-alpha/ClipMesh-Windows.exe) |
-| Android | [Download APK](https://github.com/Aayuss/clipmesh/releases/download/v0.2.20-alpha/ClipMesh-Android.apk) |
+| macOS | [Download DMG](https://github.com/Aayuss/clipmesh/releases/download/v0.2.21-alpha/ClipMesh-macOS.dmg) |
+| Windows | [Download EXE](https://github.com/Aayuss/clipmesh/releases/download/v0.2.21-alpha/ClipMesh-Windows.exe) |
+| Android | [Download APK](https://github.com/Aayuss/clipmesh/releases/download/v0.2.21-alpha/ClipMesh-Android.apk) |
 
-[Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.20-alpha/SHA256SUMS.txt) to verify the installers. Release assets are built from the same `main` commit and are published only after the platform build, smoke/runtime, signing, and package-validation jobs pass.
+[Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.21-alpha/SHA256SUMS.txt) to verify the installers. Release assets are built from the same `main` commit and are published only after the platform build, smoke/runtime, signing, and package-validation jobs pass.
 
 For the newest fully green build from `main`, including changes newer than the current immutable release, use the continuously refreshed [`dev-latest` release](https://github.com/Aayuss/clipmesh/releases/tag/dev-latest): [macOS DMG](https://github.com/Aayuss/clipmesh/releases/download/dev-latest/ClipMesh-macOS.dmg) · [Windows EXE](https://github.com/Aayuss/clipmesh/releases/download/dev-latest/ClipMesh-Windows.exe) · [Android APK](https://github.com/Aayuss/clipmesh/releases/download/dev-latest/ClipMesh-Android.apk).
 
-## What's new in v0.2.20-alpha
+## What's new in v0.2.21-alpha
 
-- Fixes asymmetric re-pairing after a device has previously been removed, so both devices persist and unblock each other after six-digit verification.
-- Refreshes paired-device state automatically on both sides when pairing succeeds; manual Refresh/Rescan is no longer required to finish pairing.
-- Makes the six-digit verification code substantially larger and easier to read on macOS, Windows, and Android.
-- Adds a persistent user-selectable receive folder on macOS, Windows, and Android.
-- Stores received images in `images/`, videos in `video/`, and other files directly in the selected main receive folder.
-- Keeps `Downloads/ClipMesh` as the default receive folder when no custom folder is selected.
-- Updates the macOS receive folder's modification timestamp after a successful transfer so Finder's Date Modified sorting brings it forward without renaming, moving, or rewriting contained files.
-- Reduces nearby-pairing status polling while preserving the verification timeout window.
-- Retains the event-driven clipboard, transfer-progress, signing, runtime, and low-idle optimizations from v0.2.17.
+- Replaces the clipped macOS verification-code alert with a dedicated ClipMesh sheet so the complete six-digit code is centered, fully visible, and visually dominant.
+- Makes receiving-side verification placeholders clearly look like placeholders: Android's `000000` is subdued, while macOS uses a neutral `6-digit code` hint.
+- Removes Android's hidden first-run pairing prerequisite. ClipMesh now creates the local encrypted clipboard space and key automatically before pairing, matching macOS behavior.
+- Keeps automatic post-pair refresh and auto-dismiss behavior so both devices move into the paired state without manual Refresh/Rescan steps.
+- Includes the receive-folder selection, file organization, Finder recency, bidirectional re-pairing, and low-idle/runtime improvements introduced in v0.2.20.
 
 ## Capabilities
 
@@ -100,5 +96,7 @@ python3 ci/reconstruct.py --platform Windows  # Windows
 ```
 
 The main verification workflows reconstruct every platform, run protocol and regression tests, compile the native applications, validate package metadata, and verify the signed Android release artifact. Local Mac-to-Android physical testing is available through `dev-test.sh` when an authorized Android Debug Bridge device is connected.
+
+**Release discipline:** every user-facing ClipMesh change must advance the app version, advance Android `versionCode`, update this README's current-release/download/changelog sections, and publish fresh macOS, Windows, and Android executables from the same green `main` commit.
 
 Release-signing requirements are documented in [`RELEASE_SIGNING.md`](RELEASE_SIGNING.md), and the physical acceptance boundary is recorded in [`PHYSICAL_VERIFICATION.md`](PHYSICAL_VERIFICATION.md).
