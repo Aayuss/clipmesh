@@ -10,17 +10,21 @@ if SYSTEM == "Darwin":
     section = transfer.split("private func refreshDownloadsFolderRecency()",1)[1].split("private func destinationURL",1)[0]
     for needle in (
         "TransferPrefs.outputFolder.standardizedFileURL",
-        ".modificationDate: Date()",
-        ".downloadsDirectory",
-        "Darwin.rename",
-        ".ClipMesh-recency-",
-        "for _ in 0..<5",
-        "manager.moveItem(at: temporary, to: folder)",
+        ".modificationDate: now",
+        "ATTR_CMN_ADDEDTIME",
+        "setattrlist(",
+        '"/usr/bin/mdimport"',
     ):
         assert needle in section, needle
-    assert "copyItem(" not in section
-    assert "removeItem(" not in section
-    assert "contentsOfDirectory" not in section
+    for forbidden in (
+        "Darwin.rename",
+        ".ClipMesh-recency-",
+        "copyItem(",
+        "moveItem(",
+        "removeItem(",
+        "contentsOfDirectory",
+    ):
+        assert forbidden not in section, forbidden
     assert "if done {" in transfer and "refreshDownloadsFolderRecency()" in transfer
 elif SYSTEM in ("Linux","Windows"):
     pass
