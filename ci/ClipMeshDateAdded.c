@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <errno.h>
+#include <unistd.h>
 
 int clipmesh_get_date_added(const char *path, int64_t *seconds, int64_t *nanoseconds) {
     if (!path || !seconds || !nanoseconds) {
