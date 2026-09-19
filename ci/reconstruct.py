@@ -60,6 +60,7 @@ PIPELINES = {
         "patch-v055-android-storage.py",
         "patch-v055-android-storage-ui.py",
         "patch-v057-pairing-ux.py",
+        "patch-v063-work-profile-startup.py",
     ],
     "Windows": [
         "patch-features.py", "patch-sync-fixes.py", "patch-desktop.py", "patch-windows.py",

@@ -39,6 +39,10 @@ on:
       - 'ci/v054_resource_finalization_selftest.py'
       - 'ci/patch-v057-pairing-ux.py'
       - 'ci/v057_pairing_ux_selftest.py'
+      - 'ci/patch-v063-work-profile-startup.py'
+      - 'ci/v063_work_profile_startup_selftest.py'
+      - 'ci/android-v064-work-profile-runtime-test.sh'
+      - 'ci/patch-v064-release.py'
       - 'ci/patch-v059-finder-recency.py'
       - 'ci/v059_finder_recency_selftest.py'
       - 'ci/patch-v061-direct-finder-date-added.py'
@@ -87,6 +91,10 @@ on:
       - 'ci/v054_resource_finalization_selftest.py'
       - 'ci/patch-v057-pairing-ux.py'
       - 'ci/v057_pairing_ux_selftest.py'
+      - 'ci/patch-v063-work-profile-startup.py'
+      - 'ci/v063_work_profile_startup_selftest.py'
+      - 'ci/android-v064-work-profile-runtime-test.sh'
+      - 'ci/patch-v064-release.py'
       - 'ci/patch-v059-finder-recency.py'
       - 'ci/v059_finder_recency_selftest.py'
       - 'ci/patch-v061-direct-finder-date-added.py'
@@ -229,6 +237,7 @@ jobs:
           python ci/v053_second_pass_selftest.py
           python ci/v054_resource_finalization_selftest.py
           CLIPMESH_PLATFORM=Linux python ci/v057_pairing_ux_selftest.py
+          CLIPMESH_PLATFORM=Linux python ci/v063_work_profile_startup_selftest.py
           J=clipmesh/android/app/src/main/java/dev/clipmesh
           grep -q 'val devices = runCatching { LocalTransferEngine.nearbyDevices() }.getOrDefault(emptyList())' "$J/fileshare/FileShareActivity.kt"
           ! grep -q 'nearbyDevices().filterNot' "$J/fileshare/FileShareActivity.kt"
