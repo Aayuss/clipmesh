@@ -109,7 +109,7 @@ elif SYSTEM == "Darwin":
         "publishIncomingProgress(session: session",
         "refreshDownloadsFolderRecency()",
         "let folder = TransferPrefs.outputFolder",
-        ".modificationDate: Date()",
+        ".modificationDate: now",
         "publishIncomingFailure(session: session",
         "percent - session.lastNotifiedPercent >= 10",
         "identifier: \"clipmesh-receive-",

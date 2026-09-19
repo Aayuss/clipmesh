@@ -50,7 +50,7 @@ if SYSTEM == "Darwin":
         'appendPathComponent("images"',
         'appendPathComponent("video"',
         "let folder = TransferPrefs.outputFolder",
-        ".modificationDate: Date()",
+        ".modificationDate: now",
     )
     recency = transfer[transfer.index("private func refreshDownloadsFolderRecency"):transfer.index("private func destinationURL")]
     if "copyItem(" in recency or "removeItem(" in recency or "contentsOfDirectory" in recency:

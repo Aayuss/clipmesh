@@ -4,25 +4,25 @@ ClipMesh is a private, cross-platform clipboard and file-transfer suite for macO
 
 ## Download
 
-### Current release - `v0.2.22-alpha`
+### Current release - `v0.2.23-alpha`
 
 | Platform | Installer |
 | --- | --- |
-| macOS | [Download DMG](https://github.com/Aayuss/clipmesh/releases/download/v0.2.22-alpha/ClipMesh-macOS.dmg) |
-| Windows | [Download EXE](https://github.com/Aayuss/clipmesh/releases/download/v0.2.22-alpha/ClipMesh-Windows.exe) |
-| Android | [Download APK](https://github.com/Aayuss/clipmesh/releases/download/v0.2.22-alpha/ClipMesh-Android.apk) |
+| macOS | [Download DMG](https://github.com/Aayuss/clipmesh/releases/download/v0.2.23-alpha/ClipMesh-macOS.dmg) |
+| Windows | [Download EXE](https://github.com/Aayuss/clipmesh/releases/download/v0.2.23-alpha/ClipMesh-Windows.exe) |
+| Android | [Download APK](https://github.com/Aayuss/clipmesh/releases/download/v0.2.23-alpha/ClipMesh-Android.apk) |
 
-[Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.22-alpha/SHA256SUMS.txt) to verify the installers. Release assets are built from the same `main` commit and are published only after the platform build, smoke/runtime, signing, and package-validation jobs pass.
+[Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.23-alpha/SHA256SUMS.txt) to verify the installers. Release assets are built from the same `main` commit and are published only after the platform build, smoke/runtime, signing, and package-validation jobs pass.
 
 For the newest fully green build from `main`, including changes newer than the current immutable release, use the continuously refreshed [`dev-latest` release](https://github.com/Aayuss/clipmesh/releases/tag/dev-latest): [macOS DMG](https://github.com/Aayuss/clipmesh/releases/download/dev-latest/ClipMesh-macOS.dmg) · [Windows EXE](https://github.com/Aayuss/clipmesh/releases/download/dev-latest/ClipMesh-Windows.exe) · [Android APK](https://github.com/Aayuss/clipmesh/releases/download/dev-latest/ClipMesh-Android.apk).
 
-## What's new in v0.2.22-alpha
+## What's new in v0.2.23-alpha
 
-- Fixes Finder Downloads grouping for the default `Downloads/ClipMesh` receive folder. After a complete incoming transfer, ClipMesh now refreshes the folder's Finder **Date Added** metadata so it moves into **Today** instead of remaining under **Previous 30 Days**.
-- Keeps the operation metadata-only: ClipMesh performs a same-directory POSIX rename of the `ClipMesh` directory entry out-and-back once per completed receive session. Files and subfolders inside it are not copied, rewritten, removed, or recreated.
-- Continues to refresh the receive folder's normal modification timestamp as well, so both **Date Added** and **Date Modified** views reflect recent transfers.
-- Applies the Date Added refresh only to the default receive folder directly inside Downloads; custom receive folders are not renamed behind the user's back.
-- Retains the v0.2.21 pairing verification UI fixes, subdued placeholders, automatic Android first-run encrypted-space initialization, v0.2.20 re-pairing/output-folder improvements, and low-idle/runtime optimizations.
+- Fixes the macOS Finder **Date Added** issue for the ClipMesh receive folder using the filesystem's actual `ATTR_CMN_ADDEDTIME` metadata instead of relying on a rename trick.
+- After a completed incoming transfer, ClipMesh now updates both the folder's normal modification time and Finder's Date Added time directly, so `Downloads/ClipMesh` can move into Finder's **Today** group.
+- Removes the previous temporary rename-out/rename-back approach entirely. No files or subfolders are copied, moved, removed, recreated, or traversed for this refresh.
+- Requests a lightweight metadata refresh for the ClipMesh folder after updating Date Added so Finder/Spotlight can notice the change promptly.
+- Retains the v0.2.22 receive-folder and release improvements, v0.2.21 pairing UX fixes, and all re-pairing, output-folder, file-organization, and low-idle optimizations.
 
 ## Capabilities
 
