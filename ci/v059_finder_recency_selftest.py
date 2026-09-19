@@ -11,11 +11,12 @@ if SYSTEM == "Darwin":
     for needle in (
         "TransferPrefs.outputFolder.standardizedFileURL",
         ".modificationDate: now",
-        "ATTR_CMN_ADDEDTIME",
-        "setattrlist(",
+        "setFinderDateAdded(now, for: folder.path)",
         '"/usr/bin/mdimport"',
     ):
         assert needle in section, needle
+    for needle in ("ATTR_CMN_ADDEDTIME", "setattrlist("):
+        assert needle in transfer, needle
     for forbidden in (
         "Darwin.rename",
         ".ClipMesh-recency-",
