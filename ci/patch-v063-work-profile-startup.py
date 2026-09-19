@@ -18,6 +18,19 @@ def replace(path: Path, old: str, new: str, label: str, count: int = 1) -> None:
     path.write_text(text.replace(old, new, count), encoding="utf-8")
 
 
+def remove_early_service_start(path: Path, before: str, label: str) -> None:
+    text = path.read_text(encoding="utf-8")
+    pivot = text.find(before)
+    if pivot < 0:
+        raise SystemExit(f"{label}: missing pivot {before!r} in {path}")
+    prefix, suffix = text[:pivot], text[pivot:]
+    needle = "        BackgroundService.start(this)\n"
+    # Older patch layers place this at slightly different positions inside
+    # onCreate. Remove it wherever it appears before settings/UI initialization.
+    prefix = prefix.replace(needle, "")
+    path.write_text(prefix + suffix, encoding="utf-8")
+
+
 if SYSTEM == "Linux":
     java = PROJECT / "android/app/src/main/java/dev/clipmesh"
     store = java / "SettingsStore.kt"
@@ -25,9 +38,6 @@ if SYSTEM == "Linux":
     share = java / "fileshare/FileShareActivity.kt"
     service = java / "BackgroundService.kt"
 
-    # Samsung/Shelter work profiles are managed Android users. Preserve the
-    # personal-profile default, but do not require a connected-device FGS merely
-    # to launch a fresh managed-profile copy of ClipMesh.
     replace(
         store,
         'class SettingsStore(context: Context) {\n    private val prefs = context.getSharedPreferences("clipmesh_settings", Context.MODE_PRIVATE)',
@@ -52,15 +62,10 @@ if SYSTEM == "Linux":
         "managed-profile background receive default",
     )
 
-    # v0.2.3 injected an unconditional persistent service start immediately after
-    # Activity creation. Move that decision until after settings are available.
-    replace(
-        main,
-        '''        super.onCreate(savedInstanceState)
-        BackgroundService.start(this)''',
-        '''        super.onCreate(savedInstanceState)''',
-        "remove unconditional MainActivity FGS startup",
-    )
+    # v023/v027 layers can position this call differently in MainActivity.
+    # Strip any pre-settings service start, then make the decision from the
+    # managed-profile-aware settings.
+    remove_early_service_start(main, "        settings = SettingsStore(this)", "MainActivity early FGS")
     replace(
         main,
         '''        settings = SettingsStore(this)
@@ -73,23 +78,22 @@ if SYSTEM == "Linux":
         "conditional MainActivity background startup",
     )
 
-    # File Transfer remains fully functional while visible through its existing
-    # LocalTransferEngine lifecycle. Start the persistent service only when the
-    # user actually enabled a background feature.
+    # FileShareActivity can also receive the v023 service injection before its
+    # selected-file initialization. Make that startup managed-profile-aware too.
+    remove_early_service_start(share, "        selected += extractSharedUris(intent)", "FileShareActivity early FGS")
     replace(
         share,
         '''        super.onCreate(savedInstanceState)
-        BackgroundService.start(this)''',
+''',
         '''        super.onCreate(savedInstanceState)
         val backgroundSettings = dev.clipmesh.SettingsStore(this)
         if (backgroundSettings.backgroundSync || backgroundSettings.receiveFilesInBackground) {
             BackgroundService.start(this)
-        }''',
+        }
+''',
         "conditional FileShareActivity background startup",
     )
 
-    # A device-owner/profile-owner policy may reject connectedDevice foreground
-    # service promotion. That must not terminate ClipMesh.
     replace(
         service,
         '''        createChannel()
@@ -127,9 +131,6 @@ if SYSTEM == "Linux":
                 if (Build.VERSION.SDK_INT >= 26) app.startForegroundService(intent) else app.startService(intent)
             }.onFailure { error ->
                 android.util.Log.w("ClipMesh", "Foreground service start rejected", error)
-                // Do not pretend to own a persistent background runtime when Android
-                // rejected its foreground-service owner. Foreground Activities and the
-                // AccessibilityService keep their own event-driven lifecycle safely.
                 if (captureCurrent) runCatching { BackgroundRuntime.captureNow() }
             }''',
         "safe denied-FGS fallback",
