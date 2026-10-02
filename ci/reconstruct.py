@@ -35,6 +35,7 @@ PIPELINES = {
         "patch-v057-pairing-ux.py",
         "patch-v059-finder-recency.py",
         "patch-v061-direct-finder-date-added.py",
+        "patch-v063-ember-ui.py",
     ],
     "Linux": [
         "patch-features.py", "patch-sync-fixes.py",
@@ -60,6 +61,7 @@ PIPELINES = {
         "patch-v055-android-storage.py",
         "patch-v055-android-storage-ui.py",
         "patch-v057-pairing-ux.py",
+        "patch-v063-ember-ui.py",
     ],
     "Windows": [
         "patch-features.py", "patch-sync-fixes.py", "patch-desktop.py", "patch-windows.py",
@@ -81,6 +83,7 @@ PIPELINES = {
         "patch-v055-pairing-core.py",
         "patch-v055-windows-pairing.py",
         "patch-v055-windows-storage.py",
+        "patch-v063-ember-ui.py",
     ],
 }
 

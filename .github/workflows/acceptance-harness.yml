@@ -44,6 +44,10 @@ on:
       - 'ci/patch-v061-direct-finder-date-added.py'
       - 'ci/v061_direct_finder_date_added_selftest.py'
       - 'ci/patch-v062-release.py'
+      - 'ci/patch-v063-ember-ui.py'
+      - 'ci/v063_ember_ui_selftest.py'
+      - 'ci/v063/**'
+      - 'ci/patch-v064-release.py'
       - 'ci/patch-v056-release.py'
       - 'ci/patch-v058-release.py'
       - 'ci/patch-v060-release.py'
@@ -92,6 +96,10 @@ on:
       - 'ci/patch-v061-direct-finder-date-added.py'
       - 'ci/v061_direct_finder_date_added_selftest.py'
       - 'ci/patch-v062-release.py'
+      - 'ci/patch-v063-ember-ui.py'
+      - 'ci/v063_ember_ui_selftest.py'
+      - 'ci/v063/**'
+      - 'ci/patch-v064-release.py'
       - 'ci/patch-v056-release.py'
       - 'ci/patch-v058-release.py'
       - 'ci/patch-v060-release.py'
@@ -155,6 +163,7 @@ jobs:
           CLIPMESH_PLATFORM=Darwin python ci/v057_pairing_ux_selftest.py
           CLIPMESH_PLATFORM=Darwin python ci/v059_finder_recency_selftest.py
           CLIPMESH_PLATFORM=Darwin python ci/v061_direct_finder_date_added_selftest.py
+          CLIPMESH_PLATFORM=Darwin python ci/v063_ember_ui_selftest.py
           grep -q 'SO_BROADCAST' ci/ClipMeshTransfer.swift
           grep -q '255.255.255.255' ci/ClipMeshTransfer.swift
           grep -q 'scheduleDaemonRestart' ci/ClipMeshApp.swift

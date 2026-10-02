@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ClipMesh "Ember": dark canvas from the first frame so launch never flashes white. -->
+    <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#131314</item>
+        <item name="android:colorBackground">#131314</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:colorAccent">#E55F11</item>
+        <item name="android:colorControlActivated">#E55F11</item>
+        <item name="android:textColorPrimary">#FFFFFF</item>
+        <item name="android:fontFamily">@font/sora_regular</item>
+    </style>
+</resources>

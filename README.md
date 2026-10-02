@@ -4,25 +4,29 @@ ClipMesh is a private, cross-platform clipboard and file-transfer suite for macO
 
 ## Download
 
-### Current release - `v0.2.23-alpha`
+### Current release - `v0.2.24-alpha`
 
 | Platform | Installer |
 | --- | --- |
-| macOS | [Download DMG](https://github.com/Aayuss/clipmesh/releases/download/v0.2.23-alpha/ClipMesh-macOS.dmg) |
-| Windows | [Download EXE](https://github.com/Aayuss/clipmesh/releases/download/v0.2.23-alpha/ClipMesh-Windows.exe) |
-| Android | [Download APK](https://github.com/Aayuss/clipmesh/releases/download/v0.2.23-alpha/ClipMesh-Android.apk) |
+| macOS | [Download DMG](https://github.com/Aayuss/clipmesh/releases/download/v0.2.24-alpha/ClipMesh-macOS.dmg) |
+| Windows | [Download EXE](https://github.com/Aayuss/clipmesh/releases/download/v0.2.24-alpha/ClipMesh-Windows.exe) |
+| Android | [Download APK](https://github.com/Aayuss/clipmesh/releases/download/v0.2.24-alpha/ClipMesh-Android.apk) |
 
-[Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.23-alpha/SHA256SUMS.txt) to verify the installers. Release assets are built from the same `main` commit and are published only after the platform build, smoke/runtime, signing, and package-validation jobs pass.
+[Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.24-alpha/SHA256SUMS.txt) to verify the installers. Release assets are built from the same `main` commit and are published only after the platform build, smoke/runtime, signing, and package-validation jobs pass.
 
 For the newest fully green build from `main`, including changes newer than the current immutable release, use the continuously refreshed [`dev-latest` release](https://github.com/Aayuss/clipmesh/releases/tag/dev-latest): [macOS DMG](https://github.com/Aayuss/clipmesh/releases/download/dev-latest/ClipMesh-macOS.dmg) · [Windows EXE](https://github.com/Aayuss/clipmesh/releases/download/dev-latest/ClipMesh-Windows.exe) · [Android APK](https://github.com/Aayuss/clipmesh/releases/download/dev-latest/ClipMesh-Android.apk).
 
-## What's new in v0.2.23-alpha
+## What's new in v0.2.24-alpha
 
-- Fixes the macOS Finder **Date Added** issue for the ClipMesh receive folder using the filesystem's actual `ATTR_CMN_ADDEDTIME` metadata instead of relying on a rename trick.
-- After a completed incoming transfer, ClipMesh now updates both the folder's normal modification time and Finder's Date Added time directly, so `Downloads/ClipMesh` can move into Finder's **Today** group.
-- Removes the previous temporary rename-out/rename-back approach entirely. No files or subfolders are copied, moved, removed, recreated, or traversed for this refresh.
-- Requests a lightweight metadata refresh for the ClipMesh folder after updating Date Added so Finder/Spotlight can notice the change promptly.
-- Retains the v0.2.22 receive-folder and release improvements, v0.2.21 pairing UX fixes, and all re-pairing, output-folder, file-organization, and low-idle optimizations.
+- **Ember UI on every platform.** Android, macOS and Windows now share one design: Sora typeface, a dark `#131314` canvas with `#E55F11` accents, the same Clipboard / Transfer / Settings layout, and the same motion (spring-driven navigation pill, 220 ms page transitions, 260 ms dialogs, press feedback). Android moves to Jetpack Compose with a floating Suya-style bottom bar.
+- **Decluttered screens.** Clipboard shows a live preview card and one Devices list (paired + nearby); Transfer shows the selection, the devices to send to and incoming progress; device name, receive folder and pairing tools live in Settings.
+- **Sent files clear automatically.** After a successful transfer the selection empties on every platform (it used to stay selected in the macOS main window). Failed sends keep their files for retry.
+- **Real clipboard preview.** The clipboard view shows the actual image, text or files instead of raw pasteboard type identifiers. Finder file copies preview the copied image file itself.
+- **macOS Share menu.** The Finder Share extension is rebuilt as a properly linked, sandboxed app extension, so ClipMesh appears under Share and in Share → Edit Extensions. Shared files open straight in the Transfer page.
+- **Instant Android screenshots.** Screenshots now sync the moment they are saved instead of after Samsung's preview toolbar closes (MediaStore change events are deferred and retried briefly instead of being dropped).
+- **Zero UI polling.** All three apps refresh only on real events: nearby-device changes from the transfer engine, peer updates from the daemon's `peers.json` (file-system watch on desktop, preference listener on Android), runtime status changes, and app activation. The only timers are one-shot deadlines (device expiry, "Online" → "Last seen").
+- **Android picker.** A floating **+** on Transfer offers **Photos & videos** (system photo picker, no storage permission) or **Files**; photo-picker items are sent with readable `IMG_`/`VID_` names.
+- **Windows Explorer.** Adds a ClipMesh *Send to* entry and hands shared files to the running app instead of starting a second window.
 
 ## Capabilities
 

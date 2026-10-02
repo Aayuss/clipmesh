@@ -95,7 +95,7 @@ elif SYSTEM == "Linux":
     require(share,
         "Intent.ACTION_OPEN_DOCUMENT_TREE",
         "PICK_OUTPUT_FOLDER",
-        "Choose folder",
+        "fun chooseOutputFolder()",
     )
 
 elif SYSTEM == "Windows":

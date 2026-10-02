@@ -31,10 +31,13 @@ if system == "Linux":
     require(root / "dev/android/AcceptanceReceiver.kt", "{ _, _, _, _, _ -> }")
     require(root / "dev/android/AcceptanceReceiverV2.kt", "{ _, _, _, _, _ -> }")
 elif system == "Darwin":
-    require(root / "ci/ClipMeshTransfer.swift", "progressValue", "countOfBytesSent", "NSProgressIndicator", "self?.files.removeAll(); self?.refreshFiles()")
+    require(root / "ci/ClipMeshTransfer.swift", "progressValue", "countOfBytesSent")
+    # v063: the main window clears the sent selection after every successful send.
+    require(root / "ci/ClipMeshApp.swift", "progressValue:", "clearTransferSelection(animated: true)")
 elif system == "Windows":
-    require(root / "ci/ClipMeshTransfer.cs", "Action<int> progressValue", "Action<long> onProgress", "ProgressBar transferProgress", "files.Clear();RefreshFiles()")
-    require(root / "ci/ClipMeshWindows.cs", "ProgressBar transferProgress", "transferFiles.Clear(); UpdateTransferFiles()")
+    require(root / "ci/ClipMeshTransfer.cs", "Action<int> progressValue", "Action<long> onProgress")
+    # v063: the main window clears the sent selection after every successful send.
+    require(root / "ci/ClipMeshWindows.cs", "transferProgress", "transferFiles.Clear(); UpdateTransferFiles()")
 else:
     raise AssertionError(f"set CLIPMESH_PLATFORM for this test, got {system!r}")
 

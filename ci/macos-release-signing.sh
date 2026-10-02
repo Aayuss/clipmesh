@@ -68,6 +68,9 @@ sign_package() {
   local extension="$APP/Contents/PlugIns/ClipMeshShare.appex"
   local daemon="$APP/Contents/MacOS/clipmesh-bin"
   [ -d "$extension" ] || { echo "ERROR: Finder Share extension is missing." >&2; exit 1; }
+  # The Share extension must stay sandboxed or PlugInKit refuses to list it.
+  local extension_entitlements="$ROOT/ci/v063/macos/ClipMeshShare.entitlements"
+  [ -f "$extension_entitlements" ] || { echo "ERROR: Finder Share extension entitlements are missing." >&2; exit 1; }
   [ -f "$daemon" ] || { echo "ERROR: bundled clipmesh-bin daemon is missing." >&2; exit 1; }
   file -b "$daemon" | grep -q 'Mach-O' || { echo "ERROR: bundled clipmesh-bin is not Mach-O code." >&2; exit 1; }
 
@@ -108,10 +111,21 @@ sign_package() {
   done < "$macho_manifest"
   while IFS= read -r bundle_path; do
     [ -n "$bundle_path" ] || continue
+    if [ "$bundle_path" = "$extension" ]; then
+      codesign --force --options runtime --timestamp \
+        --entitlements "$extension_entitlements" \
+        --sign "$CLIPMESH_MACOS_SIGNING_IDENTITY" \
+        --keychain "$CLIPMESH_MACOS_SIGNING_KEYCHAIN" "$bundle_path"
+      continue
+    fi
     codesign --force --options runtime --timestamp \
       --sign "$CLIPMESH_MACOS_SIGNING_IDENTITY" \
       --keychain "$CLIPMESH_MACOS_SIGNING_KEYCHAIN" "$bundle_path"
   done < "$bundle_manifest"
+  codesign -d --entitlements - "$extension" 2>/dev/null | grep -q "com.apple.security.app-sandbox" || {
+    echo "ERROR: Finder Share extension lost its sandbox entitlement." >&2
+    exit 1
+  }
   codesign --force --options runtime --timestamp \
     --sign "$CLIPMESH_MACOS_SIGNING_IDENTITY" \
     --keychain "$CLIPMESH_MACOS_SIGNING_KEYCHAIN" "$APP"

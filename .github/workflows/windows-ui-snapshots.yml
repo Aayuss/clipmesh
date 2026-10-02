@@ -1,0 +1,56 @@
+name: Windows UI snapshots
+
+# Renders the real Windows UI (ClipMeshForm) with representative fake data at
+# 100% and 150% scale via `clipmesh.exe --ui-snapshot`, and uploads the PNGs.
+# No tray icon, daemon, network or single-instance mutex is used in this mode.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'ci/v063/windows/**'
+      - '.github/workflows/windows-ui-snapshots.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  snapshots:
+    name: Windows UI snapshots
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: clipmesh
+      - name: Reconstruct current Windows source
+        shell: pwsh
+        run: |
+          python ci/reconstruct.py --platform Windows; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Build Windows app
+        working-directory: clipmesh
+        shell: pwsh
+        run: |
+          .\scripts\build-windows.ps1
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Render UI snapshots
+        working-directory: clipmesh
+        shell: pwsh
+        run: |
+          $out = Join-Path (Get-Location) 'snapshots'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $process = Start-Process -FilePath '.\dist\windows\clipmesh.exe' -ArgumentList '--ui-snapshot', "`"$out`"" -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "UI snapshot failed with exit code $($process.ExitCode)" }
+          $pngs = @(Get-ChildItem -Path $out -Filter *.png)
+          if ($pngs.Count -lt 10) { throw "Expected 10 snapshot PNGs, found $($pngs.Count)" }
+          $pngs | ForEach-Object { "{0}  {1:N0} bytes" -f $_.Name, $_.Length }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-ui-snapshots
+          if-no-files-found: error
+          path: clipmesh/snapshots/*.png
