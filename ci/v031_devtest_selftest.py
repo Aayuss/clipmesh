@@ -30,7 +30,7 @@ if system == "Darwin":
     assert 'static func clipboardDaemonIsListening(_ pid: Int32) -> Bool' in app
     assert 'guard ready, process.isRunning else' in app
     assert 'scheduleDaemonRestart(after:' in app
-    assert 'Background sync interrupted - recovering' in app
+    assert 'Background sync was interrupted' in app
     assert '--reclaim-stale-daemon-test' in app
     assert '--clipboard-preview-self-test' in app
     assert '--dev-test-transfer-fingerprint' in app
@@ -40,9 +40,12 @@ if system == "Darwin":
     assert 'func devTestSend(file: URL, address: String, fingerprint: String) throws' in transfer
     assert 'enum CMClipboardSnapshot' in app
     preview_start = app.index('@objc private func viewClipboard()')
-    preview_end = app.index('@objc private func quitApp', preview_start)
+    import re as _re
+    _next = _re.search(r'\n    (?:@objc )?(?:private |fileprivate )?func ', app[preview_start + 10:])
+    preview_end = preview_start + 10 + _next.start() if _next else app.index('@objc private func quitApp', preview_start)
     preview_handler = app[preview_start:preview_end]
-    assert 'CMClipboardSnapshot.describe(NSPasteboard.general)' in preview_handler
+    assert 'refreshClipboardPreview()' in preview_handler
+    assert 'Types:' not in preview_handler
     assert 'NSImage(pasteboard:' not in preview_handler
     assert 'readObjects(forClasses:' not in preview_handler
     assert 'LocalTransferManager.shared.setUIVisible(false)' in app

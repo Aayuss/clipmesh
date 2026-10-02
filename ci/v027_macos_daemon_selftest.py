@@ -36,9 +36,14 @@ if system == "Darwin":
     assert '--clipboard-preview-self-test' in app
     assert 'enum CMClipboardSnapshot' in app
     preview_start = app.index('@objc private func viewClipboard()')
-    preview_end = app.index('@objc private func quitApp', preview_start)
+    # Only the viewer handler itself (up to the next member declaration).
+    import re as _re
+    _next = _re.search(r'\n    (?:@objc )?(?:private |fileprivate )?func ', app[preview_start + 10:])
+    preview_end = preview_start + 10 + _next.start() if _next else app.index('@objc private func quitApp', preview_start)
     preview_handler = app[preview_start:preview_end]
-    assert 'CMClipboardSnapshot.describe(NSPasteboard.general)' in preview_handler
+    # v063: the viewer renders the parsed clipboard (image/text/files), never raw pasteboard type names.
+    assert 'refreshClipboardPreview()' in preview_handler
+    assert 'Types:' not in preview_handler
     assert 'NSImage(pasteboard:' not in preview_handler
     assert 'readObjects(forClasses:' not in preview_handler
     assert 'LocalTransferManager.shared.setUIVisible(false)' in app
