@@ -68,7 +68,8 @@ open class MainActivity : ComponentActivity(), ClipboardActions {
     // render. The only timers are one-shots for known future state changes
     // (a nearby device expiring, a peer going from Online to Last seen).
     private val render = Runnable { if (resumed) { refreshHome(); transfer.renderDevices(); armTransitions() } }
-    private val transition = Runnable { requestRender() }
+    // While the screen is open, an expiring Online window re-probes once instead of guessing.
+    private val transition = Runnable { if (resumed) BackgroundRuntime.probePeers { requestRender() } }
     private val engineListener: () -> Unit = { requestRender() }
     private val peersListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == null || key == "known_peers_json" || key == "device_name") requestRender()
@@ -83,7 +84,7 @@ open class MainActivity : ComponentActivity(), ClipboardActions {
         main.removeCallbacks(transition)
         val now = System.currentTimeMillis()
         val peerFlip = settings.knownPeers().mapNotNull { peer ->
-            (peer.lastSeenMs + 90_000L - now).takeIf { peer.lastSeenMs > 0 && it > 0 }
+            (peer.lastSeenMs + ONLINE_WINDOW_MS - now).takeIf { peer.lastSeenMs > 0 && it > 0 }
         }.minOrNull()
         val next = listOfNotNull(peerFlip?.plus(50L), LocalTransferEngine.nextDeviceExpiryInMs()).minOrNull() ?: return
         main.postDelayed(transition, next)
@@ -141,6 +142,7 @@ open class MainActivity : ComponentActivity(), ClipboardActions {
         transfer.onResume()
         LocalTransferEngine.discoverNow()
         BackgroundRuntime.captureNow()
+        BackgroundRuntime.probePeers { requestRender() }
         settingsController.onResume()
         (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).addPrimaryClipChangedListener(clipboardListener)
         LocalTransferEngine.setDevicesListener(engineListener)
@@ -212,7 +214,7 @@ open class MainActivity : ComponentActivity(), ClipboardActions {
         val nearbyByName = runCatching { LocalTransferEngine.nearbyDevices() }.getOrDefault(emptyList())
             .associateBy { it.alias.trim().lowercase() }
         val next = settings.knownPeers().map { peer ->
-            val online = peer.lastSeenMs > 0 && now - peer.lastSeenMs < 90_000L
+            val online = peer.lastSeenMs > 0 && now - peer.lastSeenMs < ONLINE_WINDOW_MS
             val caption = when {
                 online -> "Online"
                 peer.lastSeenMs == 0L -> "Paired"
@@ -232,6 +234,8 @@ open class MainActivity : ComponentActivity(), ClipboardActions {
 
     override fun refreshDevices() {
         LocalTransferEngine.discoverNow()
+        BackgroundRuntime.rescan()
+        BackgroundRuntime.probePeers { requestRender() }
         main.postDelayed({ refreshHome(); transfer.renderDevices() }, 450L)
     }
 
@@ -384,6 +388,8 @@ open class MainActivity : ComponentActivity(), ClipboardActions {
 
     companion object {
         const val EXTRA_TAB = "clipmesh_tab"
+        /** A peer reached (by traffic or an on-demand probe) within this window shows as Online. */
+        const val ONLINE_WINDOW_MS = 300_000L
         private const val STATE_TAB = "clipmesh_tab_state"
     }
 }

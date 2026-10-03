@@ -3,7 +3,7 @@ name: Cleanup old ClipMesh releases
 on:
   workflow_dispatch:
   workflow_run:
-    workflows: ["Release ClipMesh v0.2.27"]
+    workflows: ["Release ClipMesh v0.2.28"]
     types: [completed]
 
 permissions:

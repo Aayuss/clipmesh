@@ -3911,7 +3911,7 @@ internal sealed class ClipMeshForm : Form
 
         devicesCard = new Card(); clip.Controls.Add(devicesCard);
         devicesTitle = CardHeader("Devices"); devicesCard.Controls.Add(devicesTitle);
-        refreshDevices = IconButton(Glyph.Refresh, "Look for devices"); refreshDevices.Click += delegate { LocalTransferManagerC.Shared.DiscoverNow(); RefreshHome(); RefreshDeviceLists(); };
+        refreshDevices = IconButton(Glyph.Refresh, "Look for devices"); refreshDevices.Click += delegate { ProbePeers(); LocalTransferManagerC.Shared.DiscoverNow(); RefreshHome(); RefreshDeviceLists(); };
         pairWithCode = IconButton(Glyph.Plus, "Pair with a code"); pairWithCode.Click += delegate { PairWithCode(); };
         devicesCard.Controls.Add(refreshDevices); devicesCard.Controls.Add(pairWithCode);
         pairedList = new RowList(); pairedList.HeightChanged += delegate { pages[0].RequestLayout(); }; devicesCard.Controls.Add(pairedList);
@@ -3985,7 +3985,7 @@ internal sealed class ClipMeshForm : Form
         shareTimer = OneShot(400, delegate { ProcessShareInbox(); });
         peersDebounce = OneShot(250, delegate { LoadPeersFile(); });
         configDebounce = OneShot(250, delegate { RefreshHome(true); });
-        onlineTimer = OneShot(1000, delegate { if (latestState != null) RenderPeers(latestState.Peers); });
+        onlineTimer = OneShot(1000, delegate { if (observersAttached) ProbePeers(); else if (latestState != null) RenderPeers(latestState.Peers); });
 
         DragEnter += FileDragEnter; DragOver += FileDragEnter; DragLeave += delegate { selectionCard.DragHot = false; }; DragDrop += FileDragDrop;
         FormClosing += OnFormClosing; Shown += OnShown;
@@ -4371,7 +4371,7 @@ internal sealed class ClipMeshForm : Form
             {
                 DeviceRow row = (DeviceRow)r;
                 row.Tag2 = p;
-                bool online = p.LastSeenMs > 0 && now >= p.LastSeenMs && now - p.LastSeenMs < 90000UL;
+                bool online = p.LastSeenMs > 0 && now >= p.LastSeenMs && now - p.LastSeenMs < OnlineWindowMs;
                 string caption = online ? "Online" : (p.LastSeenMs == 0 ? "Paired" : "Last seen " + Ago(p.LastSeenMs, now));
                 string type = null;
                 foreach (TransferDeviceC d in nearby) if (String.Equals(d.Alias.Trim(), p.Name.Trim(), StringComparison.OrdinalIgnoreCase)) { type = d.Type; break; }
@@ -5062,9 +5062,26 @@ internal sealed class ClipMeshForm : Form
                 catch { configWatcher = null; }
             }
         }
-        // Catch up once on what changed while we were hidden (cheap: no process spawn).
+        // Catch up once on what changed while we were hidden, then one on-demand probe.
         RefreshDeviceLists();
         LoadPeersFile();
+        ProbePeers();
+    }
+
+    // A peer reached by traffic or an on-demand probe within this window shows as Online.
+    private const ulong OnlineWindowMs = 300000UL;
+    private int probeInFlight;
+
+    // On-demand presence: one `probe-peers` run (TCP connect to each paired peer). The
+    // daemon refreshes peers.json and the config watcher re-renders. No heartbeat.
+    private void ProbePeers()
+    {
+        if (snapshotMode || Interlocked.CompareExchange(ref probeInFlight, 1, 0) != 0) return;
+        ThreadPool.QueueUserWorkItem(delegate
+        {
+            try { ClipMeshRuntime.Run("probe-peers"); } catch { }
+            Interlocked.Exchange(ref probeInFlight, 0);
+        });
     }
 
     private void DetachObservers()
@@ -5167,12 +5184,12 @@ internal sealed class ClipMeshForm : Form
         ulong soonest = UInt64.MaxValue;
         foreach (PeerState p in peers)
         {
-            if (p.LastSeenMs == 0 || now < p.LastSeenMs || now - p.LastSeenMs >= 90000UL) continue;
-            ulong remaining = 90000UL - (now - p.LastSeenMs);
+            if (p.LastSeenMs == 0 || now < p.LastSeenMs || now - p.LastSeenMs >= OnlineWindowMs) continue;
+            ulong remaining = OnlineWindowMs - (now - p.LastSeenMs);
             if (remaining < soonest) soonest = remaining;
         }
         if (soonest == UInt64.MaxValue) return;
-        onlineTimer.Interval = (int)Math.Min(90500UL, Math.Max(500UL, soonest + 500UL));
+        onlineTimer.Interval = (int)Math.Min(OnlineWindowMs + 500UL, Math.Max(500UL, soonest + 500UL));
         onlineTimer.Start();
     }
 

@@ -2309,6 +2309,9 @@ private struct CMRowItem {
 
 // MARK: - App
 
+/// A peer reached by traffic or an on-demand probe within this window shows as Online.
+enum CMPresence { static let onlineWindowMs: UInt64 = 300_000 }
+
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private enum SyncHealth { case starting, on, recovering, stopped }
 
@@ -3120,7 +3123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         guard peer.lastSeenMs > 0 else { return ("Paired", false) }
         guard now >= peer.lastSeenMs else { return ("Online", true) }
         let age = now - peer.lastSeenMs
-        if age < 90_000 { return ("Online", true) }
+        if age < CMPresence.onlineWindowMs { return ("Online", true) }
         let minutes = age / 60_000
         if minutes < 60 { return ("Last seen \(max(1, minutes))m ago", false) }
         let hours = minutes / 60
@@ -3175,25 +3178,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     /// One one-shot timer for the soonest Online → "Last seen" transition (no polling).
+    private var probeInFlight = false
+
     private func armPeerStatusTimer(_ peers: [PeerState], now: UInt64) {
         peerStatusWork?.cancel()
         peerStatusWork = nil
         guard window?.isVisible == true else { return }
         let next = peers.compactMap { peer -> UInt64? in
-            guard peer.lastSeenMs > 0, now >= peer.lastSeenMs, now - peer.lastSeenMs < 90_000 else { return nil }
-            return peer.lastSeenMs + 90_000
+            guard peer.lastSeenMs > 0, now >= peer.lastSeenMs, now - peer.lastSeenMs < CMPresence.onlineWindowMs else { return nil }
+            return peer.lastSeenMs + CMPresence.onlineWindowMs
         }.min()
         guard let next else { return }
-        let work = DispatchWorkItem { [weak self] in
-            guard let self, let peers = self.latestState?.peers else { return }
-            self.renderPeers(peers)
-        }
+        // While the window is open, an expiring Online window re-probes once instead of guessing.
+        let work = DispatchWorkItem { [weak self] in self?.probePeers() }
         peerStatusWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + Double(next - now) / 1000 + 0.25, execute: work)
     }
 
+    /// On-demand presence: one `probe-peers` run (TCP connect to each paired peer).
+    /// The daemon refreshes peers.json and the directory watcher re-renders. No heartbeat.
+    private func probePeers() {
+        guard !probeInFlight else { return }
+        probeInFlight = true
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            _ = try? Runtime.run(["probe-peers"])
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.probeInFlight = false
+                self.diskStamp = ""
+                self.reloadStateFromDisk()
+            }
+        }
+    }
+
     private func refreshDevicesPressed() {
         CMMotion.spin(devicesRefreshButton)
+        probePeers()
         LocalTransferManager.shared.discoverNow()
         refreshHome()
         refreshNearbyPairDevices()
@@ -3930,6 +3950,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
         if latestState != nil { diskStamp = ""; reloadStateFromDisk() }
         startWatchingSupport()
+        probePeers()
         if selectedTab == 0 { refreshNearbyPairDevices(); refreshClipboardPreview() }
         if selectedTab == 1 { refreshTransferDevices() }
     }

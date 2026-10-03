@@ -183,102 +183,6 @@ replace_once(
     "v063 friendly picker names",
 )
 
-# A half-open socket must not keep a peer "connected" forever: desktops ping every
-# 30s and Android peers every 120s, so a 300s read timeout tears down and
-# reconnects only a genuinely silent link.
-network_kt = android / "app/src/main/java/dev/clipmesh/network/NetworkEngine.kt"
-replace_once(
-    network_kt,
-    "        socket.keepAlive = true\n        socket.soTimeout = 0\n        if (!isLan(socket.inetAddress)) { socket.close(); return@withContext }\n",
-    "        socket.keepAlive = true\n        socket.soTimeout = PEER_IDLE_TIMEOUT_MS\n        if (!isLan(socket.inetAddress)) { socket.close(); return@withContext }\n",
-    "v063 Android peer idle timeout",
-)
-replace_once(
-    network_kt,
-    "        private const val REPLAY_TTL_MS = 30_000L\n",
-    "        private const val REPLAY_TTL_MS = 30_000L\n        private const val PEER_IDLE_TIMEOUT_MS = 300_000\n",
-    "v063 Android idle timeout constant",
-)
-
-# Same policy on Android: a newer authenticated connection replaces one older
-# than 10s instead of being rejected, so a dozed-through dead link can't block
-# the desktop from reconnecting.
-replace_once(
-    network_kt,
-    '''            val accepted = synchronized(peers) {
-                if (peers.containsKey(peerId)) {
-                    false
-                } else {
-                    peers[peerId] = connection
-                    true
-                }
-            }
-            if (!accepted) {''',
-    '''            var replaced: PeerConnection? = null
-            val accepted = synchronized(peers) {
-                val existing = peers[peerId]
-                if (existing != null && System.currentTimeMillis() - existing.createdAt < PEER_REPLACE_AFTER_MS) {
-                    false
-                } else {
-                    replaced = existing
-                    peers[peerId] = connection
-                    true
-                }
-            }
-            replaced?.close()
-            if (!accepted) {''',
-    "v063 Android newer connection replaces stale",
-)
-replace_once(
-    network_kt,
-    '''                if (peers[peerId]?.id == connection.id) peers.remove(peerId)
-                connection.close()
-                clearPeerRetry(peerId)''',
-    '''                val wasCurrent = peers[peerId]?.id == connection.id
-                if (wasCurrent) peers.remove(peerId)
-                connection.close()
-                if (wasCurrent) clearPeerRetry(peerId)''',
-    "v063 Android replaced connection keeps the new link's retries",
-)
-replace_once(
-    network_kt,
-    '''        private val closed = AtomicBoolean(false)
-''',
-    '''        private val closed = AtomicBoolean(false)
-        val createdAt: Long = System.currentTimeMillis()
-''',
-    "v063 Android connection age",
-)
-replace_once(
-    network_kt,
-    "        private const val PEER_IDLE_TIMEOUT_MS = 300_000\n",
-    "        private const val PEER_IDLE_TIMEOUT_MS = 300_000\n        private const val PEER_REPLACE_AFTER_MS = 10_000L\n",
-    "v063 Android replace threshold",
-)
-
-# Dial paired peers at their last known LAN address too, so reconnecting never
-# depends on catching a broadcast. 30s while a paired peer is missing, else 120s.
-replace_once(
-    network_kt,
-    '''            for (entry in settings.staticPeers) {
-                parsePeer(entry)?.let { (address, port) -> if (isLan(address)) scope.launch { connect(address, port) } }
-            }
-            delay(120_000L)''',
-    '''            for (entry in settings.staticPeers) {
-                parsePeer(entry)?.let { (address, port) -> if (isLan(address)) scope.launch { connect(address, port) } }
-            }
-            var missing = false
-            for (known in settings.knownPeers()) {
-                if (known.deviceId == settings.deviceId || peers.containsKey(known.deviceId) || settings.isPeerBlocked(known.deviceId)) continue
-                val address = runCatching { InetAddress.getByName(known.address) }.getOrNull() ?: continue
-                if (!isLan(address) || known.port !in 1..65535) continue
-                missing = true
-                scope.launch { connect(address, known.port) }
-            }
-            delay(if (missing) 30_000L else 120_000L)''',
-    "v063 Android known-peer redial",
-)
-
 # One-tap battery exemption so Samsung/OEM power management can't park the sync
 # service while the phone is locked.
 manifest_text = manifest.read_text(encoding="utf-8")
@@ -289,3 +193,24 @@ if "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" not in manifest_text:
         '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />',
         "v063 battery exemption permission",
     )
+
+
+# NetworkEngine.kt is installed whole from ci/v063/android/src (push-only transport).
+
+# UI presence is checked on demand (screen opened / refresh), never by a heartbeat.
+replace_once(
+    runtime,
+    "    fun debugPeerCount(): Int = network?.peerCount() ?: 0\n",
+    '''    fun debugPeerCount(): Int = network?.peerCount() ?: 0
+
+    /** One-shot reachability check of paired peers; refreshes their last-seen. */
+    fun probePeers(onDone: () -> Unit = {}) {
+        val engine = network ?: return onDone()
+        Thread({ runCatching { kotlinx.coroutines.runBlocking { engine.probePeers() } }; onDone() }, "ClipMesh-Probe").start()
+    }
+
+    /** User-initiated rescan: one discovery broadcast so peers re-announce. */
+    fun rescan() { network?.broadcastDiscovery() }
+''',
+    "v063 on-demand peer probe",
+)
