@@ -179,3 +179,109 @@ replace_once(
 }''',
     "v063 zombie-connection regression tests",
 )
+
+# "First connection wins" made any stale entry permanent. A peer only reconnects
+# when it believes its old link is dead, so a newer authenticated connection now
+# replaces one older than a few seconds (simultaneous connects still de-dupe).
+replace_once(
+    network,
+    '''struct PeerEntry {
+    connection_id: Uuid,
+    tx: mpsc::UnboundedSender<Vec<u8>>,
+}''',
+    '''struct PeerEntry {
+    connection_id: Uuid,
+    tx: mpsc::UnboundedSender<Vec<u8>>,
+    created: Instant,
+    kill: Arc<tokio::sync::Notify>,
+}
+
+/// Connections younger than this are treated as a simultaneous-connect duplicate.
+const PEER_REPLACE_AFTER: Duration = Duration::from_secs(10);''',
+    "v063 peer entry replacement state",
+)
+replace_once(
+    network,
+    '''    match peers.entry(peer_id) {
+        Entry::Occupied(_) => {
+            debug!(peer=%peer_id,addr=%peer_addr,"closing duplicate authenticated connection");
+            return Ok(());
+        }
+        Entry::Vacant(entry) => {
+            entry.insert(PeerEntry{connection_id:conn_id,tx:tx.clone()});
+        }
+    }''',
+    '''    let kill=Arc::new(tokio::sync::Notify::new());
+    match peers.entry(peer_id) {
+        Entry::Occupied(mut entry) => {
+            if entry.get().created.elapsed()<PEER_REPLACE_AFTER {
+                debug!(peer=%peer_id,addr=%peer_addr,"closing duplicate authenticated connection");
+                return Ok(());
+            }
+            info!(peer=%peer_id,addr=%peer_addr,"replacing stale peer connection");
+            entry.get().kill.notify_one();
+            entry.insert(PeerEntry{connection_id:conn_id,tx:tx.clone(),created:Instant::now(),kill:kill.clone()});
+        }
+        Entry::Vacant(entry) => {
+            entry.insert(PeerEntry{connection_id:conn_id,tx:tx.clone(),created:Instant::now(),kill:kill.clone()});
+        }
+    }''',
+    "v063 newer connection replaces stale",
+)
+replace_once(
+    network,
+    '''        let len=match time::timeout(PEER_IDLE_TIMEOUT,read_half.read_u32()).await {
+            Ok(Ok(v))=>v as usize,
+            Ok(Err(_))=>break,
+            Err(_)=>{ info!(peer=%peer_id,"peer connection idle; reconnecting"); break; }
+        };''',
+    '''        let len=tokio::select! {
+            _=kill.notified()=>{ debug!(peer=%peer_id,"connection replaced by a newer one"); break; }
+            r=time::timeout(PEER_IDLE_TIMEOUT,read_half.read_u32())=>match r {
+                Ok(Ok(v))=>v as usize,
+                Ok(Err(_))=>break,
+                Err(_)=>{ info!(peer=%peer_id,"peer connection idle; reconnecting"); break; }
+            },
+        };''',
+    "v063 replaced connections stop reading",
+)
+# Regression test: a reconnect from the same peer replaces a stale registration.
+replace_once(
+    network,
+    '''        assert!(!peers.contains_key(&phone), "dead connection left the peer registered");
+    }
+}''',
+    '''        assert!(!peers.contains_key(&phone), "dead connection left the peer registered");
+    }
+
+    #[tokio::test]
+    async fn reconnect_replaces_a_stale_registration() {
+        let master=Arc::new(MasterKey::generate());
+        let space=Uuid::new_v4();
+        let mut b=Config::new("B".into());
+        b.space_id=space;
+        let b=Arc::new(b);
+        let phone=Uuid::new_v4();
+        let (peers,pending,seen,latest)=empty_maps();
+        // A registration left behind by a link that silently died long ago.
+        let (dead_tx,_dead_rx)=mpsc::unbounded_channel();
+        peers.insert(phone,PeerEntry{connection_id:Uuid::new_v4(),tx:dead_tx,created:Instant::now()-Duration::from_secs(600),kill:Arc::new(tokio::sync::Notify::new())});
+        let (remote_tx,mut remote_rx)=mpsc::unbounded_channel();
+        let listener=TcpListener::bind((Ipv4Addr::LOCALHOST,0)).await.unwrap();
+        let addr=listener.local_addr().unwrap();
+        {
+            let b=b.clone(); let master=master.clone(); let peers=peers.clone();
+            tokio::spawn(async move {
+                let (stream,_)=listener.accept().await.unwrap();
+                let _=handle_connection(stream,false,b,master,peers,pending,seen,latest,remote_tx).await;
+            });
+        }
+        let mut client=raw_client(addr,&master,space,phone).await;
+        write_frame(&mut client,&clip_frame(&master,space,phone,b"after-reconnect")).await;
+        let (_,p)=time::timeout(Duration::from_secs(3),remote_rx.recv()).await.expect("reconnect was rejected as a duplicate").unwrap();
+        assert_eq!(p.representations[0].bytes().unwrap(),b"after-reconnect");
+        assert!(peers.get(&phone).unwrap().created.elapsed()<Duration::from_secs(5));
+    }
+}''',
+    "v063 stale-registration regression test",
+)

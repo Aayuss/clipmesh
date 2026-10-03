@@ -199,3 +199,59 @@ replace_once(
     "        private const val REPLAY_TTL_MS = 30_000L\n        private const val PEER_IDLE_TIMEOUT_MS = 300_000\n",
     "v063 Android idle timeout constant",
 )
+
+# Same policy on Android: a newer authenticated connection replaces one older
+# than 10s instead of being rejected, so a dozed-through dead link can't block
+# the desktop from reconnecting.
+replace_once(
+    network_kt,
+    '''            val accepted = synchronized(peers) {
+                if (peers.containsKey(peerId)) {
+                    false
+                } else {
+                    peers[peerId] = connection
+                    true
+                }
+            }
+            if (!accepted) {''',
+    '''            var replaced: PeerConnection? = null
+            val accepted = synchronized(peers) {
+                val existing = peers[peerId]
+                if (existing != null && System.currentTimeMillis() - existing.createdAt < PEER_REPLACE_AFTER_MS) {
+                    false
+                } else {
+                    replaced = existing
+                    peers[peerId] = connection
+                    true
+                }
+            }
+            replaced?.close()
+            if (!accepted) {''',
+    "v063 Android newer connection replaces stale",
+)
+replace_once(
+    network_kt,
+    '''                if (peers[peerId]?.id == connection.id) peers.remove(peerId)
+                connection.close()
+                clearPeerRetry(peerId)''',
+    '''                val wasCurrent = peers[peerId]?.id == connection.id
+                if (wasCurrent) peers.remove(peerId)
+                connection.close()
+                if (wasCurrent) clearPeerRetry(peerId)''',
+    "v063 Android replaced connection keeps the new link's retries",
+)
+replace_once(
+    network_kt,
+    '''        private val closed = AtomicBoolean(false)
+''',
+    '''        private val closed = AtomicBoolean(false)
+        val createdAt: Long = System.currentTimeMillis()
+''',
+    "v063 Android connection age",
+)
+replace_once(
+    network_kt,
+    "        private const val PEER_IDLE_TIMEOUT_MS = 300_000\n",
+    "        private const val PEER_IDLE_TIMEOUT_MS = 300_000\n        private const val PEER_REPLACE_AFTER_MS = 10_000L\n",
+    "v063 Android replace threshold",
+)

@@ -33,7 +33,7 @@ def forbid(text: str, *needles: str) -> None:
 if SYSTEM in ("Darwin", "Windows"):
     # Peer connections must never become write-only zombies (desktop daemon).
     net = read(PROJECT / "apps/desktop/src/network.rs")
-    require(net, "PEER_IDLE_TIMEOUT", "dropping undecryptable frame", "} Ok(()) }.await;", "bad_frames_do_not_kill_the_reader_and_teardown_always_unregisters")
+    require(net, "PEER_IDLE_TIMEOUT", "dropping undecryptable frame", "} Ok(()) }.await;", "bad_frames_do_not_kill_the_reader_and_teardown_always_unregisters", "replacing stale peer connection", "reconnect_replaces_a_stale_registration")
     forbid(net, "let frame=decrypt_frame(&master,cfg.space_id,&data,true)?;")
     require(read(PROJECT / "apps/desktop/src/config.rs"), "clipmesh-unit-tests-")
 
@@ -63,7 +63,7 @@ if SYSTEM == "Linux":
     bridge = read(java / "clipboard/ClipboardBridge.kt")
     require(bridge, "scheduleScreenshotFollowUp(SCREENSHOT_MIN_PROBE_SPACING_MS - elapsed)", "SCREENSHOT_FOLLOW_UP_DELAYS_MS")
     forbid(bridge, "if (now - previous < 2_000L")
-    require(read(java / "network/NetworkEngine.kt"), "socket.soTimeout = PEER_IDLE_TIMEOUT_MS")
+    require(read(java / "network/NetworkEngine.kt"), "socket.soTimeout = PEER_IDLE_TIMEOUT_MS", "PEER_REPLACE_AFTER_MS", "replaced?.close()")
     manifest = read(app / "src/main/AndroidManifest.xml")
     require(manifest, 'android:name=".fileshare.FileShareActivity"', "android.intent.action.SEND_MULTIPLE", "android:configChanges=")
 elif SYSTEM == "Darwin":

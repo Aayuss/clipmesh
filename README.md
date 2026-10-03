@@ -4,19 +4,23 @@ ClipMesh is a private, cross-platform clipboard and file-transfer suite for macO
 
 ## Download
 
-### Current release - `v0.2.25-alpha`
+### Current release - `v0.2.26-alpha`
 
 | Platform | Installer |
 | --- | --- |
-| macOS | [Download DMG](https://github.com/Aayuss/clipmesh/releases/download/v0.2.25-alpha/ClipMesh-macOS.dmg) |
-| Windows | [Download EXE](https://github.com/Aayuss/clipmesh/releases/download/v0.2.25-alpha/ClipMesh-Windows.exe) |
-| Android | [Download APK](https://github.com/Aayuss/clipmesh/releases/download/v0.2.25-alpha/ClipMesh-Android.apk) |
+| macOS | [Download DMG](https://github.com/Aayuss/clipmesh/releases/download/v0.2.26-alpha/ClipMesh-macOS.dmg) |
+| Windows | [Download EXE](https://github.com/Aayuss/clipmesh/releases/download/v0.2.26-alpha/ClipMesh-Windows.exe) |
+| Android | [Download APK](https://github.com/Aayuss/clipmesh/releases/download/v0.2.26-alpha/ClipMesh-Android.apk) |
 
-[Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.25-alpha/SHA256SUMS.txt) to verify the installers. Release assets are built from the same `main` commit and are published only after the platform build, smoke/runtime, signing, and package-validation jobs pass.
+[Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.26-alpha/SHA256SUMS.txt) to verify the installers. Release assets are built from the same `main` commit and are published only after the platform build, smoke/runtime, signing, and package-validation jobs pass.
 
 For the newest fully green build from `main`, including changes newer than the current immutable release, use the continuously refreshed [`dev-latest` release](https://github.com/Aayuss/clipmesh/releases/tag/dev-latest): [macOS DMG](https://github.com/Aayuss/clipmesh/releases/download/dev-latest/ClipMesh-macOS.dmg) · [Windows EXE](https://github.com/Aayuss/clipmesh/releases/download/dev-latest/ClipMesh-Windows.exe) · [Android APK](https://github.com/Aayuss/clipmesh/releases/download/dev-latest/ClipMesh-Android.apk).
 
-## What's new in v0.2.25-alpha
+## What's new in v0.2.26-alpha
+
+- **Self-healing connections.** A newer authenticated connection from a paired device now replaces a stale one instead of being rejected as a duplicate (desktop daemon and Android). A link that died while the phone was dozing can no longer block it from reconnecting, so devices come back Online by themselves.
+
+### v0.2.25
 
 - **Paired devices stay connected and show Online correctly.** A single unreadable or replayed frame used to stop the desktop daemon from reading a peer's connection while keeping it registered, so phone → desktop sync silently stalled, the desktop showed the phone as "Last seen hours ago", and the phone's reconnects were rejected as duplicates. Bad frames are now skipped, silent links time out and reconnect (100s desktop / 300s Android), and teardown always unregisters the peer. Covered by new transport regression tests.
 - Includes everything from v0.2.24 below.
