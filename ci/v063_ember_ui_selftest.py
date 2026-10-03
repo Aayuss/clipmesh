@@ -30,6 +30,13 @@ def forbid(text: str, *needles: str) -> None:
             raise SystemExit(f"v063 forbidden text present: {needle}")
 
 
+if SYSTEM in ("Darwin", "Windows"):
+    # Peer connections must never become write-only zombies (desktop daemon).
+    net = read(PROJECT / "apps/desktop/src/network.rs")
+    require(net, "PEER_IDLE_TIMEOUT", "dropping undecryptable frame", "} Ok(()) }.await;", "bad_frames_do_not_kill_the_reader_and_teardown_always_unregisters")
+    forbid(net, "let frame=decrypt_frame(&master,cfg.space_id,&data,true)?;")
+    require(read(PROJECT / "apps/desktop/src/config.rs"), "clipmesh-unit-tests-")
+
 if SYSTEM == "Linux":
     app = PROJECT / "android/app"
     java = app / "src/main/java/dev/clipmesh"
@@ -56,6 +63,7 @@ if SYSTEM == "Linux":
     bridge = read(java / "clipboard/ClipboardBridge.kt")
     require(bridge, "scheduleScreenshotFollowUp(SCREENSHOT_MIN_PROBE_SPACING_MS - elapsed)", "SCREENSHOT_FOLLOW_UP_DELAYS_MS")
     forbid(bridge, "if (now - previous < 2_000L")
+    require(read(java / "network/NetworkEngine.kt"), "socket.soTimeout = PEER_IDLE_TIMEOUT_MS")
     manifest = read(app / "src/main/AndroidManifest.xml")
     require(manifest, 'android:name=".fileshare.FileShareActivity"', "android.intent.action.SEND_MULTIPLE", "android:configChanges=")
 elif SYSTEM == "Darwin":

@@ -4,19 +4,24 @@ ClipMesh is a private, cross-platform clipboard and file-transfer suite for macO
 
 ## Download
 
-### Current release - `v0.2.24-alpha`
+### Current release - `v0.2.25-alpha`
 
 | Platform | Installer |
 | --- | --- |
-| macOS | [Download DMG](https://github.com/Aayuss/clipmesh/releases/download/v0.2.24-alpha/ClipMesh-macOS.dmg) |
-| Windows | [Download EXE](https://github.com/Aayuss/clipmesh/releases/download/v0.2.24-alpha/ClipMesh-Windows.exe) |
-| Android | [Download APK](https://github.com/Aayuss/clipmesh/releases/download/v0.2.24-alpha/ClipMesh-Android.apk) |
+| macOS | [Download DMG](https://github.com/Aayuss/clipmesh/releases/download/v0.2.25-alpha/ClipMesh-macOS.dmg) |
+| Windows | [Download EXE](https://github.com/Aayuss/clipmesh/releases/download/v0.2.25-alpha/ClipMesh-Windows.exe) |
+| Android | [Download APK](https://github.com/Aayuss/clipmesh/releases/download/v0.2.25-alpha/ClipMesh-Android.apk) |
 
-[Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.24-alpha/SHA256SUMS.txt) to verify the installers. Release assets are built from the same `main` commit and are published only after the platform build, smoke/runtime, signing, and package-validation jobs pass.
+[Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.25-alpha/SHA256SUMS.txt) to verify the installers. Release assets are built from the same `main` commit and are published only after the platform build, smoke/runtime, signing, and package-validation jobs pass.
 
 For the newest fully green build from `main`, including changes newer than the current immutable release, use the continuously refreshed [`dev-latest` release](https://github.com/Aayuss/clipmesh/releases/tag/dev-latest): [macOS DMG](https://github.com/Aayuss/clipmesh/releases/download/dev-latest/ClipMesh-macOS.dmg) · [Windows EXE](https://github.com/Aayuss/clipmesh/releases/download/dev-latest/ClipMesh-Windows.exe) · [Android APK](https://github.com/Aayuss/clipmesh/releases/download/dev-latest/ClipMesh-Android.apk).
 
-## What's new in v0.2.24-alpha
+## What's new in v0.2.25-alpha
+
+- **Paired devices stay connected and show Online correctly.** A single unreadable or replayed frame used to stop the desktop daemon from reading a peer's connection while keeping it registered, so phone → desktop sync silently stalled, the desktop showed the phone as "Last seen hours ago", and the phone's reconnects were rejected as duplicates. Bad frames are now skipped, silent links time out and reconnect (100s desktop / 300s Android), and teardown always unregisters the peer. Covered by new transport regression tests.
+- Includes everything from v0.2.24 below.
+
+### v0.2.24
 
 - **Ember UI on every platform.** Android, macOS and Windows now share one design: Sora typeface, a dark `#131314` canvas with `#E55F11` accents, the same Clipboard / Transfer / Settings layout, and the same motion (spring-driven navigation pill, 220 ms page transitions, 260 ms dialogs, press feedback). Android moves to Jetpack Compose with a floating Suya-style bottom bar.
 - **Decluttered screens.** Clipboard shows a live preview card and one Devices list (paired + nearby); Transfer shows the selection, the devices to send to and incoming progress; device name, receive folder and pairing tools live in Settings.

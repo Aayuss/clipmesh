@@ -1,11 +1,11 @@
-name: Release ClipMesh v0.2.24
+name: Release ClipMesh v0.2.25
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/release-v0.2.24.yml'
+      - '.github/workflows/release-v0.2.25.yml'
       - 'ci/patch-v049-event-driven-performance.py'
       - 'ci/patch-v050-ultra-idle.py'
       - 'ci/patch-v052-android-clipboard-runtime.py'
@@ -36,6 +36,7 @@ on:
       - 'ci/v063_ember_ui_selftest.py'
       - 'ci/v063/**'
       - 'ci/patch-v064-release.py'
+      - 'ci/patch-v065-release.py'
       - 'ci/reconstruct.py'
       - 'ci/v027_macos_daemon_selftest.py'
       - 'ci/v031_devtest_selftest.py'
@@ -50,13 +51,13 @@ permissions:
   contents: read
 
 env:
-  PREVIOUS_RELEASE_SHA: 4c645df7d5a462a2d321f7050bfafebd78a57493
-  RELEASE_VERSION: 0.2.24
-  RELEASE_TAG: v0.2.24-alpha
+  PREVIOUS_RELEASE_SHA: a1f88964e632559ca3ece8c37871daa6c0a30a72
+  RELEASE_VERSION: 0.2.25
+  RELEASE_TAG: v0.2.25-alpha
 
 jobs:
   verify-boundary:
-    name: Verify v0.2.24 release boundary
+    name: Verify v0.2.25 release boundary
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
@@ -106,11 +107,12 @@ jobs:
             ci/patch-v062-release.py \
             ci/patch-v063-ember-ui.py \
             ci/v063_ember_ui_selftest.py \
-            ci/patch-v064-release.py
+            ci/patch-v064-release.py \
+            ci/patch-v065-release.py
           python ci/v032_release_signing_selftest.py
 
   macos:
-    name: macOS v0.2.24 DMG
+    name: macOS v0.2.25 DMG
     needs: verify-boundary
     runs-on: macos-14
     steps:
@@ -150,10 +152,11 @@ jobs:
           python ci/patch-v060-release.py
           python ci/patch-v062-release.py
           python ci/patch-v064-release.py
+          python ci/patch-v065-release.py
           python ci/v032_release_signing_selftest.py
-          grep -q 'CFBundleShortVersionString</key><string>0.2.24' clipmesh/scripts/build-macos.sh
-          grep -q 'CFBundleVersion</key><string>0.2.24' clipmesh/scripts/build-macos.sh
-          grep -q '^version = "0.2.24"$' clipmesh/Cargo.toml
+          grep -q 'CFBundleShortVersionString</key><string>0.2.25' clipmesh/scripts/build-macos.sh
+          grep -q 'CFBundleVersion</key><string>0.2.25' clipmesh/scripts/build-macos.sh
+          grep -q '^version = "0.2.25"$' clipmesh/Cargo.toml
       - name: Test protocol core and transport
         working-directory: clipmesh
         run: |
@@ -195,15 +198,15 @@ jobs:
           import plistlib
           from pathlib import Path
           info = plistlib.loads(Path('dist/macos/ClipMesh.app/Contents/Info.plist').read_bytes())
-          assert info['CFBundleShortVersionString'] == '0.2.24'
-          assert info['CFBundleVersion'] == '0.2.24'
-          print('macOS v0.2.24 metadata validated')
+          assert info['CFBundleShortVersionString'] == '0.2.25'
+          assert info['CFBundleVersion'] == '0.2.25'
+          print('macOS v0.2.25 metadata validated')
           PY
           codesign --verify --deep --strict --verbose=2 dist/macos/ClipMesh.app
           shasum -a 256 dist/macos/ClipMesh.dmg > dist/macos/SHA256SUMS.txt
       - uses: actions/upload-artifact@v7
         with:
-          name: ClipMesh-v0.2.24-macOS
+          name: ClipMesh-v0.2.25-macOS
           if-no-files-found: error
           path: |
             clipmesh/dist/macos/ClipMesh.dmg
@@ -214,7 +217,7 @@ jobs:
         run: bash ci/macos-release-signing.sh cleanup
 
   windows:
-    name: Windows v0.2.24 EXE
+    name: Windows v0.2.25 EXE
     needs: verify-boundary
     runs-on: windows-2025
     steps:
@@ -251,10 +254,11 @@ jobs:
           python ci/patch-v060-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/patch-v062-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/patch-v064-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/patch-v065-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/v032_release_signing_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $ui = Get-Content 'ci/ClipMeshWindows.cs' -Raw
-          if (-not $ui.Contains('private const string Version = "0.2.24";')) { throw 'Windows v0.2.24 runtime version missing' }
-          if (-not (Get-Content 'clipmesh/Cargo.toml' -Raw).Contains('version = "0.2.24"')) { throw 'Cargo v0.2.24 package version missing' }
+          if (-not $ui.Contains('private const string Version = "0.2.25";')) { throw 'Windows v0.2.25 runtime version missing' }
+          if (-not (Get-Content 'clipmesh/Cargo.toml' -Raw).Contains('version = "0.2.25"')) { throw 'Cargo v0.2.25 package version missing' }
       - name: Test protocol core and transport
         working-directory: clipmesh
         shell: pwsh
@@ -274,19 +278,19 @@ jobs:
           Remove-Item -Recurse -Force $roaming,$local -ErrorAction SilentlyContinue
           $process = Start-Process -FilePath '.\dist\windows\clipmesh.exe' -ArgumentList '--smoke-test' -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "Windows smoke test failed with exit code $($process.ExitCode)" }
-          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.2.24\clipmesh-bin.exe'))) { throw 'Windows v0.2.24 runtime missing' }
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.2.25\clipmesh-bin.exe'))) { throw 'Windows v0.2.25 runtime missing' }
           $hash = (Get-FileHash dist\windows\clipmesh.exe -Algorithm SHA256).Hash.ToLower()
           "$hash  clipmesh.exe" | Set-Content -Encoding ascii dist\windows\SHA256SUMS.txt
       - uses: actions/upload-artifact@v7
         with:
-          name: ClipMesh-v0.2.24-Windows
+          name: ClipMesh-v0.2.25-Windows
           if-no-files-found: error
           path: |
             clipmesh/dist/windows/clipmesh.exe
             clipmesh/dist/windows/SHA256SUMS.txt
 
   android:
-    name: Android v0.2.24 APK
+    name: Android v0.2.25 APK
     needs: verify-boundary
     runs-on: ubuntu-24.04
     steps:
@@ -330,10 +334,11 @@ jobs:
           python ci/patch-v060-release.py
           python ci/patch-v062-release.py
           python ci/patch-v064-release.py
+          python ci/patch-v065-release.py
           python ci/v032_release_signing_selftest.py
-          grep -q 'versionCode = 34' clipmesh/android/app/build.gradle.kts
-          grep -q 'versionName = "0.2.24"' clipmesh/android/app/build.gradle.kts
-          grep -q '^version = "0.2.24"$' clipmesh/Cargo.toml
+          grep -q 'versionCode = 35' clipmesh/android/app/build.gradle.kts
+          grep -q 'versionName = "0.2.25"' clipmesh/android/app/build.gradle.kts
+          grep -q '^version = "0.2.25"$' clipmesh/Cargo.toml
       - name: Install Android SDK and build debug APK
         run: |
           set -euo pipefail
@@ -344,8 +349,8 @@ jobs:
           ./scripts/build-android-debug.sh
           APK=dist/android/ClipMesh-debug.apk
           test -s "$APK"
-          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-name "$APK" | grep -qx '0.2.24'
-          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-code "$APK" | grep -qx '34'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-name "$APK" | grep -qx '0.2.25'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-code "$APK" | grep -qx '35'
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -367,19 +372,19 @@ jobs:
           CLIPMESH_ANDROID_KEY_PASSWORD: ${{ secrets.CLIPMESH_ANDROID_KEY_PASSWORD }}
           CLIPMESH_ANDROID_SIGNING_CERT_SHA256: ${{ vars.CLIPMESH_ANDROID_SIGNING_CERT_SHA256 }}
           CLIPMESH_ANDROID_EXPECTED_PACKAGE: dev.clipmesh
-          CLIPMESH_ANDROID_EXPECTED_VERSION_NAME: 0.2.24
-          CLIPMESH_ANDROID_EXPECTED_VERSION_CODE: '34'
+          CLIPMESH_ANDROID_EXPECTED_VERSION_NAME: 0.2.25
+          CLIPMESH_ANDROID_EXPECTED_VERSION_CODE: '35'
         run: bash ci/build-android-release.sh
       - uses: actions/upload-artifact@v7
         with:
-          name: ClipMesh-v0.2.24-Android
+          name: ClipMesh-v0.2.25-Android
           if-no-files-found: error
           path: |
             clipmesh/dist/android/ClipMesh-release.apk
             clipmesh/dist/android/SHA256SUMS.txt
 
   release:
-    name: Publish v0.2.24-alpha
+    name: Publish v0.2.25-alpha
     needs: [verify-boundary, macos, windows, android]
     runs-on: ubuntu-24.04
     permissions:
@@ -387,15 +392,15 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
-          name: ClipMesh-v0.2.24-macOS
+          name: ClipMesh-v0.2.25-macOS
           path: artifacts/macos
       - uses: actions/download-artifact@v8
         with:
-          name: ClipMesh-v0.2.24-Windows
+          name: ClipMesh-v0.2.25-Windows
           path: artifacts/windows
       - uses: actions/download-artifact@v8
         with:
-          name: ClipMesh-v0.2.24-Android
+          name: ClipMesh-v0.2.25-Android
           path: artifacts/android
       - name: Prepare and verify release assets
         run: |
@@ -420,13 +425,13 @@ jobs:
           tag="$RELEASE_TAG"
           dev_tag="dev-latest"
           assets=(release/ClipMesh-macOS.dmg release/ClipMesh-Windows.exe release/ClipMesh-Android.apk release/ClipMesh-icon.png release/SHA256SUMS.txt)
-          notes='ClipMesh v0.2.24 introduces the Ember design across Android, macOS and Windows: one consistent dark UI with Sora type, a Suya-style sliding navigation, fluid spring animations and decluttered Clipboard, Transfer and Settings screens. Sent files now clear automatically after a successful transfer on every platform, the clipboard view shows the actual image (or text/files) instead of raw pasteboard type names, the macOS Finder Share extension is rebuilt as a sandboxed extension so ClipMesh appears under Share, and Windows Explorer integration adds a Send to entry that hands files to the running app.'
+          notes='ClipMesh v0.2.25 fixes paired devices showing as offline and phone-to-desktop clipboard sync silently stopping. A single unreadable or replayed frame used to kill the desktop daemon reader while leaving the connection registered, so the phone could never reconnect. Bad frames are now skipped, silent links time out and reconnect, and teardown always unregisters the peer. Includes the v0.2.24 Ember UI.'
 
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "$tag already exists; keeping its published assets immutable."
           else
             gh release create "$tag" "${assets[@]}" \
-              --title "ClipMesh v0.2.24-alpha" \
+              --title "ClipMesh v0.2.25-alpha" \
               --notes "$notes" \
               --target "$GITHUB_SHA" \
               --prerelease

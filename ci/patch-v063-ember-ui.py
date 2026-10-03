@@ -53,6 +53,15 @@ def install_tree(source_root: Path, target_root: Path) -> None:
             install(source, target_root / source.relative_to(source_root))
 
 
+def run_layer(path: Path, **extra) -> None:
+    exec(compile(path.read_text(encoding="utf-8"), str(path), "exec"),
+         {"__name__": "__v063__", "ROOT": ROOT, "PROJECT": PROJECT, "LAYER": LAYER, "FONTS": FONTS,
+          "replace_once": replace_once, "regex_once": regex_once, "install": install, **extra})
+
+
+if SYSTEM in ("Darwin", "Windows"):
+    run_layer(LAYER / "desktop/patch_daemon.py")
+
 if SYSTEM == "Darwin":
     from_dir = LAYER / "macos"
     for name in ("ClipMeshApp.swift", "ClipMeshTransfer.swift"):

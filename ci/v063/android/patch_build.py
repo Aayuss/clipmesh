@@ -182,3 +182,20 @@ replace_once(
     "        return SendMeta(UUID.randomUUID().toString(), uri, sanitizeName(PickerNames.friendly(context, uri, name, mime)), size, mime)\n",
     "v063 friendly picker names",
 )
+
+# A half-open socket must not keep a peer "connected" forever: desktops ping every
+# 30s and Android peers every 120s, so a 300s read timeout tears down and
+# reconnects only a genuinely silent link.
+network_kt = android / "app/src/main/java/dev/clipmesh/network/NetworkEngine.kt"
+replace_once(
+    network_kt,
+    "        socket.keepAlive = true\n        socket.soTimeout = 0\n        if (!isLan(socket.inetAddress)) { socket.close(); return@withContext }\n",
+    "        socket.keepAlive = true\n        socket.soTimeout = PEER_IDLE_TIMEOUT_MS\n        if (!isLan(socket.inetAddress)) { socket.close(); return@withContext }\n",
+    "v063 Android peer idle timeout",
+)
+replace_once(
+    network_kt,
+    "        private const val REPLAY_TTL_MS = 30_000L\n",
+    "        private const val REPLAY_TTL_MS = 30_000L\n        private const val PEER_IDLE_TIMEOUT_MS = 300_000\n",
+    "v063 Android idle timeout constant",
+)
