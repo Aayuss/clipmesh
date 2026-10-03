@@ -43,7 +43,7 @@ class SettingsController(private val host: MainActivity) : SettingsActions {
 
     private fun changed() { host.ui.settingsRevision++ }
 
-    fun onResume() { refreshShizukuUi() }
+    fun onResume() { refreshShizukuUi(); changed() }
     fun onPause() = Unit
 
     override fun snapshot(): SettingsSnapshot = SettingsSnapshot(
@@ -64,6 +64,7 @@ class SettingsController(private val host: MainActivity) : SettingsActions {
         shizukuAction = shizukuState.second,
         shizukuActionEnabled = shizukuState.third,
         staticPeers = settingsStore.staticPeers.joinToString("\n"),
+        batteryUnrestricted = (host.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager).isIgnoringBatteryOptimizations(host.packageName),
         version = BuildConfig.VERSION_NAME,
     )
 
@@ -138,6 +139,17 @@ class SettingsController(private val host: MainActivity) : SettingsActions {
             else -> if (!ShizukuManager.requestShizukuPermission()) host.toast("Could not request Shizuku permission")
         }
         host.main.postDelayed({ refreshShizukuUi() }, 400L)
+    }
+
+    override fun battery() {
+        val power = host.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        val intent = if (!power.isIgnoringBatteryOptimizations(host.packageName)) {
+            @Suppress("BatteryLife")
+            Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${host.packageName}"))
+        } else {
+            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+        }
+        runCatching { host.startActivity(intent) }.onFailure { appInfo() }
     }
 
     override fun accessibility() { host.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }

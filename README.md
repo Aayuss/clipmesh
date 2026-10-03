@@ -4,19 +4,23 @@ ClipMesh is a private, cross-platform clipboard and file-transfer suite for macO
 
 ## Download
 
-### Current release - `v0.2.26-alpha`
+### Current release - `v0.2.27-alpha`
 
 | Platform | Installer |
 | --- | --- |
-| macOS | [Download DMG](https://github.com/Aayuss/clipmesh/releases/download/v0.2.26-alpha/ClipMesh-macOS.dmg) |
-| Windows | [Download EXE](https://github.com/Aayuss/clipmesh/releases/download/v0.2.26-alpha/ClipMesh-Windows.exe) |
-| Android | [Download APK](https://github.com/Aayuss/clipmesh/releases/download/v0.2.26-alpha/ClipMesh-Android.apk) |
+| macOS | [Download DMG](https://github.com/Aayuss/clipmesh/releases/download/v0.2.27-alpha/ClipMesh-macOS.dmg) |
+| Windows | [Download EXE](https://github.com/Aayuss/clipmesh/releases/download/v0.2.27-alpha/ClipMesh-Windows.exe) |
+| Android | [Download APK](https://github.com/Aayuss/clipmesh/releases/download/v0.2.27-alpha/ClipMesh-Android.apk) |
 
-[Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.26-alpha/SHA256SUMS.txt) to verify the installers. Release assets are built from the same `main` commit and are published only after the platform build, smoke/runtime, signing, and package-validation jobs pass.
+[Download SHA-256 checksums](https://github.com/Aayuss/clipmesh/releases/download/v0.2.27-alpha/SHA256SUMS.txt) to verify the installers. Release assets are built from the same `main` commit and are published only after the platform build, smoke/runtime, signing, and package-validation jobs pass.
 
 For the newest fully green build from `main`, including changes newer than the current immutable release, use the continuously refreshed [`dev-latest` release](https://github.com/Aayuss/clipmesh/releases/tag/dev-latest): [macOS DMG](https://github.com/Aayuss/clipmesh/releases/download/dev-latest/ClipMesh-macOS.dmg) · [Windows EXE](https://github.com/Aayuss/clipmesh/releases/download/dev-latest/ClipMesh-Windows.exe) · [Android APK](https://github.com/Aayuss/clipmesh/releases/download/dev-latest/ClipMesh-Android.apk).
 
-## What's new in v0.2.26-alpha
+## What's new in v0.2.27-alpha
+
+- **Always connected on the same network.** Paired devices now redial each other at their last known address (a direct connection wakes a locked phone, unlike broadcasts): immediately when a link drops, then with a short backoff. A handshake timeout prevents hung dials, Android redials paired peers too, and Settings → Stay connected → **Run unrestricted** exempts ClipMesh from battery optimization so the phone stays reachable while locked.
+
+### v0.2.26
 
 - **Self-healing connections.** A newer authenticated connection from a paired device now replaces a stale one instead of being rejected as a duplicate (desktop daemon and Android). A link that died while the phone was dozing can no longer block it from reconnecting, so devices come back Online by themselves.
 

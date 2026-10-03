@@ -285,3 +285,85 @@ replace_once(
 }''',
     "v063 stale-registration regression test",
 )
+
+# Always-connected paired devices: a sleeping phone barely broadcasts discovery,
+# so waiting for its announcement left it "offline" until unlock. Dial every
+# paired-but-disconnected peer at its last known LAN address (a unicast SYN wakes
+# the phone), immediately after a link drops and then with 5s..60s backoff.
+replace_once(
+    network,
+    "    spawn_static_peer_loop(cfg.clone(),master.clone(),peers.clone(),pending.clone(),seen.clone(),latest.clone(),remote_clip_tx.clone());\n",
+    "    spawn_static_peer_loop(cfg.clone(),master.clone(),peers.clone(),pending.clone(),seen.clone(),latest.clone(),remote_clip_tx.clone());\n"
+    "    spawn_known_peer_redial(cfg.clone(),master.clone(),peers.clone(),pending.clone(),seen.clone(),latest.clone(),remote_clip_tx.clone());\n",
+    "v063 start known-peer redial",
+)
+replace_once(
+    network,
+    "fn spawn_static_peer_loop(",
+    '''/// Woken whenever an authenticated peer link ends, so redial starts at once.
+static PEER_LOST: tokio::sync::Notify = tokio::sync::Notify::const_new();
+
+fn spawn_known_peer_redial(cfg:Arc<Config>,master:Arc<MasterKey>,peers:PeerMap,pending:Pending,seen:Seen,latest:Latest,remote:mpsc::UnboundedSender<(Uuid,ClipPayload)>) {
+    let dialing:Arc<DashMap<Uuid,()>>=Arc::new(DashMap::new());
+    tokio::spawn(async move {
+        let mut backoff=Duration::from_secs(5);
+        loop {
+            let mut missing=false;
+            for known in Config::load_known_peers(cfg.space_id).unwrap_or_default() {
+                if known.device_id==cfg.device_id || cfg.blocked_devices.contains(&known.device_id) || peers.contains_key(&known.device_id) { continue; }
+                let Ok(ip)=known.address.parse::<IpAddr>() else { continue; };
+                if !is_lan_ip(ip) { continue; }
+                missing=true;
+                if dialing.insert(known.device_id,()).is_some() { continue; }
+                let target=SocketAddr::new(ip,if known.port==0 { cfg.tcp_port } else { known.port });
+                let cfg=cfg.clone(); let master=master.clone(); let peers=peers.clone(); let pending=pending.clone(); let seen=seen.clone(); let latest=latest.clone(); let remote=remote.clone(); let dialing=dialing.clone();
+                let id=known.device_id;
+                tokio::spawn(async move {
+                    if let Ok(Ok(stream))=time::timeout(Duration::from_secs(3),TcpStream::connect(target)).await {
+                        dialing.remove(&id);
+                        if let Err(e)=handle_connection(stream,true,cfg,master,peers,pending,seen,latest,remote).await { debug!(peer=%target,error=%e,"redialed peer ended"); }
+                    } else {
+                        dialing.remove(&id);
+                    }
+                });
+            }
+            let wait=if missing { let w=backoff; backoff=(backoff*2).min(Duration::from_secs(60)); w } else { backoff=Duration::from_secs(5); Duration::from_secs(60) };
+            tokio::select! {
+                _=time::sleep(wait)=>{}
+                _=PEER_LOST.notified()=>{ backoff=Duration::from_secs(5); time::sleep(Duration::from_secs(1)).await; }
+            }
+        }
+    });
+}
+
+fn spawn_static_peer_loop(''',
+    "v063 known-peer redial loop",
+)
+replace_once(
+    network,
+    '''    if peers.get(&peer_id).map(|e|e.connection_id)==Some(conn_id) { peers.remove(&peer_id); }
+    if let Err(e)=&result { warn!(peer=%peer_id,error=%e,"peer connection closed"); }''',
+    '''    if peers.get(&peer_id).map(|e|e.connection_id)==Some(conn_id) { peers.remove(&peer_id); PEER_LOST.notify_one(); }
+    if let Err(e)=&result { warn!(peer=%peer_id,error=%e,"peer connection closed"); }''',
+    "v063 redial immediately after a link ends",
+)
+# The hello exchange had no timeout: a dial to the wrong host could hang forever.
+replace_once(
+    network,
+    '''    let remote_hello = if outgoing {
+        stream.write_all(&our_hello).await?;
+        let mut b=vec![0u8;clipmesh_core::discovery::HELLO_SIZE]; stream.read_exact(&mut b).await?; Hello::verify(&master,cfg.space_id,&b)?
+    } else {
+        let mut b=vec![0u8;clipmesh_core::discovery::HELLO_SIZE]; stream.read_exact(&mut b).await?; let h=Hello::verify(&master,cfg.space_id,&b)?; stream.write_all(&our_hello).await?; h
+    };''',
+    '''    let handshake=async {
+        if outgoing {
+            stream.write_all(&our_hello).await?;
+            let mut b=vec![0u8;clipmesh_core::discovery::HELLO_SIZE]; stream.read_exact(&mut b).await?; Hello::verify(&master,cfg.space_id,&b)
+        } else {
+            let mut b=vec![0u8;clipmesh_core::discovery::HELLO_SIZE]; stream.read_exact(&mut b).await?; let h=Hello::verify(&master,cfg.space_id,&b)?; stream.write_all(&our_hello).await?; Ok(h)
+        }
+    };
+    let remote_hello=match time::timeout(Duration::from_secs(10),handshake).await { Ok(r)=>r?, Err(_)=>bail!("peer handshake timed out") };''',
+    "v063 handshake timeout",
+)

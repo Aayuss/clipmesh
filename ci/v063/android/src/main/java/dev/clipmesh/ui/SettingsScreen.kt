@@ -56,6 +56,7 @@ data class SettingsSnapshot(
     val shizukuAction: String,
     val shizukuActionEnabled: Boolean,
     val staticPeers: String,
+    val batteryUnrestricted: Boolean,
     val version: String,
 )
 
@@ -74,6 +75,7 @@ interface SettingsActions {
     fun setAutoAcceptFavorites(value: Boolean)
     fun chooseOutputFolder()
     fun shizuku()
+    fun battery()
     fun accessibility()
     fun exclusions()
     fun appInfo()
@@ -124,6 +126,16 @@ fun SettingsScreen(ui: ClipMeshUi, actions: SettingsActions) {
         Hairline()
         SettingRow("Receive folder", s.outputFolder, onClick = actions::chooseOutputFolder) {
             PillButton("Change", onClick = actions::chooseOutputFolder, style = PillStyle.Secondary, compact = true)
+        }
+    }
+
+    Group("Stay connected") {
+        SettingRow(
+            "Run unrestricted",
+            if (s.batteryUnrestricted) "Allowed · stays connected while the phone is locked" else "Keeps sync and transfers alive while the phone is locked",
+            onClick = actions::battery,
+        ) {
+            if (s.batteryUnrestricted) Badge("On", Ember.Positive) else PillButton("Allow", onClick = actions::battery, compact = true)
         }
     }
 

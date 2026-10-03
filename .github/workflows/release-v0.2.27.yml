@@ -1,11 +1,11 @@
-name: Release ClipMesh v0.2.26
+name: Release ClipMesh v0.2.27
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/release-v0.2.26.yml'
+      - '.github/workflows/release-v0.2.27.yml'
       - 'ci/patch-v049-event-driven-performance.py'
       - 'ci/patch-v050-ultra-idle.py'
       - 'ci/patch-v052-android-clipboard-runtime.py'
@@ -38,6 +38,7 @@ on:
       - 'ci/patch-v064-release.py'
       - 'ci/patch-v065-release.py'
       - 'ci/patch-v066-release.py'
+      - 'ci/patch-v067-release.py'
       - 'ci/reconstruct.py'
       - 'ci/v027_macos_daemon_selftest.py'
       - 'ci/v031_devtest_selftest.py'
@@ -52,13 +53,13 @@ permissions:
   contents: read
 
 env:
-  PREVIOUS_RELEASE_SHA: ee52415069d103589601646692d1b029d751f4a3
-  RELEASE_VERSION: 0.2.26
-  RELEASE_TAG: v0.2.26-alpha
+  PREVIOUS_RELEASE_SHA: 0c55cf5a6a4eae66c74777c94f17712ded37fb89
+  RELEASE_VERSION: 0.2.27
+  RELEASE_TAG: v0.2.27-alpha
 
 jobs:
   verify-boundary:
-    name: Verify v0.2.26 release boundary
+    name: Verify v0.2.27 release boundary
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
@@ -110,11 +111,12 @@ jobs:
             ci/v063_ember_ui_selftest.py \
             ci/patch-v064-release.py \
             ci/patch-v065-release.py \
-            ci/patch-v066-release.py
+            ci/patch-v066-release.py \
+            ci/patch-v067-release.py
           python ci/v032_release_signing_selftest.py
 
   macos:
-    name: macOS v0.2.26 DMG
+    name: macOS v0.2.27 DMG
     needs: verify-boundary
     runs-on: macos-14
     steps:
@@ -156,10 +158,11 @@ jobs:
           python ci/patch-v064-release.py
           python ci/patch-v065-release.py
           python ci/patch-v066-release.py
+          python ci/patch-v067-release.py
           python ci/v032_release_signing_selftest.py
-          grep -q 'CFBundleShortVersionString</key><string>0.2.26' clipmesh/scripts/build-macos.sh
-          grep -q 'CFBundleVersion</key><string>0.2.26' clipmesh/scripts/build-macos.sh
-          grep -q '^version = "0.2.26"$' clipmesh/Cargo.toml
+          grep -q 'CFBundleShortVersionString</key><string>0.2.27' clipmesh/scripts/build-macos.sh
+          grep -q 'CFBundleVersion</key><string>0.2.27' clipmesh/scripts/build-macos.sh
+          grep -q '^version = "0.2.27"$' clipmesh/Cargo.toml
       - name: Test protocol core and transport
         working-directory: clipmesh
         run: |
@@ -201,15 +204,15 @@ jobs:
           import plistlib
           from pathlib import Path
           info = plistlib.loads(Path('dist/macos/ClipMesh.app/Contents/Info.plist').read_bytes())
-          assert info['CFBundleShortVersionString'] == '0.2.26'
-          assert info['CFBundleVersion'] == '0.2.26'
-          print('macOS v0.2.26 metadata validated')
+          assert info['CFBundleShortVersionString'] == '0.2.27'
+          assert info['CFBundleVersion'] == '0.2.27'
+          print('macOS v0.2.27 metadata validated')
           PY
           codesign --verify --deep --strict --verbose=2 dist/macos/ClipMesh.app
           shasum -a 256 dist/macos/ClipMesh.dmg > dist/macos/SHA256SUMS.txt
       - uses: actions/upload-artifact@v7
         with:
-          name: ClipMesh-v0.2.26-macOS
+          name: ClipMesh-v0.2.27-macOS
           if-no-files-found: error
           path: |
             clipmesh/dist/macos/ClipMesh.dmg
@@ -220,7 +223,7 @@ jobs:
         run: bash ci/macos-release-signing.sh cleanup
 
   windows:
-    name: Windows v0.2.26 EXE
+    name: Windows v0.2.27 EXE
     needs: verify-boundary
     runs-on: windows-2025
     steps:
@@ -259,10 +262,11 @@ jobs:
           python ci/patch-v064-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/patch-v065-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/patch-v066-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python ci/patch-v067-release.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python ci/v032_release_signing_selftest.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $ui = Get-Content 'ci/ClipMeshWindows.cs' -Raw
-          if (-not $ui.Contains('private const string Version = "0.2.26";')) { throw 'Windows v0.2.26 runtime version missing' }
-          if (-not (Get-Content 'clipmesh/Cargo.toml' -Raw).Contains('version = "0.2.26"')) { throw 'Cargo v0.2.26 package version missing' }
+          if (-not $ui.Contains('private const string Version = "0.2.27";')) { throw 'Windows v0.2.27 runtime version missing' }
+          if (-not (Get-Content 'clipmesh/Cargo.toml' -Raw).Contains('version = "0.2.27"')) { throw 'Cargo v0.2.27 package version missing' }
       - name: Test protocol core and transport
         working-directory: clipmesh
         shell: pwsh
@@ -282,19 +286,19 @@ jobs:
           Remove-Item -Recurse -Force $roaming,$local -ErrorAction SilentlyContinue
           $process = Start-Process -FilePath '.\dist\windows\clipmesh.exe' -ArgumentList '--smoke-test' -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "Windows smoke test failed with exit code $($process.ExitCode)" }
-          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.2.26\clipmesh-bin.exe'))) { throw 'Windows v0.2.26 runtime missing' }
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'ClipMesh\Runtime\0.2.27\clipmesh-bin.exe'))) { throw 'Windows v0.2.27 runtime missing' }
           $hash = (Get-FileHash dist\windows\clipmesh.exe -Algorithm SHA256).Hash.ToLower()
           "$hash  clipmesh.exe" | Set-Content -Encoding ascii dist\windows\SHA256SUMS.txt
       - uses: actions/upload-artifact@v7
         with:
-          name: ClipMesh-v0.2.26-Windows
+          name: ClipMesh-v0.2.27-Windows
           if-no-files-found: error
           path: |
             clipmesh/dist/windows/clipmesh.exe
             clipmesh/dist/windows/SHA256SUMS.txt
 
   android:
-    name: Android v0.2.26 APK
+    name: Android v0.2.27 APK
     needs: verify-boundary
     runs-on: ubuntu-24.04
     steps:
@@ -340,10 +344,11 @@ jobs:
           python ci/patch-v064-release.py
           python ci/patch-v065-release.py
           python ci/patch-v066-release.py
+          python ci/patch-v067-release.py
           python ci/v032_release_signing_selftest.py
-          grep -q 'versionCode = 36' clipmesh/android/app/build.gradle.kts
-          grep -q 'versionName = "0.2.26"' clipmesh/android/app/build.gradle.kts
-          grep -q '^version = "0.2.26"$' clipmesh/Cargo.toml
+          grep -q 'versionCode = 37' clipmesh/android/app/build.gradle.kts
+          grep -q 'versionName = "0.2.27"' clipmesh/android/app/build.gradle.kts
+          grep -q '^version = "0.2.27"$' clipmesh/Cargo.toml
       - name: Install Android SDK and build debug APK
         run: |
           set -euo pipefail
@@ -354,8 +359,8 @@ jobs:
           ./scripts/build-android-debug.sh
           APK=dist/android/ClipMesh-debug.apk
           test -s "$APK"
-          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-name "$APK" | grep -qx '0.2.26'
-          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-code "$APK" | grep -qx '36'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-name "$APK" | grep -qx '0.2.27'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-code "$APK" | grep -qx '37'
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -377,19 +382,19 @@ jobs:
           CLIPMESH_ANDROID_KEY_PASSWORD: ${{ secrets.CLIPMESH_ANDROID_KEY_PASSWORD }}
           CLIPMESH_ANDROID_SIGNING_CERT_SHA256: ${{ vars.CLIPMESH_ANDROID_SIGNING_CERT_SHA256 }}
           CLIPMESH_ANDROID_EXPECTED_PACKAGE: dev.clipmesh
-          CLIPMESH_ANDROID_EXPECTED_VERSION_NAME: 0.2.26
-          CLIPMESH_ANDROID_EXPECTED_VERSION_CODE: '36'
+          CLIPMESH_ANDROID_EXPECTED_VERSION_NAME: 0.2.27
+          CLIPMESH_ANDROID_EXPECTED_VERSION_CODE: '37'
         run: bash ci/build-android-release.sh
       - uses: actions/upload-artifact@v7
         with:
-          name: ClipMesh-v0.2.26-Android
+          name: ClipMesh-v0.2.27-Android
           if-no-files-found: error
           path: |
             clipmesh/dist/android/ClipMesh-release.apk
             clipmesh/dist/android/SHA256SUMS.txt
 
   release:
-    name: Publish v0.2.26-alpha
+    name: Publish v0.2.27-alpha
     needs: [verify-boundary, macos, windows, android]
     runs-on: ubuntu-24.04
     permissions:
@@ -397,15 +402,15 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
-          name: ClipMesh-v0.2.26-macOS
+          name: ClipMesh-v0.2.27-macOS
           path: artifacts/macos
       - uses: actions/download-artifact@v8
         with:
-          name: ClipMesh-v0.2.26-Windows
+          name: ClipMesh-v0.2.27-Windows
           path: artifacts/windows
       - uses: actions/download-artifact@v8
         with:
-          name: ClipMesh-v0.2.26-Android
+          name: ClipMesh-v0.2.27-Android
           path: artifacts/android
       - name: Prepare and verify release assets
         run: |
@@ -430,13 +435,13 @@ jobs:
           tag="$RELEASE_TAG"
           dev_tag="dev-latest"
           assets=(release/ClipMesh-macOS.dmg release/ClipMesh-Windows.exe release/ClipMesh-Android.apk release/ClipMesh-icon.png release/SHA256SUMS.txt)
-          notes='ClipMesh v0.2.26 makes paired-device connections self-healing. A newer authenticated connection from a peer now replaces a stale one instead of being rejected as a duplicate (desktop and Android), so a link that died while a phone was dozing can no longer block reconnection. Together with v0.2.25 (bad frames skipped, idle links time out, teardown always unregisters), devices show Online and sync both ways reliably.'
+          notes='ClipMesh v0.2.27 keeps paired devices connected: desktops and Android redial paired peers at their last known LAN address (immediately when a link drops, then with backoff), a handshake timeout prevents hung dials, and Android adds a one-tap Run unrestricted setting so a locked phone stays reachable. Includes the v0.2.25/v0.2.26 connection self-healing fixes.'
 
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "$tag already exists; keeping its published assets immutable."
           else
             gh release create "$tag" "${assets[@]}" \
-              --title "ClipMesh v0.2.26-alpha" \
+              --title "ClipMesh v0.2.27-alpha" \
               --notes "$notes" \
               --target "$GITHUB_SHA" \
               --prerelease

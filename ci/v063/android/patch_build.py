@@ -255,3 +255,37 @@ replace_once(
     "        private const val PEER_IDLE_TIMEOUT_MS = 300_000\n        private const val PEER_REPLACE_AFTER_MS = 10_000L\n",
     "v063 Android replace threshold",
 )
+
+# Dial paired peers at their last known LAN address too, so reconnecting never
+# depends on catching a broadcast. 30s while a paired peer is missing, else 120s.
+replace_once(
+    network_kt,
+    '''            for (entry in settings.staticPeers) {
+                parsePeer(entry)?.let { (address, port) -> if (isLan(address)) scope.launch { connect(address, port) } }
+            }
+            delay(120_000L)''',
+    '''            for (entry in settings.staticPeers) {
+                parsePeer(entry)?.let { (address, port) -> if (isLan(address)) scope.launch { connect(address, port) } }
+            }
+            var missing = false
+            for (known in settings.knownPeers()) {
+                if (known.deviceId == settings.deviceId || peers.containsKey(known.deviceId) || settings.isPeerBlocked(known.deviceId)) continue
+                val address = runCatching { InetAddress.getByName(known.address) }.getOrNull() ?: continue
+                if (!isLan(address) || known.port !in 1..65535) continue
+                missing = true
+                scope.launch { connect(address, known.port) }
+            }
+            delay(if (missing) 30_000L else 120_000L)''',
+    "v063 Android known-peer redial",
+)
+
+# One-tap battery exemption so Samsung/OEM power management can't park the sync
+# service while the phone is locked.
+manifest_text = manifest.read_text(encoding="utf-8")
+if "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" not in manifest_text:
+    replace_once(
+        manifest,
+        '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
+        '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />',
+        "v063 battery exemption permission",
+    )
